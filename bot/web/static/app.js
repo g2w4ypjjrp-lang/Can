@@ -307,7 +307,8 @@
   /* ------------------------------------------------------- bağlantı teşhisi */
   function diagHtml(r) {
     const items = (r.steps || []).map((s) => `<li><span class="${s.ok ? "i-ok" : "i-bad"}">${s.ok ? "✓" : "✗"}</span><span>${esc(s.name)}<small>${esc(s.detail)}</small></span></li>`).join("");
-    return `<div class="callout ${r.ok ? "ok" : "warn"}"><strong>${esc(r.summary)}</strong><ul class="diag">${items}</ul></div>`;
+    const when = r.time ? `<p class="tiny muted">Test zamanı: ${hm(r.time)}</p>` : "";
+    return `<div class="callout ${r.ok ? "ok" : "warn"}"><strong>${esc(r.summary)}</strong><ul class="diag">${items}</ul>${when}</div>`;
   }
   // Hedef seçiciyle verilir: panel her 3 sn'de yenilendiğinde öğe değişse de sonuç doğru yere yazılır.
   async function runDiagnose(selector, btn) {
@@ -330,7 +331,8 @@
     if (!b.connected) {
       alerts.push(`<div class="callout danger"><strong>Binance bağlantısı yok.</strong><p>${esc(b.error || "Bağlanılıyor…")}</p><button class="btn sm" id="reconnect-btn">Yeniden bağlan</button> <button class="btn sm ghost" id="diag-home-btn">Sorunu teşhis et</button> <button class="btn sm ghost" data-goto="settings">Ayarlara git</button></div>`);
     } else if (b.error) {
-      alerts.push(`<div class="callout warn"><strong>Uyarı:</strong> ${esc(b.error)} <button class="btn sm ghost" id="diag-home-btn">Sorunu teşhis et</button></div>`);
+      const keyBtn = b.error_kind === "auth" ? ` <button class="btn sm" data-goto="settings">Anahtarları düzenle</button>` : "";
+      alerts.push(`<div class="callout warn"><strong>Uyarı:</strong> ${esc(b.error)}${keyBtn} <button class="btn sm ghost" id="diag-home-btn">Sorunu teşhis et</button></div>`);
     }
     if (b.halt) alerts.push(`<div class="callout danger"><strong>Bot kendini durdurdu.</strong><p>${esc(b.halt)} Ayarları gözden geçirip otomatik işlemi yeniden açabilirsiniz.</p></div>`);
     else if (b.guard) alerts.push(`<div class="callout warn">${esc(b.guard)}</div>`);
@@ -349,8 +351,9 @@
 
     const hs = $("#hero-status");
     const trouble = !b.connected || !!b.error;
+    const troubleText = b.error_kind === "auth" ? "AÇIK — ama Binance API anahtarını reddediyor" : "AÇIK — ama Binance'e ulaşılamıyor";
     hs.textContent = b.auto_trade
-      ? (trouble ? "AÇIK — ama Binance'e ulaşılamıyor" : "AÇIK — bot kendi işlem yapıyor")
+      ? (trouble ? troubleText : "AÇIK — bot kendi işlem yapıyor")
       : "KAPALI — yalnızca izliyor";
     hs.className = `hero-status ${b.auto_trade && !trouble ? "on" : ""}`;
     hs.style.color = b.auto_trade && trouble ? "var(--warn)" : "";

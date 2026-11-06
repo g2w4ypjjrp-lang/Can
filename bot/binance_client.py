@@ -25,6 +25,16 @@ PROD_URL = "https://fapi.binance.com"
 TESTNET_URL_CANDIDATES = ("https://demo-fapi.binance.com", "https://testnet.binancefuture.com")
 
 
+def error_kind(exc: BaseException) -> str:
+    """Hata türü: 'network' (Binance'e ulaşılamadı), 'auth' (anahtar reddedildi) ya da 'other'."""
+    if isinstance(exc, BinanceAPIError):
+        if exc.status == 0:
+            return "network"
+        if exc.code in (-2014, -2015, -1022) or exc.status == 401:
+            return "auth"
+    return "other"
+
+
 class BinanceAPIError(Exception):
     def __init__(self, status: int, code: int | None, msg: str):
         super().__init__(f"Binance hatası {code}: {msg} (HTTP {status})")
@@ -45,7 +55,10 @@ FRIENDLY = {
     -1021: "Bilgisayarınızın saati Binance ile uyumsuz. Saati otomatik ayara alın.",
     -1022: "İmza geçersiz: API Secret yanlış girilmiş olabilir.",
     -2014: "API anahtarı biçimi geçersiz.",
-    -2015: "API anahtarı geçersiz ya da yetkisiz: Futures izni açık mı, IP kısıtlaması doğru mu?",
+    -2015: (
+        "Binance API anahtarını reddetti: anahtar Binance'te silinmiş olabilir (yenisini girin), "
+        "anahtarın IP listesinde bu bilgisayarın internet IP'si olmayabilir ya da Vadeli İşlemler izni kapalı olabilir."
+    ),
     -2019: "Yetersiz teminat (bakiye).",
     -2021: "Emir anında tetiklenirdi (fiyat stop seviyesini geçmiş).",
     -4164: "Emir tutarı Binance'in en düşük tutarının altında.",

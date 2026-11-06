@@ -15,7 +15,7 @@ from typing import Any
 
 from . import __version__
 from .backtest import BacktestResult, load_backtest_data, run_backtest
-from .binance_client import PROD_URL, BinanceFuturesClient, friendly_error
+from .binance_client import PROD_URL, BinanceFuturesClient, error_kind, friendly_error
 from .brokers import (
     AccountSnapshot,
     Broker,
@@ -117,6 +117,7 @@ class Engine:
         self.external: list[dict[str, Any]] = []
         self.status = "starting"
         self.error: str | None = None
+        self.error_kind: str | None = None
         self.guard_reason: str | None = None
         self.halt_reason: str | None = None
         self.cooldowns: dict[str, float] = {}
@@ -219,12 +220,14 @@ class Engine:
                     self.log("Hesap 'Hedge' modunda; emirler buna göre gönderilecek.")
             self.status = "ready"
             self.error = None
+            self.error_kind = None
             self.log(f"Mod: {MODE_LABELS[mode]} — bağlantı hazır", persist=True)
         except Exception as exc:  # noqa: BLE001
             self.broker = None
             self.data = None
             self.status = "error"
             self.error = friendly_error(exc)
+            self.error_kind = error_kind(exc.__cause__ or exc)
             self.log(f"Bağlantı kurulamadı: {self.error}", "error")
         self.last_scanned_candle = 0
 
@@ -236,6 +239,7 @@ class Engine:
                 raise
             except Exception as exc:  # noqa: BLE001
                 self.error = friendly_error(exc)
+                self.error_kind = error_kind(exc)
                 self.log(f"Döngü hatası: {self.error}", "error")
             try:
                 await asyncio.wait_for(self._wake.wait(), timeout=self.LOOP_SECONDS)
@@ -267,6 +271,7 @@ class Engine:
         if self._scan_due():
             await self.run_scan()
         self.error = None
+        self.error_kind = None
         self.status = "running"
         if self.account and now - self._last_equity_at >= self.EQUITY_EVERY:
             self._last_equity_at = now
@@ -947,6 +952,8 @@ class Engine:
         if self.broker is None:
             return f"Bağlantı yok: {self.error or 'bağlanılıyor…'}"
         if self.error:
+            if self.error_kind == "auth":
+                return f"Binance API anahtarını reddediyor: {self.error}"
             return f"Binance'e ulaşılamıyor, tekrar deneniyor: {self.error}"
         if self.halt_reason:
             return self.halt_reason
@@ -997,6 +1004,7 @@ class Engine:
                 "status": self.status,
                 "status_text": self.status_text(),
                 "error": self.error,
+                "error_kind": self.error_kind,
                 "guard": self.guard_reason,
                 "halt": self.halt_reason,
                 "busy": self.busy,

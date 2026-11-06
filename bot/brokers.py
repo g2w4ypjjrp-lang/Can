@@ -521,6 +521,7 @@ async def connect_live_broker(
     else:
         urls = list(TESTNET_URL_CANDIDATES) if testnet_url == "auto" else [testnet_url]
     errors: list[str] = []
+    last_exc: Exception | None = None
     for url in urls:
         client = client_factory(url, api_key, api_secret)
         broker = LiveBroker(client, mode)
@@ -529,5 +530,6 @@ async def connect_live_broker(
             return broker
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{url.replace('https://', '')}: {friendly_error(exc)}")
+            last_exc = exc
             await client.aclose()
-    raise RuntimeError("Binance'e bağlanılamadı → " + " | ".join(errors))
+    raise RuntimeError("Binance'e bağlanılamadı → " + " | ".join(errors)) from last_exc
