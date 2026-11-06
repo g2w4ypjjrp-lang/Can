@@ -108,6 +108,8 @@ Evden uzaktayken bağlanmak isterseniz [Tailscale](https://tailscale.com/) gibi 
 
 **Elle açtığım pozisyonlara dokunur mu?** Hayır. Botun açmadığı pozisyonlar ayrıca listelenir; bot o coinlerde işlem açmaz.
 
+**Botu iki bilgisayarda aynı anda çalıştırabilir miyim?** Aynı API anahtarıyla hayır — iki bot aynı hesapta birbirinden habersiz işlem açar. Tek bilgisayarda çalıştırıp diğer cihazlardan (telefon gibi) panele bağlanın.
+
 **Telegram bildirimi alabilir miyim?** Evet: **Ayarlar → Telegram** (isteğe bağlı).
 
 **Verilerim nerede?** `%LOCALAPPDATA%\CanBot` (ayarlar, işlem geçmişi, günlük dosyaları). Kaynak koddan çalıştırırken proje içindeki `data` klasörü.
