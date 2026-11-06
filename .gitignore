@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# CanBot verileri (API anahtarları, işlem kayıtları) — ASLA paylaşmayın
+data/
+.env
+
+# Paketleme çıktıları
+build/
+dist/
+*.spec.bak
+
+# Sistem
+.DS_Store
+Thumbs.db
