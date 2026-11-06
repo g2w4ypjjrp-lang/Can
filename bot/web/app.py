@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import __version__
 from ..binance_client import friendly_error
 from ..brokers import connect_live_broker
+from ..diagnostics import diagnose
 from ..engine import Engine
 from ..settings import BOUNDS, MODES, SecretStore, SettingsStore, data_dir
 from ..storage import Storage
@@ -346,6 +347,11 @@ def create_app(
             }
         finally:
             await broker.aclose()
+
+    @app.post("/api/diagnose", dependencies=auth)
+    async def diagnose_connection(request: Request) -> dict[str, Any]:
+        """Binance'e neden bağlanılamadığını adım adım test eder."""
+        return await diagnose(engine_of(request).data_url)
 
     @app.put("/api/telegram", dependencies=auth)
     async def save_telegram(request: Request, body: dict[str, Any]) -> dict[str, Any]:

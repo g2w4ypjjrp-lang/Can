@@ -14,6 +14,7 @@ datas += collect_data_files("webview")
 hiddenimports = []
 hiddenimports += collect_submodules("uvicorn")
 hiddenimports += collect_submodules("bot")
+hiddenimports += collect_submodules("truststore")
 hiddenimports += [
     "pystray._win32",
     "webview.platforms.winforms",

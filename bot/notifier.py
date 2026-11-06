@@ -6,6 +6,7 @@ import logging
 
 import httpx
 
+from .net import ssl_context
 from .settings import SecretStore
 
 log = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class Notifier:
         if not (token and chat_id):
             return False
         try:
-            async with httpx.AsyncClient(timeout=10, transport=self._transport) as client:
+            async with httpx.AsyncClient(timeout=10, transport=self._transport, verify=ssl_context()) as client:
                 resp = await client.post(
                     f"https://api.telegram.org/bot{token}/sendMessage",
                     json={"chat_id": chat_id, "text": text, "disable_web_page_preview": True},

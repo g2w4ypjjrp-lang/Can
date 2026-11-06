@@ -363,7 +363,7 @@ def selftest(out: str | None, strict: bool) -> int:
         result["icon_exists"] = static_icon("canbot.ico").exists()
         server.stop()
         server.join(10)
-        for mod in ("webview", "pystray", "PIL.Image", "qrcode"):
+        for mod in ("webview", "pystray", "PIL.Image", "qrcode", "truststore"):
             try:
                 __import__(mod)
                 result[f"import_{mod}"] = True

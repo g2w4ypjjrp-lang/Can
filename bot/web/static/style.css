@@ -290,6 +290,13 @@ textarea { min-height: 70px; resize: vertical; }
 .explain li.warn::before { background: var(--warn); }
 .explain li.flat::before { background: var(--faint); }
 
+/* bağlantı teşhisi */
+.diag { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.diag li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; font-size: 13.5px; align-items: start; }
+.diag li small { display: block; color: var(--muted); word-break: break-word; }
+.diag .i-ok { color: var(--up); font-weight: 800; }
+.diag .i-bad { color: var(--down); font-weight: 800; }
+
 /* ilerleme */
 .progress { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; margin-top: 14px; }
 .progress span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transition: width .4s; }

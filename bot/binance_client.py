@@ -17,6 +17,8 @@ from urllib.parse import urlencode
 
 import httpx
 
+from .net import describe_network_error, ssl_context
+
 log = logging.getLogger(__name__)
 
 PROD_URL = "https://fapi.binance.com"
@@ -54,6 +56,8 @@ FRIENDLY = {
 
 def friendly_error(exc: Exception) -> str:
     if isinstance(exc, BinanceAPIError):
+        if exc.status == 0:
+            return exc.msg
         if exc.status == 451:
             return "Binance bulunduğunuz konumdan erişime izin vermiyor (HTTP 451)."
         if exc.status in (418, 429):
@@ -106,6 +110,7 @@ class BinanceFuturesClient:
             base_url=self.base_url,
             timeout=timeout,
             transport=transport,
+            verify=ssl_context(),
             headers={"User-Agent": "CanBot/1.0"},
         )
 
@@ -168,7 +173,7 @@ class BinanceFuturesClient:
                 if retry_allowed and attempt <= max_retries:
                     await asyncio.sleep(min(2**attempt, 10))
                     continue
-                raise BinanceAPIError(0, None, f"Bağlantı hatası: {exc.__class__.__name__}") from exc
+                raise BinanceAPIError(0, None, describe_network_error(exc)) from exc
 
             weight = resp.headers.get("x-mbx-used-weight-1m")
             if weight and weight.isdigit():

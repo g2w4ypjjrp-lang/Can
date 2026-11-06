@@ -946,6 +946,8 @@ class Engine:
         s = self.settings
         if self.broker is None:
             return f"Bağlantı yok: {self.error or 'bağlanılıyor…'}"
+        if self.error:
+            return f"Binance'e ulaşılamıyor, tekrar deneniyor: {self.error}"
         if self.halt_reason:
             return self.halt_reason
         if not s.auto_trade:

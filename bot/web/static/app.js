@@ -304,14 +304,33 @@
     $("#version").textContent = `Sürüm ${state.version}`;
   }
 
+  /* ------------------------------------------------------- bağlantı teşhisi */
+  function diagHtml(r) {
+    const items = (r.steps || []).map((s) => `<li><span class="${s.ok ? "i-ok" : "i-bad"}">${s.ok ? "✓" : "✗"}</span><span>${esc(s.name)}<small>${esc(s.detail)}</small></span></li>`).join("");
+    return `<div class="callout ${r.ok ? "ok" : "warn"}"><strong>${esc(r.summary)}</strong><ul class="diag">${items}</ul></div>`;
+  }
+  // Hedef seçiciyle verilir: panel her 3 sn'de yenilendiğinde öğe değişse de sonuç doğru yere yazılır.
+  async function runDiagnose(selector, btn) {
+    const put = (html) => { const el = $(selector); if (el) el.innerHTML = html; };
+    if (btn) btn.disabled = true;
+    put(`<p class="tiny muted">Bağlantı adım adım test ediliyor (yaklaşık 10 saniye)…</p>`);
+    try {
+      put(diagHtml(await api("/api/diagnose", { method: "POST" })));
+    } catch (e) {
+      put(`<div class="callout danger">${esc(e.message)}</div>`);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   /* ----------------------------------------------------------------- özet */
   function renderHome() {
     const b = state.bot;
     const alerts = [];
     if (!b.connected) {
-      alerts.push(`<div class="callout danger"><strong>Binance bağlantısı yok.</strong><p>${esc(b.error || "Bağlanılıyor…")}</p><button class="btn sm" id="reconnect-btn">Yeniden bağlan</button> <button class="btn sm ghost" data-goto="settings">Ayarlara git</button></div>`);
+      alerts.push(`<div class="callout danger"><strong>Binance bağlantısı yok.</strong><p>${esc(b.error || "Bağlanılıyor…")}</p><button class="btn sm" id="reconnect-btn">Yeniden bağlan</button> <button class="btn sm ghost" id="diag-home-btn">Sorunu teşhis et</button> <button class="btn sm ghost" data-goto="settings">Ayarlara git</button></div>`);
     } else if (b.error) {
-      alerts.push(`<div class="callout warn"><strong>Uyarı:</strong> ${esc(b.error)}</div>`);
+      alerts.push(`<div class="callout warn"><strong>Uyarı:</strong> ${esc(b.error)} <button class="btn sm ghost" id="diag-home-btn">Sorunu teşhis et</button></div>`);
     }
     if (b.halt) alerts.push(`<div class="callout danger"><strong>Bot kendini durdurdu.</strong><p>${esc(b.halt)} Ayarları gözden geçirip otomatik işlemi yeniden açabilirsiniz.</p></div>`);
     else if (b.guard) alerts.push(`<div class="callout warn">${esc(b.guard)}</div>`);
@@ -320,13 +339,21 @@
       const list = state.external_positions.map((p) => `${base(p.symbol)} ${p.side}`).join(", ");
       alerts.push(`<div class="callout info">Hesabınızda botun açmadığı pozisyonlar var (${esc(list)}). Bot bunlara dokunmaz ve bu coinlerde işlem açmaz.</div>`);
     }
-    $("#alerts").innerHTML = alerts.join("");
+    const diagBox = $("#diag-home");
+    const keepDiag = diagBox ? diagBox.innerHTML : "";
+    $("#alerts").innerHTML = alerts.join("") + (b.connected && !b.error ? "" : `<div id="diag-home">${keepDiag}</div>`);
+    const db = $("#diag-home-btn");
+    if (db) db.onclick = () => runDiagnose("#diag-home", db);
     const rb = $("#reconnect-btn");
     if (rb) rb.onclick = () => act(rb, () => api("/api/bot/reconnect", { method: "POST" }), "Bağlantı yenilendi");
 
     const hs = $("#hero-status");
-    hs.textContent = b.auto_trade ? "AÇIK — bot kendi işlem yapıyor" : "KAPALI — yalnızca izliyor";
-    hs.className = `hero-status ${b.auto_trade ? "on" : ""}`;
+    const trouble = !b.connected || !!b.error;
+    hs.textContent = b.auto_trade
+      ? (trouble ? "AÇIK — ama Binance'e ulaşılamıyor" : "AÇIK — bot kendi işlem yapıyor")
+      : "KAPALI — yalnızca izliyor";
+    hs.className = `hero-status ${b.auto_trade && !trouble ? "on" : ""}`;
+    hs.style.color = b.auto_trade && trouble ? "var(--warn)" : "";
     $("#hero-sub").textContent = b.status_text;
     const tg = $("#auto-toggle");
     if (document.activeElement !== tg) tg.checked = !!b.auto_trade;
@@ -987,6 +1014,7 @@
     if (btn) btn.disabled = false;
   }
   $("#keys-test").addEventListener("click", (ev) => testKeys(ev.target));
+  $("#keys-diag").addEventListener("click", (ev) => runDiagnose("#keys-result", ev.target));
   $("#keys-clear").addEventListener("click", async (ev) => {
     const ok = await confirmBox("Anahtarları sil", "Bu moda ait API anahtarları bu bilgisayardan silinecek.", "Sil");
     if (ok) act(ev.target, () => api("/api/keys", { method: "PUT", body: { mode: keysMode, api_key: "", api_secret: "" } }), "Anahtarlar silindi");
@@ -1091,7 +1119,9 @@
           const r = await api("/api/keys/test", { method: "POST", body: { mode: "live" } });
           wz.keysOk = !!r.ok;
           const warn = (r.warnings || []).map((w) => `<li>${esc(w)}</li>`).join("");
-          $("#wz-keys-result").innerHTML = `<div class="callout ${r.ok ? (warn ? "warn" : "ok") : "danger"}"><strong>${esc(r.message)}</strong>${warn ? `<ul>${warn}</ul>` : ""}</div>`;
+          $("#wz-keys-result").innerHTML = `<div class="callout ${r.ok ? (warn ? "warn" : "ok") : "danger"}"><strong>${esc(r.message)}</strong>${warn ? `<ul>${warn}</ul>` : ""}${r.ok ? "" : `<p><button class="btn sm" id="wz-diag">Bağlantı sorununu teşhis et</button></p><div id="wz-diag-out"></div>`}</div>`;
+          const wd = $("#wz-diag");
+          if (wd) wd.onclick = () => runDiagnose("#wz-diag-out", wd);
         } catch (e) {
           $("#wz-keys-result").innerHTML = `<div class="callout danger">${esc(e.message)}</div>`;
         } finally { tb.disabled = false; }
