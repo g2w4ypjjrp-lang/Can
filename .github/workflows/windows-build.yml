@@ -52,7 +52,27 @@ jobs:
           $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
           & $iscc packaging\installer.iss
+      - name: Kurulum programını dene (sessiz kurulum, çalıştırma, kaldırma)
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "CanBotKurulumTesti"
+          $log = Join-Path $env:RUNNER_TEMP "kurulum.log"
+          $selftest = Join-Path $env:RUNNER_TEMP "kurulu-selftest.json"
+          if (-not (Test-Path "dist\CanBot-Kurulum.exe")) { throw "CanBot-Kurulum.exe uretilemedi" }
+          $p = Start-Process -FilePath "dist\CanBot-Kurulum.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-","/DIR=$dir","/LOG=$log" -Wait -PassThru
+          if (Test-Path $log) { Get-Content $log -Tail 25 }
+          if ($p.ExitCode -ne 0) { throw "Kurulum basarisiz (kod $($p.ExitCode))" }
+          if (-not (Test-Path "$dir\CanBot.exe")) { throw "CanBot.exe kurulum klasorunde yok" }
+          if (-not (Test-Path "$dir\unins000.exe")) { throw "Kaldirma programi yok" }
+          $t = Start-Process -FilePath "$dir\CanBot.exe" -ArgumentList "--selftest","--selftest-strict","--selftest-out",$selftest -Wait -PassThru
+          Get-Content $selftest
+          if ($t.ExitCode -ne 0) { throw "Kurulu uygulama testi basarisiz (kod $($t.ExitCode))" }
+          Start-Process -FilePath "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait | Out-Null
+          Start-Sleep -Seconds 5
+          if (Test-Path "$dir\CanBot.exe") { Write-Warning "Kaldirma sonrasi CanBot.exe hala duruyor" }
+          Write-Host "Kurulum, calistirma ve kaldirma testi basarili"
       - name: Dosyaları yükle
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CanBot-Windows
