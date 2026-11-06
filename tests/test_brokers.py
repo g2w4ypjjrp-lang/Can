@@ -172,3 +172,46 @@ def test_connect_live_tries_testnet_urls():
 def test_connect_live_requires_keys():
     with pytest.raises(RuntimeError, match="API anahtarı"):
         run(connect_live_broker("live", "", "", "auto", lambda u, k, s: FakeFuturesClient(u)))
+
+
+def test_orphan_bot_stops_are_swept(storage, info):
+    b, fake = live()
+    fake.algo_orders[1] = {"kind": "algo", "symbol": "ABCUSDT", "clientAlgoId": "canbot-sl-1", "type": "STOP_MARKET"}
+    fake.algo_orders[2] = {"kind": "algo", "symbol": "ABCUSDT", "clientAlgoId": "elle-kullanici", "type": "STOP_MARKET"}
+    run(b.open_position(info, "LONG", Decimal("1"), 5, "ISOLATED", 95.0, None, 100.0))
+    assert 1 not in fake.algo_orders  # botun eski emri temizlendi
+    assert 2 in fake.algo_orders  # kullanıcının emrine dokunulmadı
+    new_sl = [p for kind, p in fake.calls if kind == "algo"][-1]
+    assert new_sl["clientAlgoId"].startswith("canbot-sl-")
+
+
+def test_move_stop_keeps_old_stop_when_cancel_fails(storage, info):
+    from bot.brokers import StopMoveError
+
+    b, fake = live()
+    fill = run(b.open_position(info, "LONG", Decimal("1"), 5, "ISOLATED", 95.0, None, 100.0))
+    t = open_trade(storage, fill, mode="testnet")
+
+    async def broken_cancel(algo_id):
+        raise BinanceAPIError(0, None, "Bağlantı hatası")
+
+    fake.cancel_algo_order = broken_cancel
+    with pytest.raises(StopMoveError) as exc:
+        run(b.move_stop(info, t, 99.0))
+    assert exc.value.meta["sl_id"] == t.meta["sl_id"]
+    assert len([o for o in fake.algo_orders.values() if o.get("type") == "STOP_MARKET"]) == 1
+
+
+def test_entry_timeout_adopts_open_position(storage, info):
+    b, fake = live()
+    real_new_order = fake.new_order
+
+    async def flaky(**params):
+        if params.get("type") == "MARKET":
+            await real_new_order(**params)  # emir borsada gerçekleşti...
+            raise BinanceAPIError(0, None, "Bağlantı hatası")  # ...ama yanıt gelmedi
+        return await real_new_order(**params)
+
+    fake.new_order = flaky
+    fill = run(b.open_position(info, "LONG", Decimal("1"), 5, "ISOLATED", 95.0, None, 100.0))
+    assert fill.qty == Decimal("1.000") and fill.meta.get("sl_id")  # stop konuldu

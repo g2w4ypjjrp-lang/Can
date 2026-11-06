@@ -287,6 +287,15 @@ class BinanceFuturesClient:
     async def cancel_order(self, symbol: str, order_id: int) -> dict[str, Any]:
         return await self._request("DELETE", "/fapi/v1/order", {"symbol": symbol, "orderId": order_id}, signed=True)
 
+    async def open_orders(self, symbol: str) -> list[dict[str, Any]]:
+        return await self._request("GET", "/fapi/v1/openOrders", {"symbol": symbol}, signed=True)
+
+    async def open_algo_orders(self, symbol: str) -> list[dict[str, Any]]:
+        data = await self._request("GET", "/fapi/v1/openAlgoOrders", {"symbol": symbol}, signed=True)
+        if isinstance(data, dict):  # yanıt biçimi farklıysa da çalışsın
+            data = data.get("orders") or data.get("rows") or data.get("data") or []
+        return data if isinstance(data, list) else []
+
     async def cancel_all_open_orders(self, symbol: str) -> Any:
         return await self._request("DELETE", "/fapi/v1/allOpenOrders", {"symbol": symbol}, signed=True)
 

@@ -224,7 +224,8 @@ class DesktopController:
             pass
 
     def panel_url(self) -> str:
-        token = self.secrets.issue_token() if self.secrets is not None else ""
+        # Masaüstü penceresi bu bilgisayarda çalışır; oturumu uzun süreli tutulur.
+        token = self.secrets.issue_token(ttl=10 * 365 * 86400) if self.secrets is not None else ""
         return f"http://127.0.0.1:{self.port}/#desktop={token}"
 
     def show_window(self) -> None:
@@ -260,6 +261,11 @@ class DesktopController:
         if engine is None or self.server is None:
             return
         want = not engine.settings.auto_trade
+        if want and engine.settings.mode == "live":
+            # Gerçek parayla başlatma, onay için paneldan yapılır.
+            self.show_window()
+            self.notify("Gerçek modda otomatik işlemi panelden onaylayarak açın.")
+            return
         try:
             self.server.call(engine.set_auto_trade(want))
             self.notify("Otomatik işlem açıldı" if want else "Otomatik işlem kapatıldı")

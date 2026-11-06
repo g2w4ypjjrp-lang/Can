@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
 import socket
@@ -48,6 +49,28 @@ def qr_svg(text: str) -> str:
         return img.to_string(encoding="unicode")
     except Exception:  # noqa: BLE001
         return ""
+
+
+def host_allowed(host_header: str) -> bool:
+    """DNS rebinding saldırılarına karşı: yalnızca IP, localhost ve yerel ağ adlarına izin verilir."""
+    host = (host_header or "").strip().lower()
+    if host.startswith("["):  # [::1]:8765
+        host = host[1:].split("]", 1)[0]
+    elif host.count(":") == 1:
+        host = host.split(":", 1)[0]
+    if not host:
+        return False
+    if host in ("localhost", "testserver"):
+        return True
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        pass
+    if "." not in host or host.endswith((".local", ".lan", ".home", ".ts.net")):
+        return True
+    extra = {h.strip().lower() for h in os.environ.get("CANBOT_ALLOWED_HOSTS", "").split(",") if h.strip()}
+    return host in extra
 
 
 def is_local(request: Request) -> bool:
@@ -112,6 +135,13 @@ def create_app(
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
+        if not host_allowed(request.headers.get("host", "")):
+            return JSONResponse(status_code=400, content={"detail": "Geçersiz adres (host)"})
+        origin = request.headers.get("origin")
+        if origin and request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin_host = origin.split("://", 1)[-1].rstrip("/").lower()
+            if origin_host != request.headers.get("host", "").lower():
+                return JSONResponse(status_code=403, content={"detail": "İzin verilmeyen kaynak"})
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "no-referrer")

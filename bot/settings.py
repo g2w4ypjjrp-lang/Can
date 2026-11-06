@@ -340,8 +340,8 @@ class SecretStore:
         return hmac.compare_digest(digest.hex(), hash_hex)
 
     # -- oturum jetonu (imzalı, durumsuz) --
-    def issue_token(self) -> str:
-        payload = json.dumps({"exp": int(time.time()) + self.TOKEN_TTL}).encode()
+    def issue_token(self, ttl: int | None = None) -> str:
+        payload = json.dumps({"exp": int(time.time()) + (ttl or self.TOKEN_TTL)}).encode()
         body = base64.urlsafe_b64encode(payload).decode().rstrip("=")
         sig = hmac.new(self._data["token_key"].encode(), body.encode(), hashlib.sha256).hexdigest()
         return f"{body}.{sig}"

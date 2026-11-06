@@ -59,6 +59,17 @@ class Fill:
     meta: dict[str, Any] = field(default_factory=dict)
 
 
+BOT_TAG = "canbot-"  # botun emirlerini tanımak için istemci emir kimliği öneki
+
+
+class StopMoveError(RuntimeError):
+    """Stop taşınamadı; ``meta`` borsadaki güncel stop emrini gösterir (kaydedilmeli)."""
+
+    def __init__(self, message: str, meta: dict[str, Any]):
+        super().__init__(message)
+        self.meta = meta
+
+
 @dataclass
 class ClosedInfo:
     trade_id: int
@@ -269,26 +280,46 @@ class LiveBroker(Broker):
         trig = info.round_price(trigger, rounding)
         params = self._close_params(info.symbol, side)
         params.update(type=otype, closePosition=True, workingType="MARK_PRICE")
+        tag = f"{BOT_TAG}{'sl' if otype == 'STOP_MARKET' else 'tp'}-{int(time.time() * 1000)}"
         try:
-            res = await self.client.new_algo_order(triggerPrice=trig, **params)
+            res = await self.client.new_algo_order(triggerPrice=trig, clientAlgoId=tag, **params)
             return "algo", int(res["algoId"])
         except BinanceAPIError as exc:
             if not exc.endpoint_missing:
                 raise
         # Algo uç noktası olmayan eski sistemler için klasik emir.
-        res = await self.client.new_order(stopPrice=trig, **params)
+        res = await self.client.new_order(stopPrice=trig, newClientOrderId=tag, **params)
         return "order", int(res["orderId"])
 
-    async def _cancel(self, symbol: str, kind: str | None, order_id: Any) -> None:
+    async def _cancel(self, symbol: str, kind: str | None, order_id: Any) -> bool:
+        """Emri iptal eder. Emir zaten yoksa da başarılı sayılır; diğer hatalarda False döner."""
         if not order_id:
-            return
+            return True
         try:
             if kind == "order":
                 await self.client.cancel_order(symbol, int(order_id))
             else:
                 await self.client.cancel_algo_order(int(order_id))
+            return True
         except BinanceAPIError as exc:
+            gone = exc.code in (-2011, -2013) or "unknown" in (exc.msg or "").lower()
             log.info("%s emir iptali: %s", symbol, friendly_error(exc))
+            return gone
+
+    async def _sweep_bot_orders(self, symbol: str) -> None:
+        """Bu coinde botun bıraktığı (artık pozisyonu olmayan) stop / kâr al emirlerini temizler."""
+        try:
+            for o in await self.client.open_algo_orders(symbol):
+                if str(o.get("clientAlgoId", "")).startswith(BOT_TAG) and o.get("algoId"):
+                    await self._cancel(symbol, "algo", o["algoId"])
+        except BinanceAPIError as exc:
+            log.debug("%s algo emir listesi alınamadı: %s", symbol, friendly_error(exc))
+        try:
+            for o in await self.client.open_orders(symbol):
+                if str(o.get("clientOrderId", "")).startswith(BOT_TAG) and o.get("orderId"):
+                    await self._cancel(symbol, "order", o["orderId"])
+        except BinanceAPIError as exc:
+            log.debug("%s emir listesi alınamadı: %s", symbol, friendly_error(exc))
 
     async def _cancel_trade_orders(self, trade: Trade) -> None:
         await self._cancel(trade.symbol, trade.meta.get("sl_kind"), trade.meta.get("sl_id"))
@@ -329,6 +360,7 @@ class LiveBroker(Broker):
     # -- arayüz --
     async def open_position(self, info, side, qty, leverage, margin_type, stop, take_profit, ref_price) -> Fill:
         sym = info.symbol
+        await self._sweep_bot_orders(sym)  # önceki işlemlerden kalmış olabilecek stopları temizle
         try:
             await self.client.set_margin_type(sym, margin_type)
         except BinanceAPIError as exc:
@@ -344,7 +376,18 @@ class LiveBroker(Broker):
         }
         if self.hedge:
             params["positionSide"] = side
-        order = await self.client.new_order(**params)
+        try:
+            order = await self.client.new_order(**params)
+        except BinanceAPIError as exc:
+            if not (exc.is_network or exc.status >= 500):
+                raise
+            # Yanıt gelmedi: emir gerçekleşmiş olabilir. Pozisyon varsa sahiplenip stop koyarız.
+            await asyncio.sleep(1.5)
+            pos = (await self.positions({})).get((sym, side))
+            if pos is None:
+                raise
+            log.warning("%s emir yanıtı alınamadı ama pozisyon açılmış; stop konuyor", sym)
+            order = {"orderId": None, "executedQty": str(pos.amount), "avgPrice": str(pos.entry_price)}
         executed = Decimal(str(order.get("executedQty") or "0"))
         avg = float(order.get("avgPrice") or 0)
         if executed <= 0 or avg <= 0:
@@ -388,6 +431,7 @@ class LiveBroker(Broker):
         order = await self._market_close(info, trade.side, Decimal(str(pos.amount)))
         # Önce pozisyon kapatılır, sonra kalan stop/kâr al emirleri iptal edilir.
         await self._cancel_trade_orders(trade)
+        await self._sweep_bot_orders(trade.symbol)
         qty, avg, pnl, fee = await self._fills(trade.symbol, order.get("orderId"))
         realized: float | None = pnl
         if qty <= 0:
@@ -399,7 +443,9 @@ class LiveBroker(Broker):
 
     async def move_stop(self, info: SymbolInfo, trade: Trade, new_stop: float) -> dict[str, Any]:
         meta = dict(trade.meta)
-        await self._cancel(trade.symbol, meta.get("sl_kind"), meta.get("sl_id"))
+        if not await self._cancel(trade.symbol, meta.get("sl_kind"), meta.get("sl_id")):
+            # Eski stop iptal edilemedi (ör. bağlantı sorunu): eski stop borsada duruyor, dokunma.
+            raise StopMoveError(f"{trade.symbol}: eski stop iptal edilemedi, mevcut stop korunuyor", meta)
         try:
             kind, oid = await self._place_conditional(info, trade.side, "STOP_MARKET", new_stop)
         except Exception as exc:  # noqa: BLE001
@@ -408,9 +454,10 @@ class LiveBroker(Broker):
                 kind, oid = await self._place_conditional(info, trade.side, "STOP_MARKET", float(trade.stop_price or 0))
             except Exception:  # noqa: BLE001
                 await self._market_close(info, trade.side, Decimal(trade.qty))
-                raise RuntimeError(f"{trade.symbol}: stop yenilenemedi, pozisyon güvenlik için kapatıldı") from exc
+                meta.update(sl_kind=None, sl_id=None)
+                raise StopMoveError(f"{trade.symbol}: stop yenilenemedi, pozisyon güvenlik için kapatıldı", meta) from exc
             meta.update(sl_kind=kind, sl_id=oid)
-            raise RuntimeError(f"{trade.symbol}: stop taşınamadı, eski stop korunuyor") from exc
+            raise StopMoveError(f"{trade.symbol}: stop taşınamadı, eski stop korunuyor", meta) from exc
         meta.update(sl_kind=kind, sl_id=oid)
         return meta
 
@@ -424,6 +471,7 @@ class LiveBroker(Broker):
             if (t.symbol, t.side) in positions or now - t.entry_time < 5000:
                 continue
             await self._cancel_trade_orders(t)
+            await self._sweep_bot_orders(t.symbol)
             close_side = "SELL" if t.side == "LONG" else "BUY"
             try:
                 rows = await self.client.user_trades(t.symbol, start_time=t.entry_time)

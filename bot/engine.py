@@ -22,6 +22,7 @@ from .brokers import (
     ClientFactory,
     LiveBroker,
     PaperBroker,
+    StopMoveError,
     connect_live_broker,
     default_client_factory,
 )
@@ -130,6 +131,8 @@ class Engine:
         self._last_equity_at = 0.0
         self._last_connect_try = 0.0
         self._last_prune = 0.0
+        self._last_problem: tuple[str, float] = ("", 0.0)
+        self._curve_cache: tuple[str, float, list[list[float]]] = ("", 0.0, [])
         for ev in reversed(storage.events(50)):
             self.logs.appendleft(ev)
 
@@ -143,6 +146,12 @@ class Engine:
         return self.settings.mode
 
     def log(self, message: str, level: str = "info", persist: bool = False) -> None:
+        if level in ("warning", "error"):
+            # Aynı hata art arda tekrarlanırsa (ör. internet yok) günlüğü doldurmasın: 10 dk'da bir yaz.
+            last_msg, last_ts = self._last_problem
+            if message == last_msg and time.time() - last_ts < 600:
+                return
+            self._last_problem = (message, time.time())
         self.logs.appendleft({"ts": now_ms(), "level": level, "message": message})
         getattr(log, level if level in ("info", "warning", "error") else "info")(message)
         if persist or level in ("warning", "error"):
@@ -397,7 +406,11 @@ class Engine:
                     if (mark - t.entry_price) * t.direction >= s.breakeven_at_r * r:
                         new_stop = t.entry_price * (1 + t.direction * BREAKEVEN_OFFSET)
                         if (new_stop - t.stop_price) * t.direction > 0 and (mark - new_stop) * t.direction > 0:
-                            meta = await self.broker.move_stop(info, t, new_stop)
+                            try:
+                                meta = await self.broker.move_stop(info, t, new_stop)
+                            except StopMoveError as exc:
+                                self.storage.update_trade(t.id, meta=exc.meta)
+                                raise
                             meta["breakeven"] = True
                             self.storage.update_trade(t.id, stop_price=new_stop, meta=meta)
                             self.log(f"🛡️ {t.symbol}: stop başabaş seviyesine taşındı ({new_stop:.6g})", persist=True)
@@ -525,6 +538,10 @@ class Engine:
             if improves and (mark - new_stop) * t.direction > 0:
                 try:
                     meta = await self.broker.move_stop(info, t, new_stop)
+                except StopMoveError as exc:
+                    self.storage.update_trade(t.id, meta={**exc.meta, "extreme": extreme})
+                    self.log(f"{t.symbol} iz süren stop taşınamadı: {exc}", "error")
+                    continue
                 except Exception as exc:  # noqa: BLE001
                     self.log(f"{t.symbol} iz süren stop taşınamadı: {friendly_error(exc)}", "error")
                     continue
@@ -703,6 +720,7 @@ class Engine:
                 await self._close_trade(t, "Sanal hesap sıfırlandı")
             self.broker.reset(self.settings.paper_start_balance)
             self.storage.clear_mode("paper")
+            self._curve_cache = ("", 0.0, [])
             self.storage.kv_set("peak:paper", self.settings.paper_start_balance)
             self.storage.kv_set("day_start:paper", None)
             self.log(f"Sanal hesap {self.settings.paper_start_balance:g} USDT ile sıfırlandı", persist=True)
@@ -934,6 +952,15 @@ class Engine:
         n = len(self.storage.open_trades(self.mode))
         return f"Çalışıyor — {self.universe_count} coin izleniyor, {n}/{s.max_open_positions} pozisyon açık."
 
+    def _equity_curve(self, mode: str) -> list[list[float]]:
+        """Bakiye grafiği dakikada bir değişir; her panel isteğinde veritabanını taramamak için önbellek."""
+        cached_mode, cached_at, data = self._curve_cache
+        if cached_mode == mode and time.time() - cached_at < 30:
+            return data
+        data = self.storage.equity_curve(mode, since_ms=now_ms() - 30 * 86_400_000)
+        self._curve_cache = (mode, time.time(), data)
+        return data
+
     def snapshot(self) -> dict[str, Any]:
         s = self.settings
         mode = s.mode
@@ -980,7 +1007,7 @@ class Engine:
             "scanner": [a.to_dict() for a in self.scan[:40]],
             "market": self.market_overview(),
             "trades": [t.to_dict() for t in self.storage.closed_trades(mode, 50)],
-            "equity_curve": self.storage.equity_curve(mode, since_ms=now - 30 * 86_400_000),
+            "equity_curve": self._equity_curve(mode),
             "logs": list(self.logs)[:80],
             "backtest": self.backtest,
         }

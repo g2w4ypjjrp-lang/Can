@@ -84,6 +84,8 @@
     return `${Math.floor(h / 24)} gün ${h % 24} sa`;
   }
   const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const TF_LABEL = { "5m": "5 dakikalık", "15m": "15 dakikalık", "30m": "30 dakikalık", "1h": "1 saatlik", "2h": "2 saatlik", "4h": "4 saatlik", "1d": "günlük" };
+  const tfLabel = (tf) => TF_LABEL[tf] || tf;
 
   /* ---------------------------------------------------------------- tema */
   function applyTheme(t) {
@@ -110,7 +112,7 @@
     let data = null;
     try { data = await res.json(); } catch { /* boş yanıt */ }
     if (res.status === 401 && !path.startsWith("/api/auth/")) {
-      logout(false);
+      logout();
       throw new Error("Oturum süresi doldu, tekrar giriş yapın");
     }
     if (!res.ok) {
@@ -201,12 +203,11 @@
     };
   }
 
-  function logout(show = true) {
+  function logout() {
     token = null;
     store.del(TOKEN_KEY);
     state = null;
-    if (show !== false) showAuth();
-    else showAuth();
+    showAuth();
   }
 
   async function boot() {
@@ -524,7 +525,7 @@
       ["Fonlama", pct(a.funding_rate, true, 3)],
     ];
     $("#sheet-content").innerHTML = `
-      <div class="chips">${dir}${a.signal ? `<span class="badge signal">GİRİŞ SİNYALİ</span>` : ""}<span class="badge flat">Trend: ${esc(d.trend_timeframe)} · Giriş: ${esc(d.timeframe)}</span></div>
+      <div class="chips">${dir}${a.signal ? `<span class="badge signal">GİRİŞ SİNYALİ</span>` : ""}<span class="badge flat">Trend: ${esc(tfLabel(d.trend_timeframe))} · Giriş: ${esc(tfLabel(d.timeframe))}</span></div>
       <div class="table-like">${stats.map(([k, v]) => `<div class="stat"><span>${esc(k)}</span><b class="${k === "24s değişim" ? cls(a.change_24h) : ""}">${esc(v)}</b></div>`).join("")}</div>
       <div class="candle-wrap"><canvas id="candles"></canvas></div>
       <div class="chart-legend"><span><i style="background:var(--accent)"></i>EMA21</span><span><i style="background:var(--up)"></i>Kırılım (yukarı)</span><span><i style="background:var(--down)"></i>Kırılım (aşağı)</span>${t ? `<span><i style="background:var(--warn)"></i>Giriş / stop</span>` : ""}</div>
@@ -761,24 +762,24 @@
     const r = bt.result;
     $("#bt-result").dataset.key = JSON.stringify([r.end_balance, r.trades, r.days]);
     const kp = [
-      ["Getiri", pct(r.return_pct), cls(r.return_pct)],
-      ["En büyük düşüş", pct(-r.max_drawdown_pct, true, 1), "down"],
-      ["İşlem", `${r.trades} (L ${r.long_trades} / S ${r.short_trades})`, ""],
-      ["Kazanma oranı", pct(r.win_rate, false, 0), ""],
-      ["Kâr faktörü", r.profit_factor ? r.profit_factor.toFixed(2).replace(".", ",") : "—", ""],
-      ["Ortalama R", (r.avg_r >= 0 ? "+" : minus) + Math.abs(r.avg_r).toFixed(2).replace(".", ","), cls(r.avg_r)],
+      ["Getiri", pct(r.return_pct), cls(r.return_pct), `${money(r.end_balance - r.start_balance, true)} USDT`],
+      ["En büyük düşüş", pct(-r.max_drawdown_pct, true, 1), "down", "Zirveden en derin düşüş"],
+      ["İşlem", String(r.trades), "", `Long ${r.long_trades} · Short ${r.short_trades}`],
+      ["Kazanma oranı", pct(r.win_rate, false, 0), "", `${r.wins} kazanç`],
+      ["Kâr faktörü", r.profit_factor ? r.profit_factor.toFixed(2).replace(".", ",") : "—", "", "1'in üstü kârlı"],
+      ["Ortalama R", (r.avg_r >= 0 ? "+" : minus) + Math.abs(r.avg_r).toFixed(2).replace(".", ","), cls(r.avg_r), "İşlem başına risk katı"],
     ];
     const per = Object.entries(r.per_symbol || {});
-    const best = per.slice(0, 5);
-    const worst = per.slice(-5).reverse().filter(([, v]) => v < 0);
+    const best = per.filter(([, v]) => v > 0).slice(0, 5);
+    const worst = per.filter(([, v]) => v < 0).sort((x, y) => x[1] - y[1]).slice(0, 5);
     $("#bt-result").innerHTML = `
-      <div class="callout ${r.return_pct >= 0 ? "ok" : "danger"}"><strong>${r.days} günde ${money(r.start_balance)} → ${money(r.end_balance)} USDT (${pct(r.return_pct)})</strong>
+      <div class="callout ${r.return_pct >= 0 ? "ok" : "danger"}"><strong>${String(r.days).replace(".", ",")} günde ${money(r.start_balance)} → ${money(r.end_balance)} USDT (${pct(r.return_pct)})</strong>
         <p class="tiny">İşlem başı %${String(state.settings.risk_per_trade_pct).replace(".", ",")} risk, ${state.settings.leverage}x kaldıraç, ${r.symbols.length} coin. Komisyon: ${money(r.total_fees)} USDT. Üst üste en fazla ${r.max_losing_streak} kayıp.${r.halted ? " Test sırasında en büyük düşüş limiti aşıldı ve bot durdu." : ""}</p></div>
-      <div class="kpis">${kp.map(([l, v, c]) => `<div class="kpi"><div class="k-label">${esc(l)}</div><div class="k-value ${c}">${esc(v)}</div></div>`).join("")}</div>
+      <div class="kpis">${kp.map(([l, v, c, sub]) => `<div class="kpi"><div class="k-label">${esc(l)}</div><div class="k-value ${c}">${esc(v)}</div><div class="k-sub">${esc(sub)}</div></div>`).join("")}</div>
       <div class="card"><div class="card-head"><h3>Test bakiye eğrisi</h3></div><div class="chart" id="bt-chart"></div></div>
       <div class="grid-2">
         <div class="card"><div class="card-head"><h3>Çıkış nedenleri</h3></div><div class="tag-list">${Object.entries(r.exit_reasons || {}).map(([k, v]) => `<span class="tag">${esc(k)}: <b>${v}</b></span>`).join("")}</div>
-          <h4>En kârlı coinler</h4>${best.map(([k, v]) => `<div class="row"><div class="r-title">${esc(base(k))}</div><div class="r-right ${cls(v)}">${usdt(v, true)}</div></div>`).join("")}
+          <h4>En kârlı coinler</h4>${best.length ? best.map(([k, v]) => `<div class="row"><div class="r-title">${esc(base(k))}</div><div class="r-right ${cls(v)}">${usdt(v, true)}</div></div>`).join("") : `<p class="tiny muted">Bu dönemde kâr eden coin olmadı.</p>`}
           ${worst.length ? `<h4>En zararlı coinler</h4>${worst.map(([k, v]) => `<div class="row"><div class="r-title">${esc(base(k))}</div><div class="r-right ${cls(v)}">${usdt(v, true)}</div></div>`).join("")}` : ""}
         </div>
         <div class="card"><div class="card-head"><h3>Önemli notlar</h3></div><ul class="explain">
@@ -908,10 +909,9 @@
   function renderSettings() {
     const s = state.settings;
     if (!$("#settings-fields").children.length) buildSettingsForm();
-    if (!settingsFilled || !settingsDirty) {
-      if (!settingsDirty) fillSettings(s);
-      settingsFilled = true;
-    }
+    const editing = $("#settings-form").contains(document.activeElement);
+    if (!settingsDirty && (!settingsFilled || !editing)) fillSettings(s);
+    settingsFilled = true;
     // mod
     if (!selectedMode) selectedMode = s.mode;
     $$("#mode-seg button").forEach((b) => b.classList.toggle("active", b.dataset.mode === selectedMode));
@@ -1024,7 +1024,7 @@
     const r = await act(ev.target, () => api("/api/telegram/test", { method: "POST" }));
     if (r) toast(r.message, r.ok ? "ok" : "err");
   });
-  $("#logout-btn").addEventListener("click", () => logout(true));
+  $("#logout-btn").addEventListener("click", () => logout());
 
   async function loadConnect() {
     if (connectLoaded) return;
@@ -1114,7 +1114,7 @@
       $("#wz-next").onclick = () => { wz.step = 3; renderWizard(); };
     } else {
       c.innerHTML = `${wzSteps()}<h3 id="wz-title">Hazırsınız 🎉</h3>
-        <p class="muted">${wz.mode === "live" ? "Bot gerçek Binance hesabınıza bağlanacak." : "Bot sanal hesapla çalışacak; para riske girmez."} Otomatik işlem açıkken bot her ${esc(state.settings.entry_timeframe)} mum kapanışında piyasayı tarar ve uygun fırsatta kendi işlem açar. Siz çalışırken de program saatin yanındaki simgede çalışmaya devam eder.</p>
+        <p class="muted">${wz.mode === "live" ? "Bot gerçek Binance hesabınıza bağlanacak." : "Bot sanal hesapla çalışacak; para riske girmez."} Otomatik işlem açıkken bot her ${esc(tfLabel(state.settings.entry_timeframe))} mum kapanışında piyasayı tarar ve uygun fırsatta kendi işlem açar. Siz çalışırken de program saatin yanındaki simgede çalışmaya devam eder.</p>
         <div class="actions end"><button class="btn ghost" id="wz-watch">Şimdilik sadece izle</button><button class="btn primary" id="wz-start">Otomatik işlemi başlat</button></div>`;
       const finish = async (start, btn) => {
         btn.disabled = true;

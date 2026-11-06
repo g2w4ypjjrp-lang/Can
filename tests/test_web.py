@@ -128,3 +128,18 @@ def test_desktop_endpoints_without_desktop(local, remote):
     assert local.put("/api/desktop", headers=auth, json={"keep_awake": True}).status_code == 400
     assert local.post("/api/desktop/show").json()["ok"] is False
     assert remote.post("/api/desktop/show").status_code == 403
+
+
+def test_host_and_origin_protection(local):
+    from bot.web.app import host_allowed
+
+    assert host_allowed("127.0.0.1:8765") and host_allowed("localhost:8765") and host_allowed("[::1]:8765")
+    assert host_allowed("192.168.1.20:8765") and host_allowed("masaustu:8765") and host_allowed("pc.tailnet.ts.net")
+    assert not host_allowed("evil.example.com:8765") and not host_allowed("")
+    # DNS rebinding: yabancı alan adıyla gelen istek reddedilir
+    assert local.get("/api/health", headers={"Host": "evil.example.com:8765"}).status_code == 400
+    # Başka siteden gelen değiştirici istek reddedilir
+    r = local.post("/api/auth/setup", json={"password": "gizli123"}, headers={"Origin": "http://evil.example.com"})
+    assert r.status_code == 403
+    r = local.post("/api/auth/setup", json={"password": "gizli123"}, headers={"Origin": "http://testserver"})
+    assert r.status_code == 200

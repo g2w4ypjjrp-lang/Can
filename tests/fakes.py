@@ -267,6 +267,20 @@ class FakeFuturesClient:
         del self.algo_orders[algo_id]
         return {"code": "200"}
 
+    async def open_algo_orders(self, symbol: str) -> list[dict[str, Any]]:
+        return [
+            {"algoId": k, "clientAlgoId": v.get("clientAlgoId", ""), "symbol": v.get("symbol")}
+            for k, v in self.algo_orders.items()
+            if v.get("kind") == "algo" and v.get("symbol") == symbol
+        ]
+
+    async def open_orders(self, symbol: str) -> list[dict[str, Any]]:
+        return [
+            {"orderId": k, "clientOrderId": v.get("newClientOrderId", ""), "symbol": v.get("symbol")}
+            for k, v in self.algo_orders.items()
+            if v.get("kind") == "order" and v.get("symbol") == symbol
+        ]
+
     async def cancel_order(self, symbol: str, order_id: int) -> Any:
         self.calls.append(("cancel_order", {"orderId": order_id}))
         self.algo_orders.pop(order_id, None)
