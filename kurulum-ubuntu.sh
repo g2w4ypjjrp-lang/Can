@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# CanBot Ubuntu kurulumu (sunucu / VPS). Tek komutla kurar ve 7/24 arka planda çalıştırır.
+# CanBot Ubuntu kurulumu (sunucu / VPS). Kurar ve 7/24 arka planda çalıştırır.
 #
-#   curl -fsSL https://raw.githubusercontent.com/g2w4ypjjrp-lang/Can/refs/heads/claude/merhaba-fpsls2/kurulum-ubuntu.sh | sudo bash
+# Kaynak kodu iki yoldan alabilir:
+#  1) Bu dosya CanBot klasörünün içinden çalıştırılırsa (ör. GitHub'dan indirilen ZIP
+#     sunucuya yüklenip açıldıysa) o klasörden kurar:
+#        sudo bash kurulum-ubuntu.sh
+#  2) Aksi halde GitHub'dan indirir. Depo gizli (private) ise salt okunur bir GitHub
+#     token'ı GH_TOKEN ile verilir:
+#        sudo GH_TOKEN=github_pat_xxx bash kurulum-ubuntu.sh
 #
-# Güncellemek için aynı komutu tekrar çalıştırmanız yeterli (ayarlar ve kayıtlar korunur).
+# Güncellemek için aynı komutu tekrar çalıştırın (ayarlar, anahtarlar ve kayıtlar korunur).
 # Panel güvenlik için yalnızca sunucunun kendisine (127.0.0.1) açılır; erişim için SSH tüneli
 # ya da Tailscale kullanılır (kurulum sonunda yazdırılır).
 set -euo pipefail
@@ -23,13 +29,29 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y -qq
 apt-get install -y -qq python3 python3-venv git curl ca-certificates >/dev/null
 
-echo "==> CanBot indiriliyor ($BRANCH)"
-if [ -d "$DIR/.git" ]; then
-  git -C "$DIR" fetch -q origin "$BRANCH"
-  git -C "$DIR" checkout -q -B "$BRANCH" "origin/$BRANCH"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/run.py" ] && [ -d "$SCRIPT_DIR/bot" ] && [ "$SCRIPT_DIR" != "$DIR" ]; then
+  echo "==> CanBot bu klasörden kuruluyor: $SCRIPT_DIR"
+  SRC="$SCRIPT_DIR"
 else
-  git clone -q -b "$BRANCH" "$REPO" "$DIR"
+  echo "==> CanBot GitHub'dan indiriliyor ($BRANCH)"
+  AUTH=()
+  if [ -n "${GH_TOKEN:-}" ]; then
+    AUTH=(-c "http.extraHeader=Authorization: Basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)")
+  fi
+  if ! git "${AUTH[@]}" clone -q --depth 1 -b "$BRANCH" "$REPO" "$TMP/src"; then
+    echo "HATA: GitHub'dan indirilemedi. Depo gizliyse GH_TOKEN ile salt okunur bir token verin" >&2
+    echo "      ya da depoyu ZIP olarak indirip sunucuda açın ve bu dosyayı o klasörden çalıştırın." >&2
+    exit 1
+  fi
+  SRC="$TMP/src"
 fi
+
+echo "==> Dosyalar $DIR klasörüne kopyalanıyor (ayarlar korunur)"
+mkdir -p "$DIR"
+(cd "$SRC" && tar --exclude=./.venv --exclude=./data --exclude=./.git -cf - .) | (cd "$DIR" && tar -xf -)
 
 echo "==> Python ortamı hazırlanıyor"
 python3 -m venv "$DIR/.venv"
@@ -96,8 +118,8 @@ cat <<INFO
    curl -fsSL https://tailscale.com/install.sh | sh
    tailscale up            (çıkan bağlantıyla giriş yapın)
    tailscale serve --bg $PORT
- Telefona Tailscale uygulamasını kurup aynı hesapla girin; panel adresi:
-   tailscale serve status  komutunun gösterdiği https://...ts.net adresi
+ Telefona Tailscale uygulamasını kurup aynı hesapla girin; panel adresi
+   "tailscale serve status" komutunun gösterdiği https://...ts.net adresidir.
 
  Faydalı komutlar:
    systemctl status canbot        durum

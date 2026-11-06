@@ -67,13 +67,25 @@ Her iki yolda da program **siyah konsol penceresi olmadan**, kendi penceresinde 
 
 ### Yol 3 — Ubuntu sunucu (VPS), 7/24
 
-Windows penceresi yerine sunucu modunda çalışır; aynı paneli tarayıcıdan ve telefondan kullanırsınız. Ubuntu 22.04 / 24.04'te sunucuya SSH ile bağlanıp tek komut çalıştırın:
+Windows penceresi yerine sunucu modunda çalışır; aynı paneli tarayıcıdan ve telefondan kullanırsınız. Ubuntu 22.04 / 24.04'te çalışır. Kurulum betiği (`kurulum-ubuntu.sh`) CanBot'u `/opt/canbot` klasörüne kurar, sunucu yeniden başlasa da açılan bir hizmet olarak 7/24 çalıştırır ve sonunda sunucunun internet IP'sini (Binance anahtarının IP listesi için) ve Binance'e erişim durumunu yazar. Bu depo gizli (private) olduğu için kodu sunucuya iki yoldan birini kullanarak alırsınız:
+
+**A) GitHub token ile (önerilen):** GitHub'da **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**; *Repository access*: yalnızca bu depo, *Permissions → Contents*: **Read-only**. Sonra sunucuda (SSH ile bağlanıp):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/g2w4ypjjrp-lang/Can/refs/heads/claude/merhaba-fpsls2/kurulum-ubuntu.sh | sudo bash
+TOKEN=github_pat_BURAYA_TOKEN
+curl -fsSL -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github.raw" \
+  "https://api.github.com/repos/g2w4ypjjrp-lang/Can/contents/kurulum-ubuntu.sh?ref=claude/merhaba-fpsls2" -o kurulum-ubuntu.sh
+sudo GH_TOKEN=$TOKEN bash kurulum-ubuntu.sh
 ```
 
-Komut CanBot'u `/opt/canbot` klasörüne kurar ve arka planda sürekli çalışan bir hizmet olarak başlatır; sunucu yeniden başlasa da açılır. Sonunda sunucunun internet IP'sini (Binance anahtarının IP listesi için) ve Binance'e erişim durumunu yazar. Güncellemek için aynı komutu tekrar çalıştırın.
+**B) ZIP ile:** GitHub'da bu dalı **Code → Download ZIP** ile indirin, WinSCP gibi bir programla sunucuya yükleyin, sonra:
+
+```bash
+sudo apt install -y unzip && unzip Can-claude-merhaba-fpsls2.zip
+sudo bash Can-claude-merhaba-fpsls2/kurulum-ubuntu.sh
+```
+
+Güncellemek için aynı komutları tekrar çalıştırın; ayarlarınız, anahtarlarınız ve kayıtlarınız korunur.
 
 Güvenlik için panel internete açılmaz, yalnızca sunucunun içinden erişilir. Bilgisayardan bağlanmak için Windows'ta PowerShell'de `ssh -L 8765:127.0.0.1:8765 kullanıcı@SUNUCU_IP` yazın; bu pencere açıkken tarayıcıda `http://localhost:8765` adresini açın. Telefondan bağlanmak için kurulumun sonunda yazan Tailscale adımlarını izleyin.
 
