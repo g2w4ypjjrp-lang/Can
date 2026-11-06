@@ -935,7 +935,10 @@ class Engine:
         if r.get("enableFutures") is False:
             warnings.append("Bu anahtarda 'Vadeli İşlemler (Futures)' izni kapalı; bot işlem açamaz.")
         if r.get("ipRestrict") is False:
-            warnings.append("Anahtarda IP kısıtlaması yok. Mümkünse yalnızca kendi IP adresinize izin verin.")
+            warnings.append(
+                "Anahtarda IP kısıtlaması yok. Binance bu durumda anahtara yalnızca okuma izni verir; bot işlem "
+                "yapamaz. API Yönetimi'nde 'Yalnızca güvenilir IP'lere erişimi kısıtla'yı seçip IP adresinizi ekleyin."
+            )
         return warnings
 
     # ------------------------------------------------------------------ durum

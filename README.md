@@ -78,15 +78,23 @@ Sonra **Ayarlar → Windows** bölümünden “**Windows açılınca başlat**�
 
 ## Binance API anahtarı nasıl alınır?
 
-1. Binance'e girin → profil → **API Yönetimi** → **API Oluştur** → “Sistem tarafından oluşturulan”.
-2. İsim verin (ör. *CanBot*), doğrulamayı tamamlayın.
-3. **Düzenle** → yalnızca **Okumayı etkinleştir** ve **Vadeli İşlemleri Etkinleştir** işaretli olsun.
-4. **Para çekme iznini ASLA açmayın.** Bot buna ihtiyaç duymaz; CanBot bu izin açıksa sizi uyarır.
-5. Mümkünse “Yalnızca güvenilir IP'lere erişimi kısıtla” seçip kendi IP adresinizi ekleyin.
-6. Panelde **Ayarlar → Binance API anahtarları**'na yapıştırıp **Kaydet** ve **Bağlantıyı test et**'e basın.
+**Ön koşullar** (Binance'in kuralı): kimlik doğrulaması tamamlanmış, iki aşamalı doğrulama (2FA) açık ve Spot cüzdana en az bir kez para yatırılmış olmalı. **Vadeli (Futures) hesabını anahtardan ÖNCE açın**; vadeli hesaptan önce oluşturulan anahtara Vadeli izni verilemez (o durumda yeni anahtar oluşturun).
+
+1. **API Yönetimi'ne gidin.**
+   - Bilgisayarda (binance.com): sağ üstteki **profil simgesi → Hesap → API Yönetimi**
+   - Telefonda: uygulamayı **Binance Pro** moduna alın → **Daha fazla (More)** → **Diğer (Other)** bölümü → **API Yönetimi**
+2. **API Oluştur** → **Sistem tarafından oluşturulan** (System generated) seçin. CanBot bu türü kullanır.
+3. İsim verin (ör. *CanBot*) ve güvenlik doğrulamasını tamamlayın.
+4. Çıkan **API Key** ve **Secret Key**'i hemen kopyalayın. Secret Key sonra tekrar gösterilmez.
+5. **Kısıtlamaları düzenle**:
+   - IP erişimi: **Yalnızca güvenilir IP'lere erişimi kısıtla** seçin ve internet IP adresinizi ekleyin (Google'da “IP adresim” yazınca görünür). **Bu adım zorunludur:** Binance, IP kısıtlaması olmayan bu tür anahtarlara yalnızca okuma izni verir; bot işlem yapamaz.
+   - **Okumayı Etkinleştir** ve **Vadeli İşlemleri Etkinleştir** kutularını işaretleyip kaydedin.
+   - **Para çekme iznini ASLA açmayın.** Bot buna ihtiyaç duymaz; CanBot bu izin açıksa sizi uyarır.
+6. CanBot'ta **Ayarlar → Binance API anahtarları → Gerçek hesap**'a yapıştırıp **Kaydet** ve **Bağlantıyı test et**'e basın.
+7. Binance'te **Cüzdan → Aktar** ile USDT'yi Spot'tan **USDⓈ-M Vadeli** cüzdana aktarın.
 
 Notlar:
-- Hesabınızda **Vadeli İşlemler (Futures) hesabı açılmış** ve USDT yatırılmış olmalıdır (Cüzdan → Vadeli).
+- İnternet IP adresiniz değişirse (modem yeniden başlayınca değişebilir) bot işlem yapamaz ve panelde hata görürsünüz. Binance'te API Yönetimi'nden yeni IP'yi ekleyin. Açık pozisyonların stop-loss'ları bu sırada borsada durur.
 - **Binance TR** (trbinance) vadeli işlem sunmaz; bot Binance (global) vadeli hesabıyla çalışır. Ülkenizde/hesabınızda vadeli işlemlere izin olduğundan emin olun.
 - Testnet için anahtarları Binance **Demo Trading** sayfasından alıp “Testnet” sekmesine girin.
 - Anahtarlar yalnızca bilgisayarınızda (`%LOCALAPPDATA%\CanBot\secrets.json`) saklanır ve yalnızca Binance'e gönderilir.

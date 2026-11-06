@@ -1069,7 +1069,7 @@
         <div id="wz-live" class="${wz.mode === "live" ? "" : "hidden"}">
           <label class="field"><span>API Key</span><input id="wz-key" type="text" autocomplete="off" spellcheck="false"></label>
           <label class="field"><span>Secret Key</span><input id="wz-secret" type="password" autocomplete="off" spellcheck="false"></label>
-          <p class="tiny muted">Binance → API Yönetimi → API Oluştur. Yalnızca “Okuma” ve “Vadeli İşlemler” izinlerini açın; <b>para çekme iznini açmayın</b>.</p>
+          <p class="tiny muted">Binance → profil → Hesap → API Yönetimi → API Oluştur (Sistem tarafından oluşturulan). “Yalnızca güvenilir IP'lere erişimi kısıtla”yı seçip IP adresinizi ekleyin (zorunlu), sonra “Okuma” ve “Vadeli İşlemler” izinlerini açın; <b>para çekme iznini açmayın</b>. Ayrıntılı adımlar: Ayarlar → Binance API anahtarları.</p>
           <div class="actions"><button class="btn" id="wz-test">Test et ve kaydet</button></div>
           <div id="wz-keys-result"></div>
           <label class="row-toggle"><span><strong>Riskleri anladım</strong><small>Bot gerçek hesabımda otomatik işlem yapabilir; kayıp yaşayabilirim.</small></span><span class="switch"><input type="checkbox" id="wz-live-ok" ${wz.liveOk ? "checked" : ""}><span class="slider"></span></span></label>
