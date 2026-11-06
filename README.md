@@ -65,6 +65,18 @@ Strateji, 20 büyük coinin **Temmuz 2022 – Ekim 2026** arası gerçek Binance
 
 Her iki yolda da program **siyah konsol penceresi olmadan**, kendi penceresinde açılır. Pencereyi kapatınca bot **saatin yanındaki simgede** çalışmaya devam eder (sağ tık → Paneli aç / Otomatik işlem / Çıkış).
 
+### Yol 3 — Ubuntu sunucu (VPS), 7/24
+
+Windows penceresi yerine sunucu modunda çalışır; aynı paneli tarayıcıdan ve telefondan kullanırsınız. Ubuntu 22.04 / 24.04'te sunucuya SSH ile bağlanıp tek komut çalıştırın:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/g2w4ypjjrp-lang/Can/refs/heads/claude/merhaba-fpsls2/kurulum-ubuntu.sh | sudo bash
+```
+
+Komut CanBot'u `/opt/canbot` klasörüne kurar ve arka planda sürekli çalışan bir hizmet olarak başlatır; sunucu yeniden başlasa da açılır. Sonunda sunucunun internet IP'sini (Binance anahtarının IP listesi için) ve Binance'e erişim durumunu yazar. Güncellemek için aynı komutu tekrar çalıştırın.
+
+Güvenlik için panel internete açılmaz, yalnızca sunucunun içinden erişilir. Bilgisayardan bağlanmak için Windows'ta PowerShell'de `ssh -L 8765:127.0.0.1:8765 kullanıcı@SUNUCU_IP` yazın; bu pencere açıkken tarayıcıda `http://localhost:8765` adresini açın. Telefondan bağlanmak için kurulumun sonunda yazan Tailscale adımlarını izleyin.
+
 ## İlk açılış
 
 Kurulum sihirbazı sizi 4 adımda yönlendirir:
