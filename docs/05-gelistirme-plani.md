@@ -30,8 +30,8 @@ kısıtı).
 | 4 | Balina takip sistemi | ✅ **Tamamlandı** |
 | 5 | Tarihsel veri ve grafik motoru | ✅ **Tamamlandı** |
 | 6 | Yapay zekâ analiz motoru | ✅ **Tamamlandı** |
-| 7 | Fırsat tespit sistemi | ⏭️ Sıradaki |
-| 8 | Backtest | |
+| 7 | Fırsat tespit sistemi | ✅ **Tamamlandı** |
+| 8 | Backtest | ⏭️ Sıradaki |
 | 9 | Paper Trading | |
 | 10 | Otomatik işlem motoru | |
 | 11 | Risk yönetimi | |
@@ -254,11 +254,75 @@ Yorum:
 - Modeller Aşama 7'deki puanın bileşenlerinden biri olacak. Gerçek değerlendirmeyi Aşama 8'deki
   maliyetli backtest yapacak.
 
-### Aşama 7 — Fırsat tespit sistemi
-Teknik, hacim, balina, likidite, trend, emir defteri, tarihsel benzerlik, risk/getiri ve
-**işlem maliyetlerinin** (komisyon, spread, kayma, funding) birleşimiyle 0-100 puan.
-Puan tek başına emir üretmez; risk kapısı zorunlu. **Kabul:** puanın açıklanabilirliği
-(bileşen dökümü), kalibrasyon testleri.
+### Aşama 7 — Fırsat tespit sistemi ✅
+
+**Çıktılar (uygulandı):**
+
+- **`strategies/`: 14 bağımsız strateji.** Her biri yön, 0-1 güç, yazılı gerekçe ve önerilen
+  zarar durdur/hedef (ATR katı) üretir. Bir stratejinin hatası diğerlerini durdurmaz.
+  - Trend: EMA trend takibi, Ichimoku bulut trendi.
+  - Momentum: MACD kesişimi, Stochastic RSI kesişimi.
+  - Ortalamaya dönüş: RSI aşırı bölgeden dönüş, Bollinger bandına dönüş, destek/direnç tepkisi.
+  - Kırılım: Bollinger sıkışma kırılımı, Donchian kanal kırılımı.
+  - Akış: VWAP geri alımı, hacimli itki.
+  - Vadeli: aşırı funding karşıtı, açık pozisyon teyitli trend.
+  - Makine öğrenmesi modeli.
+- **`scoring/costs.py`:** gidiş-dönüş maliyet.
+  - Komisyon (taker, iki yön).
+  - Spread ve kayma: odak sembollerinde gerçek emir defterinden, diğerlerinde 24 saatlik
+    hacme göre "tahmini" etiketiyle.
+  - Vadelide funding: yön ve elde tutma süresine göre.
+- **`scoring/score.py`:** 0-100 puan.
+  - 8 yönlü bileşen: strateji uzlaşısı, trend, momentum, hacim/agresif akış, balina, emir
+    defteri, tarihsel benzerlik, model. Verisi olmayan bileşenin ağırlığı diğerlerine dağıtılır.
+  - Cezalar: maliyet/hedef oranı, ödül/risk, likidite, sınırlı veri.
+  - Hedef, en yakın karşı seviyeyle sınırlanır.
+  - **Dökümdeki puanların toplamı puanı birebir verir.**
+- **`scoring/calibration.py`** ve `ati-engine score-calibrate`: puanlama geçmiş veride mum mum
+  çalıştırılır ve her puan aralığının maliyet sonrası getirisi ölçülür. Canlı her puanın
+  yanında, aynı aralığın geçmişteki isabet oranı ve net getirisi gösterilir.
+- **`scoring/live.py`:**
+  - 1 dakikalık mumlar puanlama aralığına (varsayılan 1 saat) birleştirilir.
+  - REST ile ısınma; son kapanmış mum hemen puanlanır.
+  - Eşik üstü (varsayılan 60) puanlar arayüze olay olarak gider ve `opportunities` tablosuna
+    yazılır.
+  - Eşik üstü adaylara depodaki geçmişten benzerlik eklenir.
+- **Yerel API:** `/v1/opportunities`, `/detail` (canlı yoksa depodan değerlendirme),
+  `/strategies`, `/calibration`, `/stats`.
+
+**Puan tek başına emir üretmez**; risk kapısı Aşama 11'de zorunlu olacak.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Puanın açıklanabilirliği (bileşen dökümü) | ✅ Her bileşenin ham değeri, ağırlığı, puana katkısı ve gerekçe metni; cezalar ayrı. Testte döküm toplamı = ham puan, ham puan - cezalar = puan. Gerçek örnek, BTCUSDT: trend +17,2, strateji uzlaşısı -10,4 (çelişen), emir defteri +7,1; maliyet cezası -15,4 ("maliyet hedef hareketin %148'i") → puan 0 |
+| Kalibrasyon testleri | ✅ Düzenek testi: puana bağlı getiride artan tablo (Spearman > 0,2), gürültüde düz (\|ρ\| < 0,05). Gerçek veri sonuçları aşağıda |
+| Canlı çalışma | ✅ Gerçek Binance verisinde 1.026 sembol ısındı ve puanlandı. Isınma sırasında döngü gecikmesi p99 30 ms, sonrasında 20 ms; uyarı/hata logu 0 |
+
+**Gerçek veride kalibrasyon** (BTC+ETH, 1 saat, 4 saat ufuk, canlıya özgü balina/emir
+defteri bileşenleri hariç):
+
+| Puan aralığı | Spot n | Spot brüt | Spot net | Futures n | Futures brüt | Futures net |
+|---|---|---|---|---|---|---|
+| 0-20 | 98.499 | +%0,028 | -%0,232 | 66.146 | +%0,013 | -%0,111 |
+| 20-40 | 23.532 | -%0,001 | -%0,248 | 27.051 | +%0,011 | -%0,113 |
+| 40-60 | 15.347 | +%0,010 | -%0,238 | 11.564 | -%0,004 | -%0,134 |
+| 60-80 | 10.191 | **+%0,127** | -%0,118 | 9.073 | **+%0,097** | -%0,029 |
+| 80-100 | 26 | — | — | 11 | — | — |
+
+Yorum:
+- 60-80 aralığı brüt getiride belirgin şekilde en iyisi ve isabeti en yüksek (Spot %42, Futures
+  %43).
+- Ancak maliyet sonrası hiçbir aralık pozitif değil; Futures 60-80 başabaşa yakın.
+- 80-100 aralığında örnek çok az (26 ve 11); istatistiksel anlamı yok.
+- Bu sonuçlar puanın yanında kullanıcıya gösterilir. Puan bir fırsat göstergesidir, kâr
+  vaadi değildir. Gerçek değerlendirme Aşama 8'deki backtest'te (zarar durdur/hedef ile) yapılır.
+
+**Bulunan ve düzeltilen sorun:** Isınma ilk sürümde ayrı bir iş parçacığındaydı. Canlı
+ölçümde, Python'un küresel kilidi (GIL) nedeniyle döngü gecikmesi p99 157 ms'ye çıktı. Hesap,
+olay döngüsünde küçük parçalara bölündü (her 25 mumda bir döngüye söz verilir); p99 30 ms'ye
+indi.
 
 ### Aşama 8 — Backtest
 Olay güdümlü motor (aynı strateji kodu, `ManualClock`), gerçekçi maliyet ve kayma modeli,

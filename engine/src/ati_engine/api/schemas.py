@@ -549,3 +549,96 @@ class PredictionResponse(BaseModel):
     oos_auc: float | None
     missing_features: list[str]
     disclaimer: str
+
+
+# --- Fırsat puanı (Aşama 7) ---------------------------------------------------------------
+
+
+class OpportunitySummary(BaseModel):
+    market: Market
+    symbol: str
+    interval: str
+    bar_open_time_ms: int
+    direction: str
+    score: float
+    price: float
+    stop_price: float | None
+    target_price: float | None
+    reward_risk: float | None
+    cost_pct: float
+    reasons: list[str]
+    historical_hit_rate: float | None
+    historical_net_return_pct: float | None
+
+
+class ScoreComponentInfo(BaseModel):
+    key: str
+    title: str
+    available: bool
+    signal: float
+    weight: float
+    points: float
+    detail: str
+
+
+class ScorePenaltyInfo(BaseModel):
+    key: str
+    title: str
+    points: float
+    detail: str
+
+
+class CostInfo(BaseModel):
+    fee_pct: float
+    spread_pct: float
+    slippage_pct: float
+    funding_pct: float
+    total_pct: float
+    estimated: bool
+    notes: list[str]
+
+
+class OpportunityDetail(BaseModel):
+    market: Market
+    symbol: str
+    interval: str
+    bar_open_time_ms: int
+    source: Literal["live", "history"]
+    price: float
+    direction: str
+    score: float
+    raw_score: float
+    components: list[ScoreComponentInfo]
+    penalties: list[ScorePenaltyInfo]
+    signals: list[dict[str, Any]]
+    cost: CostInfo
+    stop_price: float | None
+    target_price: float | None
+    reward_risk: float | None
+    target_pct: float | None
+    calibration: dict[str, Any] | None
+    notes: list[str]
+    disclaimer: str
+
+
+class StrategyInfo(BaseModel):
+    name: str
+    title: str
+    description: str
+    category: str
+    markets: list[str]
+
+
+class OpportunityStatsResponse(BaseModel):
+    interval: str
+    horizon_bars: int
+    publish_min_score: float
+    bars: int
+    scored: int
+    published: int
+    symbols: int
+    warmup_symbols: dict[str, int]
+    batch_ms_max: float
+    incomplete_bars: int
+    calibration_loaded: dict[str, bool]
+    models_loaded: dict[str, list[str]]

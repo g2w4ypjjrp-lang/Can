@@ -12,6 +12,8 @@ Kullanım::
                                        # balina radarını işlem arşivi üzerinde yeniden oynat
     ati-engine model-train --symbol BTCUSDT ETHUSDT --interval 1h --horizon 4 --side long
                                        # yürüyen pencereyle model eğit, ONNX olarak kaydet
+    ati-engine score-calibrate --symbol BTCUSDT ETHUSDT
+                                       # fırsat puanının geçmişteki maliyet sonrası sonucu
     ati-engine version
 """
 
@@ -322,6 +324,105 @@ def _cmd_model_train(args: argparse.Namespace) -> int:
     return asyncio.run(_train())
 
 
+def _cmd_score_calibrate(args: argparse.Namespace) -> int:
+    import duckdb
+
+    from ati_engine.analysis.service import _with_quote
+    from ati_engine.config import EngineSettings
+    from ati_engine.core.models import Market
+    from ati_engine.exchange.endpoints import endpoints_for
+    from ati_engine.exchange.rate_limit import WeightBudget
+    from ati_engine.exchange.rest import BinanceRestClient
+    from ati_engine.history.archive import ArchiveClient
+    from ati_engine.history.futures_data import FuturesDataSync
+    from ati_engine.history.store import KlineStore
+    from ati_engine.history.sync import HistorySync
+    from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT
+    from ati_engine.scoring.calibration import ScoredBar, calibration_table, evaluate_history
+    from ati_engine.scoring.costs import CostModel, CostSettingsView
+    from ati_engine.scoring.score import OpportunityScorer
+    from ati_engine.storage.database import Database
+
+    overrides: dict[str, object] = {}
+    if args.data_dir:
+        overrides["data_dir"] = Path(args.data_dir)
+    settings = EngineSettings(**overrides)  # type: ignore[arg-type]
+    settings.paths.ensure()
+    cfg = settings.scoring
+    interval = args.interval or cfg.interval
+    horizon = args.horizon or cfg.horizon_bars
+    market = Market(args.market)
+    futures = market is Market.USDM_FUTURES
+
+    async def _run() -> dict[str, object] | None:
+        try:
+            store = KlineStore(settings.paths.history_db)
+        except duckdb.IOException:
+            print("Tarihsel veri dosyası kullanımda (motor çalışıyor olabilir).", file=sys.stderr)
+            return None
+        db = Database(settings.paths.database)
+        await db.open()
+        await db.migrate()
+        endpoints = endpoints_for(market, settings.binance)
+        rest = BinanceRestClient(
+            endpoints.rest_base, budget=WeightBudget(DEFAULT_WEIGHT_LIMIT[market])
+        )
+        archive = ArchiveClient()
+        sync = HistorySync(archive, store, db, rest={market: (rest, endpoints)})
+        scorer = OpportunityScorer(
+            weights=cfg.weights,
+            cost_model=CostModel(
+                CostSettingsView(
+                    spot_taker_fee=cfg.spot_taker_fee,
+                    futures_taker_fee=cfg.futures_taker_fee,
+                    notional_usd=cfg.notional_usd,
+                )
+            ),
+        )
+        scored: list[ScoredBar] = []
+        try:
+            for symbol in args.symbol:
+                symbol = symbol.upper()
+                await sync.sync_klines(market, symbol, interval)
+                if futures:
+                    await FuturesDataSync(archive, store, db).sync(symbol)
+                    rows = await store.bars_with_futures(symbol, interval)
+                else:
+                    rows = [_with_quote(r) for r in await store.candles("spot", symbol, interval)]
+                result = await asyncio.to_thread(
+                    evaluate_history,
+                    rows,
+                    market="spot" if not futures else "usdm_futures",
+                    symbol=symbol,
+                    interval=interval,
+                    horizon=horizon,
+                    scorer=scorer,
+                    futures=futures,
+                )
+                print(f"{symbol}: {len(rows)} mum, {len(result)} yönlü puan", file=sys.stderr)
+                scored.extend(result)
+        finally:
+            await archive.close()
+            await rest.close()
+            await store.close()
+            await db.close()
+        source = (
+            f"{market.value} {'+'.join(s.upper() for s in args.symbol)} {interval}, ufuk "
+            f"{horizon} mum; canlıya özgü balina/emir defteri bileşenleri hariç"
+        )
+        return calibration_table(scored, source=source)
+
+    table = asyncio.run(_run())
+    if table is None:
+        return 4
+    target = settings.paths.scoring_dir / f"calibration-{market.value}-{interval}-h{horizon}.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(table, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(table, ensure_ascii=False, indent=2))
+    print(f"Kaydedildi: {target}", file=sys.stderr)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ati-engine", description="AI Trading Intelligence motoru"
@@ -374,6 +475,16 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--since", help="Başlangıç tarihi (YYYY-AA-GG)")
     train.add_argument("--cost", type=float, help="Gidiş-dönüş maliyet (ör. 0.0025)")
     train.set_defaults(func=_cmd_model_train)
+
+    calibrate = sub.add_parser(
+        "score-calibrate", help="Fırsat puanını geçmiş veride değerlendir ve kalibre et"
+    )
+    calibrate.add_argument("--data-dir")
+    calibrate.add_argument("--market", choices=["spot", "usdm_futures"], default="spot")
+    calibrate.add_argument("--symbol", nargs="+", required=True)
+    calibrate.add_argument("--interval", help="Varsayılan: scoring.interval")
+    calibrate.add_argument("--horizon", type=int, help="Varsayılan: scoring.horizon_bars")
+    calibrate.set_defaults(func=_cmd_score_calibrate)
 
     version = sub.add_parser("version", help="Sürümü yazdır")
     version.set_defaults(func=lambda _: print(__version__) or 0)

@@ -20,6 +20,7 @@ from ati_engine.api import schemas
 from ati_engine.core.events import PUBLIC_EVENT_TYPES
 from ati_engine.market.events import PUBLIC_MARKET_EVENT_TYPES
 from ati_engine.scanner.scanner import MarketSignal
+from ati_engine.scoring.live import OpportunityScored
 from ati_engine.whales.events import WhaleAlert
 
 PROTOCOL_VERSION = 1
@@ -60,6 +61,10 @@ _API_MODELS: tuple[type[BaseModel], ...] = (
     schemas.TrainJobInfo,
     schemas.ModelInfo,
     schemas.PredictionResponse,
+    schemas.OpportunitySummary,
+    schemas.OpportunityDetail,
+    schemas.StrategyInfo,
+    schemas.OpportunityStatsResponse,
 )
 
 
@@ -73,7 +78,13 @@ def build_protocol_schema() -> dict[str, Any]:
 
     event_union: Any = functools.reduce(
         operator.or_,
-        (*PUBLIC_EVENT_TYPES, *PUBLIC_MARKET_EVENT_TYPES, MarketSignal, WhaleAlert),
+        (
+            *PUBLIC_EVENT_TYPES,
+            *PUBLIC_MARKET_EVENT_TYPES,
+            MarketSignal,
+            WhaleAlert,
+            OpportunityScored,
+        ),
     )
     (event_union_schema,), event_components = msgspec.json.schema_components(
         [event_union], ref_template="#/$defs/{name}"
@@ -161,6 +172,20 @@ def build_protocol_schema() -> dict[str, Any]:
             "GET /v1/analysis/models": {"response": "ModelInfo[]", "auth": True},
             "GET /v1/analysis/predict?model_id=&symbol=": {
                 "response": "PredictionResponse",
+                "auth": True,
+            },
+            "GET /v1/opportunities?market=&min_score=&direction=&limit=": {
+                "response": "OpportunitySummary[]",
+                "auth": True,
+            },
+            "GET /v1/opportunities/detail?market=&symbol=": {
+                "response": "OpportunityDetail",
+                "auth": True,
+            },
+            "GET /v1/opportunities/strategies": {"response": "StrategyInfo[]", "auth": True},
+            "GET /v1/opportunities/calibration": {"response": "object", "auth": True},
+            "GET /v1/opportunities/stats": {
+                "response": "OpportunityStatsResponse",
                 "auth": True,
             },
             "POST /v1/market/focus": {

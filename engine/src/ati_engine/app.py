@@ -48,6 +48,7 @@ from ati_engine.safety.kill_switch import KillSwitch
 from ati_engine.safety.state import EngineStateMachine
 from ati_engine.safety.trading_mode import TradingModeController
 from ati_engine.scanner.scanner import MarketScanner
+from ati_engine.scoring.live import OpportunityEngine
 from ati_engine.security.vault import SecretVault, default_cipher
 from ati_engine.storage.audit import AuditLog
 from ati_engine.storage.database import Database
@@ -162,6 +163,8 @@ class Engine:
             if settings.history.enabled:
                 runtime.history = self._create_history(runtime)
                 runtime.analysis = AnalysisService(runtime.history, ModelRegistry(paths.models_dir))
+            if settings.scoring.enabled:
+                self._start_scoring(runtime)
 
             supervisor.spawn("loop-lag-monitor", loop_monitor.run)
             supervisor.spawn(
@@ -210,6 +213,31 @@ class Engine:
             return 0
         finally:
             await self._shutdown(server, server_task, supervisor, bus, db)
+
+    def _start_scoring(self, runtime: EngineRuntime) -> None:
+        """Fırsat motoru: piyasa verisi açıksa canlı çalışır; değilse yalnızca tarihsel veriden
+        isteğe bağlı değerlendirme yapar."""
+        settings = runtime.settings
+        engine = OpportunityEngine(
+            settings=settings.scoring,
+            bus=runtime.bus,
+            db=runtime.db,
+            calibration_dir=settings.paths.scoring_dir,
+            registry=ModelRegistry(settings.paths.models_dir),
+        )
+        runtime.opportunities = engine
+        if runtime.market_data:
+            engine.attach(
+                runtime.market_data.values(),
+                scanner=runtime.scanner,
+                radar=runtime.whales,
+                history=runtime.history,
+            )
+            runtime.supervisor.spawn(
+                "opportunities",
+                engine.run,
+                RestartPolicy(max_restarts=20, window_s=600, backoff_initial_s=1, backoff_max_s=30),
+            )
 
     def _create_history(self, runtime: EngineRuntime) -> HistoryService:
         """REST tamamlaması piyasa verisi servisinin istemcisini (ortak ağırlık bütçesi)
@@ -261,6 +289,9 @@ class Engine:
                 for service in runtime.market_data.values():
                     with contextlib.suppress(Exception):
                         await service.close()
+                if runtime.opportunities is not None:
+                    with contextlib.suppress(Exception):
+                        await runtime.opportunities.close()
                 if runtime.analysis is not None:
                     with contextlib.suppress(Exception):
                         await runtime.analysis.close()

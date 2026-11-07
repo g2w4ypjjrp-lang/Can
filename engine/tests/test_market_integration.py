@@ -299,7 +299,13 @@ async def test_scanner_api_with_warmup(stack: Stack) -> None:
             scanner.warmup_done.get("spot") == 3 and scanner.warmup_done.get("usdm_futures") == 3
         )
     )
-    assert stack.fake.kline_requests == 6
+    # Tarayıcı 1 dakikalık geçmişi ister (3 sembol x 2 piyasa); fırsat motoru da kendi
+    # puanlama aralığında (1 saat) ısınma yapar.
+    assert stack.fake.kline_intervals.get("1m") == 6
+    await wait_until(lambda: stack.fake.kline_intervals.get("1h") == 6)
+    opportunities = runtime.opportunities
+    assert opportunities is not None
+    await wait_until(lambda: len(opportunities.books) == 6)
     # Isınmadan sonraki ilk turu bekle (tablo saniyede bir yenilenir).
     await wait_until(
         lambda: (

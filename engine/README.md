@@ -79,6 +79,40 @@ Yerel API:
 
 Benzerlik ve etki istatistikleri geçmişi anlatır; gelecekteki fiyatı **garanti etmez**.
 
+## Fırsat puanı (Aşama 7)
+
+Tüm semboller her saat (ayarlanabilir) 14 stratejiyle değerlendirilir ve 0-100 arası
+**açıklanabilir** bir puan alır.
+- **Bileşenler:** strateji uzlaşısı, trend, momentum, hacim/akış, balina, emir defteri,
+  tarihsel benzerlik, model.
+- **Cezalar:** işlem maliyeti (komisyon + spread + kayma + funding), ödül/risk, likidite.
+
+Her puanın yanında aynı puan aralığının geçmişteki maliyet sonrası sonucu gösterilir. **Puan
+emir vermez.**
+
+```bash
+# Geçmiş veride kalibrasyon (sonuç motorun veri dizinine kaydedilir, canlı puanlara eklenir)
+uv run ati-engine score-calibrate --symbol BTCUSDT ETHUSDT
+uv run ati-engine score-calibrate --market usdm_futures --symbol BTCUSDT ETHUSDT
+```
+
+```toml
+[scoring]
+interval = "1h"          # 15m | 30m | 1h | 2h | 4h
+horizon_bars = 4
+publish_min_score = 60
+spot_taker_fee = 0.001   # BNB indirimi vb. varsa düşürün
+futures_taker_fee = 0.0005
+# models = { spot = { long = "<model kimliği>", short = "<model kimliği>" } }
+```
+
+Yerel API:
+- `GET /v1/opportunities?market=spot&min_score=60`
+- `GET /v1/opportunities/detail?symbol=BTCUSDT`: tam döküm.
+- `GET /v1/opportunities/strategies`
+- `GET /v1/opportunities/calibration`
+- `GET /v1/opportunities/stats`
+
 ## Analiz motoru ve model (Aşama 6)
 
 - **Göstergeler:** RSI, MACD, EMA 9/21/50/200, Bollinger, ATR, OBV, Stochastic RSI,

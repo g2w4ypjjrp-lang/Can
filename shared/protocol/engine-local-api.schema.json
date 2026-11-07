@@ -268,6 +268,52 @@
       "title": "ConnectionInfo",
       "type": "object"
     },
+    "CostInfo": {
+      "properties": {
+        "estimated": {
+          "title": "Estimated",
+          "type": "boolean"
+        },
+        "fee_pct": {
+          "title": "Fee Pct",
+          "type": "number"
+        },
+        "funding_pct": {
+          "title": "Funding Pct",
+          "type": "number"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notes",
+          "type": "array"
+        },
+        "slippage_pct": {
+          "title": "Slippage Pct",
+          "type": "number"
+        },
+        "spread_pct": {
+          "title": "Spread Pct",
+          "type": "number"
+        },
+        "total_pct": {
+          "title": "Total Pct",
+          "type": "number"
+        }
+      },
+      "required": [
+        "fee_pct",
+        "spread_pct",
+        "slippage_pct",
+        "funding_pct",
+        "total_pct",
+        "estimated",
+        "notes"
+      ],
+      "title": "CostInfo",
+      "type": "object"
+    },
     "EngineEvent": {
       "anyOf": [
         {
@@ -311,6 +357,9 @@
         },
         {
           "$ref": "#/$defs/WhaleAlert"
+        },
+        {
+          "$ref": "#/$defs/OpportunityScored"
         }
       ],
       "discriminator": {
@@ -321,6 +370,7 @@
           "KillSwitchEngaged": "#/$defs/KillSwitchEngaged",
           "KillSwitchReleased": "#/$defs/KillSwitchReleased",
           "MarketSignal": "#/$defs/MarketSignal",
+          "OpportunityScored": "#/$defs/OpportunityScored",
           "OrderBookResynced": "#/$defs/OrderBookResynced",
           "ReadinessChanged": "#/$defs/ReadinessChanged",
           "ServiceHealthChanged": "#/$defs/ServiceHealthChanged",
@@ -1306,6 +1356,472 @@
       "title": "ModelInfo",
       "type": "object"
     },
+    "OpportunityDetail": {
+      "properties": {
+        "bar_open_time_ms": {
+          "title": "Bar Open Time Ms",
+          "type": "integer"
+        },
+        "calibration": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Calibration"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/ScoreComponentInfo"
+          },
+          "title": "Components",
+          "type": "array"
+        },
+        "cost": {
+          "$ref": "#/$defs/CostInfo"
+        },
+        "direction": {
+          "title": "Direction",
+          "type": "string"
+        },
+        "disclaimer": {
+          "title": "Disclaimer",
+          "type": "string"
+        },
+        "interval": {
+          "title": "Interval",
+          "type": "string"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notes",
+          "type": "array"
+        },
+        "penalties": {
+          "items": {
+            "$ref": "#/$defs/ScorePenaltyInfo"
+          },
+          "title": "Penalties",
+          "type": "array"
+        },
+        "price": {
+          "title": "Price",
+          "type": "number"
+        },
+        "raw_score": {
+          "title": "Raw Score",
+          "type": "number"
+        },
+        "reward_risk": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reward Risk"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "signals": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Signals",
+          "type": "array"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "history"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "stop_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stop Price"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "target_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Pct"
+        },
+        "target_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Price"
+        }
+      },
+      "required": [
+        "market",
+        "symbol",
+        "interval",
+        "bar_open_time_ms",
+        "source",
+        "price",
+        "direction",
+        "score",
+        "raw_score",
+        "components",
+        "penalties",
+        "signals",
+        "cost",
+        "stop_price",
+        "target_price",
+        "reward_risk",
+        "target_pct",
+        "calibration",
+        "notes",
+        "disclaimer"
+      ],
+      "title": "OpportunityDetail",
+      "type": "object"
+    },
+    "OpportunityScored": {
+      "description": "Eşik üstü fırsat puanı (arayüz bildirimi; emir değildir).",
+      "properties": {
+        "bar_open_time_ms": {
+          "type": "integer"
+        },
+        "cost_pct": {
+          "type": "number"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "historical_hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "historical_net_return_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "interval": {
+          "type": "string"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "price": {
+          "type": "number"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reward_risk": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "score": {
+          "type": "number"
+        },
+        "stop_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "target_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "OpportunityScored"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "market",
+        "symbol",
+        "interval",
+        "bar_open_time_ms",
+        "direction",
+        "score",
+        "price",
+        "stop_price",
+        "target_price",
+        "reward_risk",
+        "cost_pct",
+        "reasons"
+      ],
+      "title": "OpportunityScored",
+      "type": "object"
+    },
+    "OpportunityStatsResponse": {
+      "properties": {
+        "bars": {
+          "title": "Bars",
+          "type": "integer"
+        },
+        "batch_ms_max": {
+          "title": "Batch Ms Max",
+          "type": "number"
+        },
+        "calibration_loaded": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "title": "Calibration Loaded",
+          "type": "object"
+        },
+        "horizon_bars": {
+          "title": "Horizon Bars",
+          "type": "integer"
+        },
+        "incomplete_bars": {
+          "title": "Incomplete Bars",
+          "type": "integer"
+        },
+        "interval": {
+          "title": "Interval",
+          "type": "string"
+        },
+        "models_loaded": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Models Loaded",
+          "type": "object"
+        },
+        "publish_min_score": {
+          "title": "Publish Min Score",
+          "type": "number"
+        },
+        "published": {
+          "title": "Published",
+          "type": "integer"
+        },
+        "scored": {
+          "title": "Scored",
+          "type": "integer"
+        },
+        "symbols": {
+          "title": "Symbols",
+          "type": "integer"
+        },
+        "warmup_symbols": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Warmup Symbols",
+          "type": "object"
+        }
+      },
+      "required": [
+        "interval",
+        "horizon_bars",
+        "publish_min_score",
+        "bars",
+        "scored",
+        "published",
+        "symbols",
+        "warmup_symbols",
+        "batch_ms_max",
+        "incomplete_bars",
+        "calibration_loaded",
+        "models_loaded"
+      ],
+      "title": "OpportunityStatsResponse",
+      "type": "object"
+    },
+    "OpportunitySummary": {
+      "properties": {
+        "bar_open_time_ms": {
+          "title": "Bar Open Time Ms",
+          "type": "integer"
+        },
+        "cost_pct": {
+          "title": "Cost Pct",
+          "type": "number"
+        },
+        "direction": {
+          "title": "Direction",
+          "type": "string"
+        },
+        "historical_hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Historical Hit Rate"
+        },
+        "historical_net_return_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Historical Net Return Pct"
+        },
+        "interval": {
+          "title": "Interval",
+          "type": "string"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "price": {
+          "title": "Price",
+          "type": "number"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "reward_risk": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reward Risk"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "stop_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stop Price"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "target_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Price"
+        }
+      },
+      "required": [
+        "market",
+        "symbol",
+        "interval",
+        "bar_open_time_ms",
+        "direction",
+        "score",
+        "price",
+        "stop_price",
+        "target_price",
+        "reward_risk",
+        "cost_pct",
+        "reasons",
+        "historical_hit_rate",
+        "historical_net_return_pct"
+      ],
+      "title": "OpportunitySummary",
+      "type": "object"
+    },
     "OrderBookInfo": {
       "properties": {
         "applied": {
@@ -1942,6 +2458,77 @@
       "title": "ScannerTopResponse",
       "type": "object"
     },
+    "ScoreComponentInfo": {
+      "properties": {
+        "available": {
+          "title": "Available",
+          "type": "boolean"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "points": {
+          "title": "Points",
+          "type": "number"
+        },
+        "signal": {
+          "title": "Signal",
+          "type": "number"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "weight": {
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "available",
+        "signal",
+        "weight",
+        "points",
+        "detail"
+      ],
+      "title": "ScoreComponentInfo",
+      "type": "object"
+    },
+    "ScorePenaltyInfo": {
+      "properties": {
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "points": {
+          "title": "Points",
+          "type": "number"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "points",
+        "detail"
+      ],
+      "title": "ScorePenaltyInfo",
+      "type": "object"
+    },
     "ServiceHealthChanged": {
       "properties": {
         "detail": {
@@ -2205,6 +2792,42 @@
         "uptime_s"
       ],
       "title": "StatusResponse",
+      "type": "object"
+    },
+    "StrategyInfo": {
+      "properties": {
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "markets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Markets",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "title",
+        "description",
+        "category",
+        "markets"
+      ],
+      "title": "StrategyInfo",
       "type": "object"
     },
     "StreamConnectionChanged": {
@@ -3277,6 +3900,26 @@
     "GET /v1/market/tickers?market=&limit=&focus_only=": {
       "auth": true,
       "response": "TickersResponse"
+    },
+    "GET /v1/opportunities/calibration": {
+      "auth": true,
+      "response": "object"
+    },
+    "GET /v1/opportunities/detail?market=&symbol=": {
+      "auth": true,
+      "response": "OpportunityDetail"
+    },
+    "GET /v1/opportunities/stats": {
+      "auth": true,
+      "response": "OpportunityStatsResponse"
+    },
+    "GET /v1/opportunities/strategies": {
+      "auth": true,
+      "response": "StrategyInfo[]"
+    },
+    "GET /v1/opportunities?market=&min_score=&direction=&limit=": {
+      "auth": true,
+      "response": "OpportunitySummary[]"
     },
     "GET /v1/scanner/signals?limit=": {
       "auth": true,

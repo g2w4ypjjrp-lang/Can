@@ -17,7 +17,7 @@ import hmac
 import itertools
 import json
 import socket
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, status
@@ -54,6 +54,9 @@ from ati_engine.api.schemas import (
     MarketServiceInfo,
     MarketStatusResponse,
     ModelInfo,
+    OpportunityDetail,
+    OpportunityStatsResponse,
+    OpportunitySummary,
     PositioningInfo,
     PredictionResponse,
     ReadinessInfo,
@@ -65,6 +68,7 @@ from ati_engine.api.schemas import (
     SimilarMatchInfo,
     SimilarResponse,
     StatusResponse,
+    StrategyInfo,
     TaskInfo,
     TickerInfo,
     TickersResponse,
@@ -92,6 +96,9 @@ from ati_engine.ml.registry import ModelError
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
 from ati_engine.scanner.scanner import MarketScanner, row_dict
+from ati_engine.scoring.live import OpportunityEngine, top_reasons
+from ati_engine.scoring.score import Opportunity
+from ati_engine.strategies.library import ALL_STRATEGIES
 from ati_engine.whales.radar import WhaleRadar
 
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "[::1]", "::1"]
@@ -716,6 +723,105 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return PredictionResponse.model_validate(data)
+
+    # --- Fırsat puanı (Aşama 7) -----------------------------------------------------------
+
+    def opportunities_or_404() -> OpportunityEngine:
+        if runtime.opportunities is None:
+            raise HTTPException(status_code=404, detail="Fırsat motoru etkin değil")
+        return runtime.opportunities
+
+    def opportunity_summary(opp: Opportunity) -> OpportunitySummary:
+        calibration = opp.calibration or {}
+        return OpportunitySummary(
+            market=Market(opp.market),
+            symbol=opp.symbol,
+            interval=opp.interval,
+            bar_open_time_ms=opp.time_ms,
+            direction=opp.direction,
+            score=opp.score,
+            price=opp.price,
+            stop_price=opp.stop_price,
+            target_price=opp.target_price,
+            reward_risk=opp.reward_risk,
+            cost_pct=opp.cost.total_pct,
+            reasons=top_reasons(opp),
+            historical_hit_rate=calibration.get("hit_rate"),
+            historical_net_return_pct=calibration.get("mean_net_return_pct"),
+        )
+
+    @app.get("/v1/opportunities", response_model=list[OpportunitySummary])
+    async def opportunities_top(
+        _: Auth,
+        market: Market | None = None,
+        min_score: Annotated[float, Query(ge=0, le=100)] = 0.0,
+        direction: Literal["long", "short"] | None = None,
+        limit: Annotated[int, Query(ge=1, le=1000)] = 50,
+    ) -> list[OpportunitySummary]:
+        engine = opportunities_or_404()
+        rows = engine.top(market, min_score=min_score, direction=direction, limit=limit)
+        return [opportunity_summary(o) for o in rows]
+
+    @app.get("/v1/opportunities/detail", response_model=OpportunityDetail)
+    async def opportunity_detail(
+        _: Auth, symbol: str, market: Market = Market.SPOT
+    ) -> OpportunityDetail:
+        engine = opportunities_or_404()
+        symbol = symbol.upper()
+        opp = engine.latest.get((market, symbol))
+        source: Literal["live", "history"] = "live"
+        if opp is None:
+            if runtime.history is None:
+                raise HTTPException(status_code=404, detail="Bu sembol için canlı puan yok")
+            try:
+                opp = await engine.evaluate_from_history(runtime.history, market, symbol)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            source = "history"
+        data = opp.to_dict()
+        data["bar_open_time_ms"] = data.pop("time_ms")
+        data["source"] = source
+        return OpportunityDetail.model_validate(data)
+
+    @app.get("/v1/opportunities/strategies", response_model=list[StrategyInfo])
+    async def opportunity_strategies(_: Auth) -> list[StrategyInfo]:
+        return [
+            StrategyInfo(
+                name=s.name,
+                title=s.title,
+                description=s.description,
+                category=s.category,
+                markets=list(s.markets),
+            )
+            for s in ALL_STRATEGIES
+        ]
+
+    @app.get("/v1/opportunities/calibration")
+    async def opportunity_calibration(_: Auth) -> dict[str, Any]:
+        engine = opportunities_or_404()
+        return {
+            "interval": engine.cfg.interval,
+            "horizon_bars": engine.cfg.horizon_bars,
+            "markets": engine.calibration,
+        }
+
+    @app.get("/v1/opportunities/stats", response_model=OpportunityStatsResponse)
+    async def opportunity_stats(_: Auth) -> OpportunityStatsResponse:
+        engine = opportunities_or_404()
+        return OpportunityStatsResponse(
+            interval=engine.cfg.interval,
+            horizon_bars=engine.cfg.horizon_bars,
+            publish_min_score=engine.cfg.publish_min_score,
+            bars=engine.stats.bars,
+            scored=engine.stats.scored,
+            published=engine.stats.published,
+            symbols=len(engine.books),
+            warmup_symbols=engine.stats.warmup_symbols,
+            batch_ms_max=round(engine.stats.batch_ms_max, 3),
+            incomplete_bars=engine.aggregator.incomplete,
+            calibration_loaded={m: bool(c) for m, c in engine.calibration.items()},
+            models_loaded={m.value: sorted(p) for m, p in engine.predictors.items()},
+        )
 
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:

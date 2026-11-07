@@ -26,6 +26,7 @@ from ati_engine.analysis.indicators import (
     Bollinger,
     Fibonacci,
     Ichimoku,
+    RollingExtremes,
     SessionVWAP,
     StochRSI,
 )
@@ -99,6 +100,59 @@ class FuturesContext:
     taker_long_short: float | None = None  # agresif alış/satış hacim oranı
 
 
+@dataclass(frozen=True)
+class Snapshot:
+    """Bir mum kapanışındaki gösterge değerleri (stratejilerin okuduğu görünüm)."""
+
+    open_time_ms: int
+    open: float
+    high: float
+    low: float
+    close: float
+    ema9: float
+    ema21: float
+    ema50: float
+    ema200: float
+    rsi: float
+    macd: float
+    macd_signal: float
+    macd_hist: float
+    atr: float
+    bb_upper: float
+    bb_middle: float
+    bb_lower: float
+    bb_width: float
+    bb_width_rank: float  # bant genişliğinin son 120 mumdaki yüzdelik sırası (0-1)
+    stoch_k: float
+    stoch_d: float | None
+    vwap: float | None
+    tenkan: float
+    kijun: float
+    span_a: float | None
+    span_b: float | None
+    lagging_ref: float | None
+    donchian_high: float | None  # önceki 20 mumun en yükseği (bu mum hariç)
+    donchian_low: float | None
+    volume_z: float
+    taker_buy_ratio: float
+    funding_rate: float | None
+    oi_change_4: float | None
+    top_long_short: float | None
+    global_long_short: float | None
+
+    @property
+    def cloud_top(self) -> float | None:
+        if self.span_a is None or self.span_b is None:
+            return None
+        return max(self.span_a, self.span_b)
+
+    @property
+    def cloud_bottom(self) -> float | None:
+        if self.span_a is None or self.span_b is None:
+            return None
+        return min(self.span_a, self.span_b)
+
+
 def _log_ratio(a: float | None, b: float | None) -> float:
     if a is None or b is None or a <= 0 or b <= 0:
         return NAN
@@ -146,6 +200,10 @@ class FeatureEngine:
         self._obv_hist: deque[float] = deque(maxlen=25)
         self._volumes: deque[float] = deque(maxlen=24)
         self._oi: deque[float | None] = deque(maxlen=25)
+        self._donchian = RollingExtremes(20)
+        self._donchian_prev: tuple[float, float] | None = None
+        self._widths: deque[float] = deque(maxlen=120)
+        self.snapshot: Snapshot | None = None
         self.bars = 0
 
     def update(self, bar: Bar, futures: FuturesContext | None = None) -> dict[str, float] | None:
@@ -175,6 +233,11 @@ class FeatureEngine:
         moments = self._log_returns.update(log_ret)
         vol_moments = self._log_volume.update(math.log(bar.volume + 1e-12))
         self._oi.append(futures.open_interest_usd if futures else None)
+        donchian = self._donchian_prev  # önceki 20 mum (bu mum hariç)
+        self._donchian_prev = self._donchian.update(h, lo)
+        if bb is not None:
+            self._widths.append(bb.width)
+        self.snapshot = None
 
         if self.bars < WARMUP_BARS:
             return None
@@ -237,6 +300,44 @@ class FeatureEngine:
             "hour_cos": math.cos(2 * math.pi * ((bar.open_time_ms // 3_600_000) % 24) / 24),
         }
         features.update(self._futures_features(futures))
+        width_rank = sum(1 for w in self._widths if w <= bb.width) / len(self._widths)
+        self.snapshot = Snapshot(
+            open_time_ms=bar.open_time_ms,
+            open=bar.open,
+            high=h,
+            low=lo,
+            close=c,
+            ema9=ema9,
+            ema21=ema21,
+            ema50=ema50,
+            ema200=ema200,
+            rsi=rsi,
+            macd=macd.macd,
+            macd_signal=macd.signal,
+            macd_hist=macd.hist,
+            atr=atr,
+            bb_upper=bb.upper,
+            bb_middle=bb.middle,
+            bb_lower=bb.lower,
+            bb_width=bb.width,
+            bb_width_rank=width_rank,
+            stoch_k=stoch.k,
+            stoch_d=stoch.d,
+            vwap=vwap,
+            tenkan=ichi.tenkan,
+            kijun=ichi.kijun,
+            span_a=ichi.span_a,
+            span_b=ichi.span_b,
+            lagging_ref=ichi.lagging_ref,
+            donchian_high=donchian[0] if donchian else None,
+            donchian_low=donchian[1] if donchian else None,
+            volume_z=features["volume_z_48"],
+            taker_buy_ratio=ratio,
+            funding_rate=futures.funding_rate if futures else None,
+            oi_change_4=(None if math.isnan(features["oi_change_4"]) else features["oi_change_4"]),
+            top_long_short=futures.top_long_short if futures else None,
+            global_long_short=futures.global_long_short if futures else None,
+        )
         return features
 
     @staticmethod

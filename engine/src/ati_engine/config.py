@@ -204,6 +204,22 @@ class ScannerSettings(BaseModel):
     tick_interval_s: float = Field(default=1.0, gt=0, le=10)
 
 
+class ScoringSettings(BaseModel):
+    """Fırsat puanı (Aşama 7). Puan tek başına emir üretmez."""
+
+    enabled: bool = True
+    interval: Literal["15m", "30m", "1h", "2h", "4h"] = "1h"
+    horizon_bars: int = Field(default=4, ge=1, le=100)
+    warmup_bars: int = Field(default=300, ge=220, le=1000)
+    publish_min_score: float = Field(default=60.0, ge=0, le=100)
+    weights: dict[str, float] = Field(default_factory=dict)
+    spot_taker_fee: float = Field(default=0.001, ge=0, le=0.01)
+    futures_taker_fee: float = Field(default=0.0005, ge=0, le=0.01)
+    notional_usd: float = Field(default=1_000.0, gt=0)
+    # {"spot": {"long": "<model kimliği>", "short": "<model kimliği>"}}
+    models: dict[str, dict[str, str]] = Field(default_factory=dict)
+
+
 class HistorySettings(BaseModel):
     """Tarihsel veri (Aşama 5): Binance arşivi + DuckDB deposu."""
 
@@ -280,6 +296,7 @@ class EngineSettings(BaseSettings):
     scanner: ScannerSettings = Field(default_factory=ScannerSettings)
     whales: WhaleSettings = Field(default_factory=WhaleSettings)
     history: HistorySettings = Field(default_factory=HistorySettings)
+    scoring: ScoringSettings = Field(default_factory=ScoringSettings)
 
     @property
     def paths(self) -> DataPaths:
