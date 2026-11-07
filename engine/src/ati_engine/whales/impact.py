@@ -106,6 +106,12 @@ class ImpactTracker:
             _Pending(kind, direction, market, symbol, t0_ms, p0, list(self._horizons))
         )
 
+    def discard_pending(self) -> int:
+        """Bekleyen ölçümleri atar (veri boşluğunda ufuk fiyatı doğru ölçülemez)."""
+        count = len(self._pending)
+        self._pending.clear()
+        return count
+
     def restore(self, kind: str, direction: int, horizon_s: int, directional_pct: float) -> None:
         """Veritabanındaki geçmiş ölçümlerden istatistikleri yeniden kurar."""
         self.stats.setdefault((kind, direction, horizon_s), ImpactStat()).add(directional_pct)

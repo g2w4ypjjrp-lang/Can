@@ -204,6 +204,13 @@ class ScannerSettings(BaseModel):
     tick_interval_s: float = Field(default=1.0, gt=0, le=10)
 
 
+class HistorySettings(BaseModel):
+    """Tarihsel veri (Aşama 5): Binance arşivi + DuckDB deposu."""
+
+    enabled: bool = True
+    download_concurrency: int = Field(default=6, ge=1, le=16)
+
+
 class OnchainSettings(BaseModel):
     """Zincir üstü büyük transfer izleme. Varsayılan KAPALI (onay kapısı G4: sağlayıcı seçimi)."""
 
@@ -272,6 +279,7 @@ class EngineSettings(BaseSettings):
     market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
     scanner: ScannerSettings = Field(default_factory=ScannerSettings)
     whales: WhaleSettings = Field(default_factory=WhaleSettings)
+    history: HistorySettings = Field(default_factory=HistorySettings)
 
     @property
     def paths(self) -> DataPaths:

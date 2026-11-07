@@ -48,6 +48,13 @@ _API_MODELS: tuple[type[BaseModel], ...] = (
     schemas.WhaleSummaryResponse,
     schemas.ImpactInfo,
     schemas.PositioningInfo,
+    schemas.HistoryStatusResponse,
+    schemas.HistorySyncRequest,
+    schemas.HistoryJobInfo,
+    schemas.CandlesResponse,
+    schemas.LevelsResponse,
+    schemas.TrendResponse,
+    schemas.SimilarResponse,
 )
 
 
@@ -114,6 +121,28 @@ def build_protocol_schema() -> dict[str, Any]:
             },
             "GET /v1/whales/impact": {"response": "ImpactInfo[]", "auth": True},
             "GET /v1/whales/positioning": {"response": "PositioningInfo[]", "auth": True},
+            "GET /v1/history/status": {"response": "HistoryStatusResponse", "auth": True},
+            "POST /v1/history/sync": {
+                "request": "HistorySyncRequest",
+                "response": "HistoryJobInfo",
+                "auth": True,
+            },
+            "GET /v1/history/candles?market=&symbol=&interval=&bars=": {
+                "response": "CandlesResponse",
+                "auth": True,
+            },
+            "GET /v1/history/levels?market=&symbol=&interval=&bars=": {
+                "response": "LevelsResponse",
+                "auth": True,
+            },
+            "GET /v1/history/trend?market=&symbol=&interval=&bars=": {
+                "response": "TrendResponse",
+                "auth": True,
+            },
+            "GET /v1/history/similar?market=&symbol=&interval=&bars=&window=&top_k=&horizons=": {
+                "response": "SimilarResponse",
+                "auth": True,
+            },
             "POST /v1/market/focus": {
                 "request": "FocusRequest",
                 "response": "FocusResponse",

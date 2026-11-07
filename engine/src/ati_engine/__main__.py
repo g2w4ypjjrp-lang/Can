@@ -8,6 +8,8 @@ Kullanım::
     ati-engine verify-audit            # yerel denetim kaydı zincirini doğrula
     ati-engine history-sync --symbol BTCUSDT --market spot --interval 1m
                                        # Binance arşivinden tarihsel mumları indir/güncelle
+    ati-engine history-replay --symbol BTCUSDT --days 30
+                                       # balina radarını işlem arşivi üzerinde yeniden oynat
     ati-engine version
 """
 
@@ -96,9 +98,13 @@ def _cmd_verify_audit(args: argparse.Namespace) -> int:
 def _cmd_history_sync(args: argparse.Namespace) -> int:
     from ati_engine.config import EngineSettings
     from ati_engine.core.models import Market
+    from ati_engine.exchange.endpoints import endpoints_for
+    from ati_engine.exchange.rate_limit import WeightBudget
+    from ati_engine.exchange.rest import BinanceRestClient
     from ati_engine.history.archive import ArchiveClient
     from ati_engine.history.store import KlineStore
     from ati_engine.history.sync import HistorySync
+    from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT
     from ati_engine.storage.database import Database
 
     overrides: dict[str, object] = {}
@@ -108,13 +114,28 @@ def _cmd_history_sync(args: argparse.Namespace) -> int:
     settings.paths.ensure()
 
     async def _sync() -> int:
+        import duckdb
+
+        try:
+            store = KlineStore(settings.paths.history_db)
+        except duckdb.IOException:
+            print(
+                "Tarihsel veri dosyası kullanımda (motor çalışıyor olabilir). Motor çalışırken "
+                "eşitleme için yerel API'yi kullanın: POST /v1/history/sync",
+                file=sys.stderr,
+            )
+            return 4
         db = Database(settings.paths.database)
         await db.open()
-        store = KlineStore(settings.paths.history_db)
         archive = ArchiveClient()
+        market = Market(args.market)
+        endpoints = endpoints_for(market, settings.binance)
+        rest_client = BinanceRestClient(
+            endpoints.rest_base, budget=WeightBudget(DEFAULT_WEIGHT_LIMIT[market])
+        )
         try:
             await db.migrate()
-            sync = HistorySync(archive, store, db)
+            sync = HistorySync(archive, store, db, rest={market: (rest_client, endpoints)})
             for symbol in args.symbol:
                 report = await sync.sync_klines(Market(args.market), symbol, args.interval)
                 coverage = await store.coverage(args.market, report.symbol, args.interval)
@@ -126,6 +147,9 @@ def _cmd_history_sync(args: argparse.Namespace) -> int:
                             "files_downloaded": report.files_downloaded,
                             "files_skipped": report.files_skipped,
                             "rows_inserted": report.rows_inserted,
+                            "rest_rows": report.rest_rows,
+                            "gaps_checked": report.gaps_checked,
+                            "gaps_rows": report.gaps_rows,
                             "mb_downloaded": round(report.bytes_downloaded / 1e6, 2),
                             "seconds": report.seconds,
                             "rows_total": coverage.rows,
@@ -138,11 +162,68 @@ def _cmd_history_sync(args: argparse.Namespace) -> int:
                 )
         finally:
             await archive.close()
+            await rest_client.close()
             await store.close()
             await db.close()
         return 0
 
     return asyncio.run(_sync())
+
+
+def _cmd_history_replay(args: argparse.Namespace) -> int:
+    import time
+    from dataclasses import asdict
+    from datetime import UTC, date, datetime, timedelta
+
+    from ati_engine.config import WhaleSettings
+    from ati_engine.core.models import Market
+    from ati_engine.history.archive import ArchiveClient, ArchiveNotFound
+    from ati_engine.history.replay import WhaleReplay, aggtrades_key, iter_aggtrades
+
+    market = Market(args.market)
+    whales = WhaleSettings()
+    floor = args.floor or (
+        whales.spot_floor_usd if market is Market.SPOT else whales.futures_floor_usd
+    )
+    end = date.fromisoformat(args.end) if args.end else datetime.now(UTC).date() - timedelta(1)
+    days = [end - timedelta(days=i) for i in range(args.days - 1, -1, -1)]
+
+    async def _replay() -> str:
+        archive = ArchiveClient()
+        replay = WhaleReplay(
+            market,
+            args.symbol.upper(),
+            floor_usd=floor,
+            quantile=whales.quantile,
+            min_samples=whales.min_samples,
+        )
+        try:
+            for day in days:
+                started = time.perf_counter()
+                try:
+                    data = await archive.download(aggtrades_key(market, args.symbol.upper(), day))
+                except ArchiveNotFound:
+                    replay.gap(day.isoformat())
+                    print(f"{day}: arşivde yok, atlandı", file=sys.stderr)
+                    continue
+                before = replay.report.trades
+                for row in iter_aggtrades(data):
+                    replay.feed(*row)
+                replay.report.days.append(day.isoformat())
+                print(
+                    f"{day}: {replay.report.trades - before:,} işlem, toplam balina "
+                    f"{replay.report.whales}, {time.perf_counter() - started:.1f} sn",
+                    file=sys.stderr,
+                )
+        finally:
+            await archive.close()
+        return json.dumps(asdict(replay.finish()), indent=2, ensure_ascii=False)
+
+    text = asyncio.run(_replay())
+    if args.report:
+        Path(args.report).write_text(text, encoding="utf-8")
+    print(text)
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -174,6 +255,17 @@ def build_parser() -> argparse.ArgumentParser:
     history.add_argument("--symbol", nargs="+", required=True)
     history.add_argument("--interval", default="1m")
     history.set_defaults(func=_cmd_history_sync)
+
+    replay = sub.add_parser(
+        "history-replay", help="Balina radarını Binance işlem arşivi üzerinde yeniden oynat"
+    )
+    replay.add_argument("--market", choices=["spot", "usdm_futures"], default="spot")
+    replay.add_argument("--symbol", required=True)
+    replay.add_argument("--days", type=int, default=7)
+    replay.add_argument("--end", help="Son gün (YYYY-AA-GG, varsayılan: dün)")
+    replay.add_argument("--floor", type=float, help="Balina alt sınırı (USDT)")
+    replay.add_argument("--report", help="JSON raporun yazılacağı dosya")
+    replay.set_defaults(func=_cmd_history_replay)
 
     version = sub.add_parser("version", help="Sürümü yazdır")
     version.set_defaults(func=lambda _: print(__version__) or 0)

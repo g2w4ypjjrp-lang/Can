@@ -29,16 +29,25 @@ from starlette.websockets import WebSocketDisconnect
 
 from ati_engine.api.schemas import (
     AuditEntry,
+    CandlesResponse,
     CheckInfo,
     ErrorResponse,
     FocusRequest,
     FocusResponse,
+    ForwardStatInfo,
     HealthResponse,
+    HistoryCoverageInfo,
+    HistoryJobInfo,
+    HistoryStatusResponse,
+    HistorySyncReportInfo,
+    HistorySyncRequest,
     ImpactInfo,
     KillSwitchEngageRequest,
     KillSwitchInfo,
     KillSwitchReleaseRequest,
     KillSwitchResponse,
+    LevelInfo,
+    LevelsResponse,
     LoopLagInfo,
     MarketServiceInfo,
     MarketStatusResponse,
@@ -49,12 +58,17 @@ from ati_engine.api.schemas import (
     ScanRowInfo,
     ShutdownResponse,
     SignalInfo,
+    SimilarMatchInfo,
+    SimilarResponse,
     StatusResponse,
     TaskInfo,
     TickerInfo,
     TickersResponse,
     TradingModeRequest,
     TradingModeResponse,
+    TrendBreakInfo,
+    TrendLineInfo,
+    TrendResponse,
     WhaleAlertInfo,
     WhaleStatsInfo,
     WhaleSummaryResponse,
@@ -66,6 +80,7 @@ from ati_engine.api.schemas import (
 from ati_engine.core.bus import OverflowPolicy
 from ati_engine.core.events import Event, SystemEvent, encode_event
 from ati_engine.core.models import Market
+from ati_engine.history.service import HistoryService, SyncJob
 from ati_engine.market.service import MarketDataService
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
@@ -102,6 +117,9 @@ def require_token(request: Request) -> None:
 # Modül seviyesinde tanımlı olmalı: FastAPI ertelenmiş (string) tip açıklamalarını
 # modülün global ad alanında çözer.
 Auth = Annotated[None, Depends(require_token)]
+
+
+HistoryBars = Annotated[int, Query(ge=50, le=20_000)]
 
 
 def create_app(runtime: EngineRuntime) -> FastAPI:
@@ -419,6 +437,198 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             PositioningInfo.model_validate(vars(s))
             for s in sorted(radar.positioning.values(), key=lambda s: -s.open_interest_usd)
         ]
+
+    # --- Tarihsel veri (Aşama 5) ---------------------------------------------------------
+
+    def history_or_404() -> HistoryService:
+        if runtime.history is None:
+            raise HTTPException(status_code=404, detail="Tarihsel veri servisi etkin değil")
+        return runtime.history
+
+    def job_info(job: SyncJob) -> HistoryJobInfo:
+        return HistoryJobInfo(
+            id=job.id,
+            market=job.market,
+            symbols=job.symbols,
+            interval=job.interval,
+            state=job.state,
+            started_ms=job.started_ms,
+            finished_ms=job.finished_ms,
+            current=job.current,
+            error=job.error,
+            reports=[
+                HistorySyncReportInfo(
+                    symbol=r.symbol,
+                    files_downloaded=r.files_downloaded,
+                    files_skipped=r.files_skipped,
+                    rows_inserted=r.rows_inserted,
+                    first_open_ms=r.first_open_ms,
+                    last_open_ms=r.last_open_ms,
+                    seconds=r.seconds,
+                )
+                for r in job.reports
+            ],
+        )
+
+    @app.get("/v1/history/status", response_model=HistoryStatusResponse)
+    async def history_status(_: Auth) -> HistoryStatusResponse:
+        history = history_or_404()
+        coverage = [
+            HistoryCoverageInfo(market=m, symbol=s, interval=i, rows=n)
+            for m, s, i, n in await history.store.symbols()
+        ]
+        jobs = [job_info(j) for j in sorted(history.jobs.values(), key=lambda j: -j.id)[:20]]
+        return HistoryStatusResponse(coverage=coverage, jobs=jobs)
+
+    @app.post(
+        "/v1/history/sync", response_model=HistoryJobInfo, status_code=status.HTTP_202_ACCEPTED
+    )
+    async def history_sync(body: HistorySyncRequest, _: Auth) -> HistoryJobInfo:
+        history = history_or_404()
+        symbols = [s.strip().upper() for s in body.symbols]
+        if not all(s.isalnum() and len(s) <= 30 for s in symbols):
+            raise HTTPException(status_code=422, detail="Geçersiz sembol")
+        try:
+            job = history.start_sync(body.market, symbols, body.interval)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return job_info(job)
+
+    @app.get("/v1/history/candles", response_model=CandlesResponse)
+    async def history_candles(
+        _: Auth,
+        symbol: str,
+        market: Market = Market.SPOT,
+        interval: str = "1h",
+        bars: HistoryBars = 500,
+    ) -> CandlesResponse:
+        history = history_or_404()
+        try:
+            rows = await history.bars(market, symbol, interval, tail=bars)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return CandlesResponse(
+            market=market,
+            symbol=symbol.upper(),
+            interval=interval,
+            columns=["open_time", "open", "high", "low", "close", "volume"],
+            rows=[[float(v) for v in r[:6]] for r in rows],
+        )
+
+    @app.get("/v1/history/levels", response_model=LevelsResponse)
+    async def history_levels(
+        _: Auth,
+        symbol: str,
+        market: Market = Market.SPOT,
+        interval: str = "1h",
+        bars: HistoryBars = 1000,
+    ) -> LevelsResponse:
+        history = history_or_404()
+        try:
+            rows, levels = await history.levels(market, symbol, interval, tail=bars)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return LevelsResponse(
+            market=market,
+            symbol=symbol.upper(),
+            interval=interval,
+            bars=len(rows),
+            last_close=float(rows[-1][4]) if rows else None,
+            levels=[LevelInfo.model_validate(vars(lv)) for lv in levels],
+        )
+
+    @app.get("/v1/history/trend", response_model=TrendResponse)
+    async def history_trend(
+        _: Auth,
+        symbol: str,
+        market: Market = Market.SPOT,
+        interval: str = "1h",
+        bars: HistoryBars = 1000,
+    ) -> TrendResponse:
+        history = history_or_404()
+        try:
+            rows, analysis = await history.trend(market, symbol, interval, tail=bars)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        last = len(rows) - 1
+        return TrendResponse(
+            market=market,
+            symbol=symbol.upper(),
+            interval=interval,
+            bars=len(rows),
+            active=[
+                TrendLineInfo(
+                    kind=line.kind,
+                    a_time_ms=line.a_time_ms,
+                    a_price=line.a_price,
+                    b_time_ms=line.b_time_ms,
+                    b_price=line.b_price,
+                    slope_per_bar=line.slope,
+                    value_now=line.value_at(last),
+                )
+                for line in analysis.active
+            ],
+            breaks=[
+                TrendBreakInfo(
+                    time_ms=b.time_ms,
+                    direction=b.direction,
+                    close=b.close,
+                    line_value=b.line_value,
+                    penetration_atr=b.penetration_atr,
+                    line_kind=b.line.kind,
+                )
+                for b in analysis.breaks[-50:]
+            ],
+        )
+
+    @app.get("/v1/history/similar", response_model=SimilarResponse)
+    async def history_similar(
+        _: Auth,
+        symbol: str,
+        market: Market = Market.SPOT,
+        interval: str = "1h",
+        bars: Annotated[int, Query(ge=200, le=200_000)] = 20_000,
+        window: Annotated[int, Query(ge=8, le=500)] = 48,
+        top_k: Annotated[int, Query(ge=1, le=50)] = 10,
+        horizons: str = "6,24",
+    ) -> SimilarResponse:
+        history = history_or_404()
+        try:
+            steps = sorted({int(h) for h in horizons.split(",") if h.strip()})
+            if not steps or steps[0] < 1 or steps[-1] > 1000:
+                raise ValueError("horizons 1-1000 arası tam sayılar olmalı")
+            result = await history.similar(
+                market, symbol, interval, tail=bars, window=window, top_k=top_k, horizons=steps
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return SimilarResponse(
+            market=market,
+            symbol=symbol.upper(),
+            interval=interval,
+            window=result.window,
+            query_end_time_ms=result.query_end_time_ms,
+            candidates=result.candidates,
+            matches=[
+                SimilarMatchInfo(
+                    start_time_ms=m.start_time_ms,
+                    end_time_ms=m.end_time_ms,
+                    distance=m.distance,
+                    forward_pct=m.forward_pct,
+                )
+                for m in result.matches
+            ],
+            forward=[
+                ForwardStatInfo(
+                    horizon_bars=f.horizon,
+                    n=f.n,
+                    mean_pct=f.mean_pct,
+                    median_pct=f.median_pct,
+                    positive_rate=f.positive_rate,
+                )
+                for f in result.forward
+            ],
+        )
 
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:

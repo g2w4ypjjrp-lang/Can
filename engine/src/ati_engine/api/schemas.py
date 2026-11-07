@@ -347,3 +347,129 @@ class PositioningInfo(BaseModel):
     global_long_change_pts: float
     open_interest_change_pct: float
     divergence: bool
+
+
+# --- Tarihsel veri (Aşama 5) ------------------------------------------------------------
+
+
+class HistoryCoverageInfo(BaseModel):
+    market: str
+    symbol: str
+    interval: str
+    rows: int
+
+
+class HistorySyncReportInfo(BaseModel):
+    symbol: str
+    files_downloaded: int
+    files_skipped: int
+    rows_inserted: int
+    first_open_ms: int | None
+    last_open_ms: int | None
+    seconds: float
+
+
+class HistoryJobInfo(BaseModel):
+    id: int
+    market: Market
+    symbols: list[str]
+    interval: str
+    state: str
+    started_ms: int
+    finished_ms: int | None
+    current: str | None
+    error: str | None
+    reports: list[HistorySyncReportInfo]
+
+
+class HistoryStatusResponse(BaseModel):
+    coverage: list[HistoryCoverageInfo]
+    jobs: list[HistoryJobInfo]
+
+
+class HistorySyncRequest(BaseModel):
+    market: Market = Market.SPOT
+    symbols: list[str] = Field(min_length=1, max_length=200)
+    interval: str = "1h"
+
+
+class CandlesResponse(BaseModel):
+    market: Market
+    symbol: str
+    interval: str
+    columns: list[str]
+    rows: list[list[float]]
+
+
+class LevelInfo(BaseModel):
+    price: float
+    kind: str
+    touches: int
+    first_time_ms: int
+    last_time_ms: int
+    strength: float
+    distance_pct: float
+
+
+class LevelsResponse(BaseModel):
+    market: Market
+    symbol: str
+    interval: str
+    bars: int
+    last_close: float | None
+    levels: list[LevelInfo]
+
+
+class TrendLineInfo(BaseModel):
+    kind: str
+    a_time_ms: int
+    a_price: float
+    b_time_ms: int
+    b_price: float
+    slope_per_bar: float
+    value_now: float
+
+
+class TrendBreakInfo(BaseModel):
+    time_ms: int
+    direction: str
+    close: float
+    line_value: float
+    penetration_atr: float
+    line_kind: str
+
+
+class TrendResponse(BaseModel):
+    market: Market
+    symbol: str
+    interval: str
+    bars: int
+    active: list[TrendLineInfo]
+    breaks: list[TrendBreakInfo]
+
+
+class SimilarMatchInfo(BaseModel):
+    start_time_ms: int
+    end_time_ms: int
+    distance: float
+    forward_pct: dict[int, float]
+
+
+class ForwardStatInfo(BaseModel):
+    horizon_bars: int
+    n: int
+    mean_pct: float
+    median_pct: float
+    positive_rate: float
+
+
+class SimilarResponse(BaseModel):
+    market: Market
+    symbol: str
+    interval: str
+    window: int
+    query_end_time_ms: int
+    candidates: int
+    matches: list[SimilarMatchInfo]
+    forward: list[ForwardStatInfo]
+    disclaimer: str = "Geçmişteki benzer dönemlerin sonucudur; gelecekteki fiyatı garanti etmez."

@@ -28,10 +28,16 @@ from ati_engine.api.server import bind_socket, build_server, create_app
 from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus, OverflowPolicy
 from ati_engine.core.events import Alert, Heartbeat
-from ati_engine.core.models import EngineState, Severity
+from ati_engine.core.models import EngineState, Market, Severity
 from ati_engine.core.supervisor import RestartPolicy, TaskSupervisor
+from ati_engine.exchange.endpoints import endpoints_for
+from ati_engine.exchange.rate_limit import WeightBudget
+from ati_engine.exchange.rest import BinanceRestClient
+from ati_engine.history.service import HistoryService
+from ati_engine.history.store import KlineStore
+from ati_engine.history.sync import RestSource
 from ati_engine.market.discovery import SymbolRegistry, UniverseFilter
-from ati_engine.market.service import MarketDataService
+from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT, MarketDataService
 from ati_engine.observability.logging import configure_logging
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.runtime import EngineRuntime
@@ -151,6 +157,8 @@ class Engine:
 
             if settings.market_data.enabled:
                 self._start_market_data(runtime)
+            if settings.history.enabled:
+                runtime.history = self._create_history(runtime)
 
             supervisor.spawn("loop-lag-monitor", loop_monitor.run)
             supervisor.spawn(
@@ -200,6 +208,31 @@ class Engine:
         finally:
             await self._shutdown(server, server_task, supervisor, bus, db)
 
+    def _create_history(self, runtime: EngineRuntime) -> HistoryService:
+        """REST tamamlaması piyasa verisi servisinin istemcisini (ortak ağırlık bütçesi)
+        kullanır; piyasa verisi kapalıysa kendi istemcisini açar."""
+        settings = runtime.settings
+        rest: dict[Market, RestSource] = {}
+        owned: list[BinanceRestClient] = []
+        for market in settings.markets:
+            service = runtime.market_data.get(market)
+            if service is not None:
+                rest[market] = (service.rest, service.endpoints)
+                continue
+            endpoints = endpoints_for(market, settings.binance)
+            client = BinanceRestClient(
+                endpoints.rest_base, budget=WeightBudget(DEFAULT_WEIGHT_LIMIT[market])
+            )
+            owned.append(client)
+            rest[market] = (client, endpoints)
+        return HistoryService(
+            KlineStore(settings.paths.history_db),
+            runtime.db,
+            concurrency=settings.history.download_concurrency,
+            rest=rest,
+            owned_rest=owned,
+        )
+
     async def _shutdown(
         self,
         server: Any,
@@ -225,6 +258,9 @@ class Engine:
                 for service in runtime.market_data.values():
                     with contextlib.suppress(Exception):
                         await service.close()
+                if runtime.history is not None:
+                    with contextlib.suppress(Exception):
+                        await runtime.history.close()
             if runtime is not None:
                 with contextlib.suppress(Exception):
                     await runtime.safety.state.transition(EngineState.STOPPED, "durduruldu")

@@ -63,6 +63,10 @@ class ChecksumError(ArchiveError):
     pass
 
 
+class ArchiveNotFound(ArchiveError):
+    """Dosya arşivde yok (Binance arşivinde nadiren eksik günler bulunur)."""
+
+
 def market_prefix(market: Market) -> str:
     return "spot" if market is Market.SPOT else "futures/um"
 
@@ -148,6 +152,23 @@ def parse_klines(data: bytes) -> list[KlineRow]:
     return rows
 
 
+def kline_from_rest(row: list[object]) -> KlineRow:
+    """REST ``klines`` yanıt satırı (değerler metin) → arşivle aynı satır biçimi."""
+    return (
+        _to_ms(str(row[0])),
+        float(str(row[1])),
+        float(str(row[2])),
+        float(str(row[3])),
+        float(str(row[4])),
+        float(str(row[5])),
+        _to_ms(str(row[6])),
+        float(str(row[7])),
+        int(str(row[8])),
+        float(str(row[9])),
+        float(str(row[10])),
+    )
+
+
 class ArchiveClient:
     """data.binance.vision üzerinde listeleme ve doğrulamalı indirme."""
 
@@ -200,7 +221,7 @@ class ArchiveClient:
         response = await self._client.get(f"{self._base}/{key}")
         self.requests += 1
         if response.status_code == 404:
-            raise ArchiveError(f"Arşivde yok: {key}")
+            raise ArchiveNotFound(f"Arşivde yok: {key}")
         response.raise_for_status()
         self.bytes_downloaded += len(response.content)
         return response.content

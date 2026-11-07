@@ -10,6 +10,7 @@ import zipfile
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -336,3 +337,153 @@ async def test_query_performance_one_year_of_minutes(store: KlineStore) -> None:
     assert load_s < 20
     assert month_s < 2
     assert resample_s < 2
+
+
+# --- REST ile baş/kuyruk tamamlama ---------------------------------------------------------
+
+
+class FakeKlinesRest:
+    """Binance ``klines`` uç noktası taklidi: listelenmeden ``now``a kadar 1 dakikalık mumlar;
+    son (henüz kapanmamış) mum da döner — eşitleme onu yazmamalı."""
+
+    def __init__(self, listing_ms: int, now_ms: int) -> None:
+        self.listing_ms = listing_ms
+        self.now_ms = now_ms
+        self.requests: list[dict[str, str]] = []
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        self.requests.append(params)
+        start = max(int(params.get("startTime", 0)), self.listing_ms)
+        end = int(params.get("endTime", self.now_ms))
+        limit = int(params.get("limit", 500))
+        first = start + (-start % 60_000)
+        rows = []
+        t = first
+        while t <= min(end, self.now_ms) and len(rows) < limit:
+            rows.append(
+                [
+                    t,
+                    "100.0",
+                    "101.0",
+                    "99.0",
+                    "100.5",
+                    "2.0",
+                    t + 59_999,
+                    "200.0",
+                    7,
+                    "1.0",
+                    "100.0",
+                    "0",
+                ]
+            )
+            t += 60_000
+        return httpx.Response(200, json=rows)
+
+
+def rest_source(fake: FakeKlinesRest, market: Market = Market.SPOT) -> tuple[Any, Any]:
+    from ati_engine.config import BinanceEndpoints
+    from ati_engine.exchange.endpoints import endpoints_for
+    from ati_engine.exchange.rate_limit import WeightBudget
+    from ati_engine.exchange.rest import BinanceRestClient
+
+    endpoints = endpoints_for(market, BinanceEndpoints())
+    client = BinanceRestClient(
+        endpoints.rest_base,
+        budget=WeightBudget(6000),
+        client=httpx.AsyncClient(
+            base_url=endpoints.rest_base, transport=httpx.MockTransport(fake.handler)
+        ),
+    )
+    return client, endpoints
+
+
+async def test_rest_fills_pre_archive_head_and_today_tail(db: Database, store: KlineStore) -> None:
+    listing = ms(2026, 10, 30)
+    now = [ms(2026, 11, 4) + 6 * 3_600_000 + 30 * 60_000 + 30_000]  # 06:30:30
+    archive_fake = FakeArchive()
+    for day in range(31, 32):
+        archive_fake.add_klines(Market.SPOT, "NEWUSDT", f"2026-10-{day}", 1440)
+    for day in range(1, 4):
+        archive_fake.add_klines(Market.SPOT, "NEWUSDT", f"2026-11-{day:02d}", 1440)
+    rest = FakeKlinesRest(listing, now[0])
+    client, endpoints = rest_source(rest)
+    archive = archive_fake.client()
+    sync = HistorySync(
+        archive,
+        store,
+        db,
+        today=lambda: date(2026, 11, 4),
+        rest={Market.SPOT: (client, endpoints)},
+        now_ms=lambda: now[0],
+    )
+    report = await sync.sync_klines(Market.SPOT, "NEWUSDT")
+    assert report.files_downloaded == 4
+    # Baş: 30 Ekim (arşivde yok) 1440 mum; kuyruk: bugün 00:00-06:29 (06:30 henüz açık).
+    assert report.rest_rows == 1440 + 390
+    assert report.first_open_ms == listing
+    assert report.last_open_ms == ms(2026, 11, 4) + 389 * 60_000
+    coverage = await store.coverage("spot", "NEWUSDT", "1m")
+    assert coverage.rows == 1440 * 5 + 390
+    assert coverage.missing == 0
+    assert all(int(r["limit"]) == 1000 for r in rest.requests)
+
+    # Beş dakika sonra: baş tekrar istenmez, yalnızca yeni kapanan 5 mum eklenir.
+    rest.requests.clear()
+    now[0] += 5 * 60_000
+    rest.now_ms = now[0]
+    again = await sync.sync_klines(Market.SPOT, "NEWUSDT")
+    assert again.files_downloaded == 0
+    assert again.rest_rows == 5
+    assert len(rest.requests) == 1
+    assert int(rest.requests[0]["startTime"]) == ms(2026, 11, 4) + 390 * 60_000
+    await archive.close()
+    await client.close()
+
+
+async def test_daily_files_before_first_monthly_are_included(
+    db: Database, store: KlineStore
+) -> None:
+    """ETHUSDT vadeli gibi: arşivin ilk günü (31 Aralık) yalnızca günlük dosya olarak var."""
+    fake = FakeArchive()
+    fake.add_klines(Market.USDM_FUTURES, "ETHUSDT", "2019-12-31", 1440)
+    fake.add_klines(Market.USDM_FUTURES, "ETHUSDT", "2020-01", 31 * 1440)
+    fake.add_klines(Market.USDM_FUTURES, "ETHUSDT", "2020-01-15", 1440)  # aylıkla örtüşen
+    archive = fake.client()
+    sync = HistorySync(archive, store, db, today=lambda: date(2020, 2, 1))
+    report = await sync.sync_klines(Market.USDM_FUTURES, "ETHUSDT")
+    assert report.downloaded == ["2019-12-31", "2020-01"]
+    assert report.first_open_ms == ms(2019, 12, 31)
+    assert (await store.coverage("usdm_futures", "ETHUSDT", "1m")).missing == 0
+    await archive.close()
+
+
+async def test_archive_gap_is_repaired_from_rest(db: Database, store: KlineStore) -> None:
+    """Arşivde eksik gün (Binance'te gerçekten görüldü): REST'ten tamamlanır; ikinci
+    eşitlemede aynı boşluk (artık yok) tekrar sorulmaz."""
+    fake = FakeArchive()
+    for day in (1, 2, 4):  # 3 Kasım arşivde yok
+        fake.add_klines(Market.SPOT, "GAPUSDT", f"2026-11-{day:02d}", 1440)
+    now = ms(2026, 11, 5)
+    rest = FakeKlinesRest(ms(2026, 11, 1), now)
+    client, endpoints = rest_source(rest)
+    archive = fake.client()
+    sync = HistorySync(
+        archive,
+        store,
+        db,
+        today=lambda: date(2026, 11, 5),
+        rest={Market.SPOT: (client, endpoints)},
+        now_ms=lambda: now,
+    )
+    report = await sync.sync_klines(Market.SPOT, "GAPUSDT")
+    assert report.gaps_checked == 1
+    assert report.gaps_rows == 1440
+    coverage = await store.coverage("spot", "GAPUSDT", "1m")
+    assert coverage.missing == 0 and coverage.rows == 4 * 1440
+    rest.requests.clear()
+    again = await sync.sync_klines(Market.SPOT, "GAPUSDT")
+    assert again.gaps_checked == 0
+    assert rest.requests == []  # boşluk kalmadı, veri de güncel: hiç istek yok
+    await archive.close()
+    await client.close()

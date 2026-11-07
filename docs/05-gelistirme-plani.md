@@ -28,8 +28,8 @@ kısıtı).
 | 2 | Binance veri motoru | ✅ **Tamamlandı** |
 | 3 | Coin tarama sistemi | ✅ **Tamamlandı** |
 | 4 | Balina takip sistemi | ✅ **Tamamlandı** |
-| 5 | Tarihsel veri ve grafik motoru | 🔄 Devam ediyor |
-| 6 | Yapay zekâ analiz motoru | |
+| 5 | Tarihsel veri ve grafik motoru | ✅ **Tamamlandı** |
+| 6 | Yapay zekâ analiz motoru | ⏭️ Sıradaki |
 | 7 | Fırsat tespit sistemi | |
 | 8 | Backtest | |
 | 9 | Paper Trading | |
@@ -136,30 +136,60 @@ Zincir üstü veri için denenen ücretsiz bir servis, paylaşılan IP nedeniyle
 ücretsiz planlar genellikle ticari kullanıma da izin vermez. Bu yüzden anahtarlı bir sağlayıcı
 seçimi ve onayınız (G4) beklenmektedir.
 
-### Aşama 5 — Tarihsel veri ve grafik motoru 🔄
+### Aşama 5 — Tarihsel veri ve grafik motoru ✅
 
-**Tamamlanan (çekirdek):** `history/`: `data.binance.vision` arşivinden doğrulamalı indirme,
-paralel indirme ve sıralı yazma, DuckDB deposu, artımlı eşitleme ve yeniden örnekleme.
-- Her dosya `.CHECKSUM` (SHA-256) ile doğrulanır; doğrulanmayan dosya yazılmaz.
-- Biçim farkları ele alınır: Spot zaman damgaları mikrosaniye, Futures dosyaları başlık
-  satırlı.
-- Komut: `ati-engine history-sync --symbol BTCUSDT ETHUSDT --interval 1h`.
-- Gerçek veriyle ölçülen sonuçlar:
-  - BTCUSDT, listelendiği 2017-08-17'den bugüne 80.725 saatlik mum, 117 dosya, 23 sn.
-  - İkinci çalıştırma 0 dosya indirdi (1,2 sn).
-  - Kalan 127 saatlik boşluk Binance'in kendi kesintileridir (en büyüğü 2018-02-08,
-    32 saat), arşiv bu saatleri içermez.
-- 11 yeni test, sorgu hızı dahil: 525.600 satırlık bir yılda aylık sorgu ve günlük yeniden
-  örnekleme.
+**Çıktılar (uygulandı):** `history/`.
 
-**Kalan:** destek/direnç, trend kırılımı, benzer piyasa koşulu arama, `aggTrades` arşivi ve
-balina radarının arşiv üzerinde yeniden oynatılması.
+- **Arşiv:** `data.binance.vision`'dan sayfalı listeleme ve SHA-256 (`.CHECKSUM`) doğrulamalı
+  indirme. Biçim farkları ele alınır: Spot mikrosaniye, Futures başlık satırı.
+- **Depo:** DuckDB (`market/history.duckdb`); toplu yükleme, tekrar yazmama, aralık sorgusu,
+  yeniden örnekleme (1m → 4h/1d), kapsama ve boşluk ölçümü.
+- **Artımlı eşitleme (`history_sync_state`):**
+  - Aylık ve günlük dosyalar paralel indirilir, sıralı yazılır; yarıda kesilirse kaldığı
+    yerden devam eder.
+  - Arşivin dışında kalan uçlar REST ile tamamlanır: arşivden önceki **baş** (ilk eşitlemede)
+    ve bugünün **kapanmış** mumları.
+  - Veri içindeki boşluklar REST ile onarılır.
+  - REST, motorun ortak ağırlık bütçesini düşük öncelikle kullanır.
+- **Grafik analizi:**
+  - ATR ve dönüş noktaları.
+  - Destek/direnç: kümelenmiş dönüşler, dokunma sayısı ve göreli güç.
+  - Trend çizgisi kırılımı: her mumda yalnızca o ana kadar kesinleşmiş dönüş noktaları
+    kullanılır, ileriye bakılmaz (testle doğrulandı).
+- **Benzer piyasa koşulu arama:** z-normalize şekil uzaklığı ve oynaklık filtresi; ileri
+  getirilerin ortalaması, medyanı ve pozitif oranı.
+- **Balina radarının arşiv işlemleri üzerinde yeniden oynatılması:** canlıdakiyle aynı
+  bileşenler; rastgele zamanlardaki temel çizgiyle karşılaştırma; kümelenmiş olaylar ayıklanır.
+- **Komutlar:** `ati-engine history-sync`, `ati-engine history-replay`.
+- **Yerel API:** `/v1/history/status|sync|candles|levels|trend|similar`.
 
-`data.binance.vision` toplu arşiv indirme (CHECKSUM), Parquet/DuckDB deposu, artımlı
-güncelleme (`history_sync_state`), destek/direnç, trend kırılımı, benzer piyasa koşulu
-arama. **Kabul:** listelenme tarihinden bugüne tam geçmiş; ikinci çalıştırmada yalnızca yeni
-veri işlenmesi; sorgu performans testleri; balina radarının arşiv işlemleri üzerinde yeniden
-oynatılarak fiyat etkisi istatistiklerinin (Aşama 4) uzun dönemli doğrulanması.
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Listelenme tarihinden bugüne tam geçmiş | ✅ ETHUSDT vadeli: 2019-11-27 (listelenme) → bugünün son kapanmış mumu, **0 eksik**. Arşiv 2019-12-31'de başladığı için baş REST'ten alındı; arşivde eksik olan 2026-10-28 REST'ten onarıldı. BTCUSDT spot: 2017-08-17 → bugün; kalan 126 saat Binance'in kendi kesintileri (REST'te de yok) |
+| İkinci çalıştırmada yalnızca yeni veri | ✅ 0 dosya indirildi; yalnızca bugünün yeni kapanan mumları REST'ten (BTC: 14 mum) |
+| Sorgu performansı | ✅ 80.725 saatlik mum 0,15 sn'de okunur; destek/direnç 0,003 sn; 9 yıllık trend kırılım taraması 0,2 sn; 62.689 pencerede benzerlik araması 0,17 sn. Testte 525.600 satırlık bir yıl: aylık sorgu ve günlük yeniden örnekleme |
+| Balina etkisinin uzun dönemli doğrulanması (Aşama 4'ten) | ✅ 30 günlük yeniden oynatma: Spot BTCUSDT (25,9 milyon işlem, 2.923 bağımsız olay) ve Futures BTCUSDT (32,2 milyon işlem, 2.575 bağımsız olay). Ayrıntı aşağıda |
+
+**Balina etkisi sonucu:**
+- Büyük agresif emirlerden sonra fiyat ilk 1 dakikada emir yönünde biraz daha hareket ediyor.
+  Spot'ta alış için t=4,5; Futures'ta t=4,3-5,9. Etki 15 dakikadan sonra kayboluyor.
+- **Ancak büyüklük çok küçük:** ortalama %0,005-0,01 (0,5-1 baz puan). İşlem ücretinin
+  (Spot ~%0,1, Futures ~%0,05) çok altında.
+- Sonuç: balina emri **tek başına kârlı bir işlem sinyali değildir**; yalnızca diğer
+  sinyallerle birlikte kullanılabilecek yardımcı bir özelliktir. Bu, Aşama 6-7'de puanlamaya
+  bu şekilde girecek.
+- Kümelenmiş olaylar ayıklanmadan yapılan ilk ölçüm t=7,9 gibi şişkin değerler veriyordu.
+  Bu yüzden olaylar arasında en az 15 dakika şartı kondu.
+
+**Bulunan veri sorunları:**
+- Binance arşivinde 2026-10-28 günü eksik: vadeli günlük `aggTrades` ve `klines` dosyaları
+  yok, Ekim aylık dosyasında 6 mum eksik. Bu boşluk REST ile onarılıyor; yeniden oynatma o
+  günü atlıyor ve boşluğu aşan ölçümleri istatistiğe katmıyor.
+- Benzer koşul aramasında tek bir aykırı dönem ortalamayı bozabiliyor (BTC 2019-10-25:
+  +%15,7). Bu yüzden medyan da raporlanıyor ve her yanıtta "geçmiş sonuç, garanti değildir"
+  uyarısı var.
 
 ### Aşama 6 — Yapay zekâ analiz motoru
 Artımlı göstergeler (RSI, MACD, EMA 9/21/50/200, Bollinger, Fibonacci, VWAP, ATR, OBV,

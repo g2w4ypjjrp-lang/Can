@@ -137,6 +137,27 @@ class KlineStore:
 
         return await self._run(run)
 
+    async def gaps(
+        self, market: str, symbol: str, interval: str, *, since_ms: int = 0, limit: int = 1000
+    ) -> list[tuple[int, int]]:
+        """Veri içindeki boşluklar: (boşluktan önceki son mum, boşluktan sonraki ilk mum)."""
+        step = INTERVAL_MS[interval]
+
+        def run() -> list[tuple[int, int]]:
+            rows = self._con.execute(
+                """
+                SELECT open_time, nxt FROM (
+                    SELECT open_time, lead(open_time) OVER (ORDER BY open_time) AS nxt
+                    FROM klines WHERE market = ? AND symbol = ? AND interval = ?
+                      AND open_time >= ?
+                ) WHERE nxt - open_time > ? ORDER BY open_time LIMIT ?
+                """,
+                [market, symbol, interval, since_ms, step, limit],
+            ).fetchall()
+            return [(int(a), int(b)) for a, b in rows]
+
+        return await self._run(run)
+
     async def candles(
         self,
         market: str,
@@ -146,8 +167,10 @@ class KlineStore:
         start_ms: int | None = None,
         end_ms: int | None = None,
         limit: int | None = None,
+        tail: int | None = None,
     ) -> list[tuple[Any, ...]]:
-        """[start_ms, end_ms) aralığındaki mumlar, zamana göre artan."""
+        """[start_ms, end_ms) aralığındaki mumlar, zamana göre artan. ``tail`` verilirse
+        aralıktaki son ``tail`` mum döner."""
 
         def run() -> list[tuple[Any, ...]]:
             sql = f"SELECT {_COLUMNS} FROM klines WHERE market = ? AND symbol = ? AND interval = ?"  # noqa: S608
@@ -158,6 +181,10 @@ class KlineStore:
             if end_ms is not None:
                 sql += " AND open_time < ?"
                 params.append(end_ms)
+            if tail is not None:
+                sql += " ORDER BY open_time DESC LIMIT ?"
+                params.append(tail)
+                return list(reversed(self._con.execute(sql, params).fetchall()))
             sql += " ORDER BY open_time"
             if limit is not None:
                 sql += " LIMIT ?"

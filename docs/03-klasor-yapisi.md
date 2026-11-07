@@ -31,8 +31,9 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── scanner/                   ✅ 3  coin tarama: artımlı istatistikler, sinyal kuralları, ısınma
 │   │   ├── whales/                    ✅ 4  balina radarı: büyük işlem, küme, duvar, tasfiye,
 │   │   │                                    konumlanma, fiyat etkisi, zincir üstü arayüzü
-│   │   ├── history/                   🔄 5  arşiv indirme + CHECKSUM ✅, DuckDB deposu ✅, artımlı
-│   │   │                                    eşitleme ✅; teknik analiz araçları sırada
+│   │   ├── history/                   ✅ 5  arşiv + CHECKSUM, DuckDB, artımlı eşitleme + REST
+│   │   │                                    onarımı, destek/direnç, trend kırılımı, benzerlik,
+│   │   │                                    balina yeniden oynatma
 │   │   ├── analysis/                  🔜 6  göstergeler (artımlı), özellikler, modeller
 │   │   ├── strategies/                🔜 6,9 10+ strateji, yarışma ve ağırlıklandırma
 │   │   ├── scoring/                   🔜 7  fırsat puanı 0-100
@@ -42,7 +43,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
 │   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
 │   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
-│   └── tests/                         ✅ 252 test (birim, gerçek mesaj fikstürleri, sahte Binance
+│   └── tests/                         ✅ 270 test (birim, gerçek mesaj fikstürleri, sahte Binance
 │                                          sunucusuyla uçtan uca, alt süreç duman testi)
 │
 ├── cloud/                             ✅ Bulut servisi (FastAPI) — yönetilen bulutta çalışır

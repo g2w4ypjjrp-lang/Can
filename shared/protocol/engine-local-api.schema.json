@@ -67,6 +67,47 @@
       "title": "AuditEntry",
       "type": "object"
     },
+    "CandlesResponse": {
+      "properties": {
+        "columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "interval": {
+          "title": "Interval",
+          "type": "string"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "market",
+        "symbol",
+        "interval",
+        "columns",
+        "rows"
+      ],
+      "title": "CandlesResponse",
+      "type": "object"
+    },
     "CheckInfo": {
       "properties": {
         "message": {
@@ -338,6 +379,39 @@
       "title": "FocusResponse",
       "type": "object"
     },
+    "ForwardStatInfo": {
+      "properties": {
+        "horizon_bars": {
+          "title": "Horizon Bars",
+          "type": "integer"
+        },
+        "mean_pct": {
+          "title": "Mean Pct",
+          "type": "number"
+        },
+        "median_pct": {
+          "title": "Median Pct",
+          "type": "number"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "positive_rate": {
+          "title": "Positive Rate",
+          "type": "number"
+        }
+      },
+      "required": [
+        "horizon_bars",
+        "n",
+        "mean_pct",
+        "median_pct",
+        "positive_rate"
+      ],
+      "title": "ForwardStatInfo",
+      "type": "object"
+    },
     "HealthResponse": {
       "properties": {
         "status": {
@@ -388,6 +462,226 @@
         "trading_mode"
       ],
       "title": "Heartbeat",
+      "type": "object"
+    },
+    "HistoryCoverageInfo": {
+      "properties": {
+        "interval": {
+          "title": "Interval",
+          "type": "string"
+        },
+        "market": {
+          "title": "Market",
+          "type": "string"
+        },
+        "rows": {
+          "title": "Rows",
+          "type": "integer"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "market",
+        "symbol",
+        "interval",
+        "rows"
+      ],
+      "title": "HistoryCoverageInfo",
+      "type": "object"
+    },
+    "HistoryJobInfo": {
+      "properties": {
+        "current": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Current"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error"
+        },
+        "finished_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Finished Ms"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "interval": {
+          "title": "Interval",
+          "type": "string"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "reports": {
+          "items": {
+            "$ref": "#/$defs/HistorySyncReportInfo"
+          },
+          "title": "Reports",
+          "type": "array"
+        },
+        "started_ms": {
+          "title": "Started Ms",
+          "type": "integer"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "symbols": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Symbols",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "market",
+        "symbols",
+        "interval",
+        "state",
+        "started_ms",
+        "finished_ms",
+        "current",
+        "error",
+        "reports"
+      ],
+      "title": "HistoryJobInfo",
+      "type": "object"
+    },
+    "HistoryStatusResponse": {
+      "properties": {
+        "coverage": {
+          "items": {
+            "$ref": "#/$defs/HistoryCoverageInfo"
+          },
+          "title": "Coverage",
+          "type": "array"
+        },
+        "jobs": {
+          "items": {
+            "$ref": "#/$defs/HistoryJobInfo"
+          },
+          "title": "Jobs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "coverage",
+        "jobs"
+      ],
+      "title": "HistoryStatusResponse",
+      "type": "object"
+    },
+    "HistorySyncReportInfo": {
+      "properties": {
+        "files_downloaded": {
+          "title": "Files Downloaded",
+          "type": "integer"
+        },
+        "files_skipped": {
+          "title": "Files Skipped",
+          "type": "integer"
+        },
+        "first_open_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Open Ms"
+        },
+        "last_open_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Open Ms"
+        },
+        "rows_inserted": {
+          "title": "Rows Inserted",
+          "type": "integer"
+        },
+        "seconds": {
+          "title": "Seconds",
+          "type": "number"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "files_downloaded",
+        "files_skipped",
+        "rows_inserted",
+        "first_open_ms",
+        "last_open_ms",
+        "seconds"
+      ],
+      "title": "HistorySyncReportInfo",
+      "type": "object"
+    },
+    "HistorySyncRequest": {
+      "properties": {
+        "interval": {
+          "default": "1h",
+          "title": "Interval",
+          "type": "string"
+        },
+        "market": {
+          "$ref": "#/$defs/Market",
+          "default": "spot"
+        },
+        "symbols": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 200,
+          "minItems": 1,
+          "title": "Symbols",
+          "type": "array"
+        }
+      },
+      "required": [
+        "symbols"
+      ],
+      "title": "HistorySyncRequest",
       "type": "object"
     },
     "ImpactInfo": {
@@ -576,6 +870,96 @@
         "engine_state"
       ],
       "title": "KillSwitchResponse",
+      "type": "object"
+    },
+    "LevelInfo": {
+      "properties": {
+        "distance_pct": {
+          "title": "Distance Pct",
+          "type": "number"
+        },
+        "first_time_ms": {
+          "title": "First Time Ms",
+          "type": "integer"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "last_time_ms": {
+          "title": "Last Time Ms",
+          "type": "integer"
+        },
+        "price": {
+          "title": "Price",
+          "type": "number"
+        },
+        "strength": {
+          "title": "Strength",
+          "type": "number"
+        },
+        "touches": {
+          "title": "Touches",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "price",
+        "kind",
+        "touches",
+        "first_time_ms",
+        "last_time_ms",
+        "strength",
+        "distance_pct"
+      ],
+      "title": "LevelInfo",
+      "type": "object"
+    },
+    "LevelsResponse": {
+      "properties": {
+        "bars": {
+          "title": "Bars",
+          "type": "integer"
+        },
+        "interval": {
+          "title": "Interval",
+          "type": "string"
+        },
+        "last_close": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Close"
+        },
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/LevelInfo"
+          },
+          "title": "Levels",
+          "type": "array"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "market",
+        "symbol",
+        "interval",
+        "bars",
+        "last_close",
+        "levels"
+      ],
+      "title": "LevelsResponse",
       "type": "object"
     },
     "LoopLagInfo": {
@@ -1424,6 +1808,95 @@
       ],
       "title": "SignalKind"
     },
+    "SimilarMatchInfo": {
+      "properties": {
+        "distance": {
+          "title": "Distance",
+          "type": "number"
+        },
+        "end_time_ms": {
+          "title": "End Time Ms",
+          "type": "integer"
+        },
+        "forward_pct": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Forward Pct",
+          "type": "object"
+        },
+        "start_time_ms": {
+          "title": "Start Time Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_time_ms",
+        "end_time_ms",
+        "distance",
+        "forward_pct"
+      ],
+      "title": "SimilarMatchInfo",
+      "type": "object"
+    },
+    "SimilarResponse": {
+      "properties": {
+        "candidates": {
+          "title": "Candidates",
+          "type": "integer"
+        },
+        "disclaimer": {
+          "default": "Geçmişteki benzer dönemlerin sonucudur; gelecekteki fiyatı garanti etmez.",
+          "title": "Disclaimer",
+          "type": "string"
+        },
+        "forward": {
+          "items": {
+            "$ref": "#/$defs/ForwardStatInfo"
+          },
+          "title": "Forward",
+          "type": "array"
+        },
+        "interval": {
+          "title": "Interval",
+          "type": "string"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "matches": {
+          "items": {
+            "$ref": "#/$defs/SimilarMatchInfo"
+          },
+          "title": "Matches",
+          "type": "array"
+        },
+        "query_end_time_ms": {
+          "title": "Query End Time Ms",
+          "type": "integer"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "window": {
+          "title": "Window",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "market",
+        "symbol",
+        "interval",
+        "window",
+        "query_end_time_ms",
+        "candidates",
+        "matches",
+        "forward"
+      ],
+      "title": "SimilarResponse",
+      "type": "object"
+    },
     "StatusResponse": {
       "properties": {
         "can_manage_positions": {
@@ -1845,6 +2318,130 @@
       "title": "TradingModeResponse",
       "type": "object"
     },
+    "TrendBreakInfo": {
+      "properties": {
+        "close": {
+          "title": "Close",
+          "type": "number"
+        },
+        "direction": {
+          "title": "Direction",
+          "type": "string"
+        },
+        "line_kind": {
+          "title": "Line Kind",
+          "type": "string"
+        },
+        "line_value": {
+          "title": "Line Value",
+          "type": "number"
+        },
+        "penetration_atr": {
+          "title": "Penetration Atr",
+          "type": "number"
+        },
+        "time_ms": {
+          "title": "Time Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "time_ms",
+        "direction",
+        "close",
+        "line_value",
+        "penetration_atr",
+        "line_kind"
+      ],
+      "title": "TrendBreakInfo",
+      "type": "object"
+    },
+    "TrendLineInfo": {
+      "properties": {
+        "a_price": {
+          "title": "A Price",
+          "type": "number"
+        },
+        "a_time_ms": {
+          "title": "A Time Ms",
+          "type": "integer"
+        },
+        "b_price": {
+          "title": "B Price",
+          "type": "number"
+        },
+        "b_time_ms": {
+          "title": "B Time Ms",
+          "type": "integer"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "slope_per_bar": {
+          "title": "Slope Per Bar",
+          "type": "number"
+        },
+        "value_now": {
+          "title": "Value Now",
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "a_time_ms",
+        "a_price",
+        "b_time_ms",
+        "b_price",
+        "slope_per_bar",
+        "value_now"
+      ],
+      "title": "TrendLineInfo",
+      "type": "object"
+    },
+    "TrendResponse": {
+      "properties": {
+        "active": {
+          "items": {
+            "$ref": "#/$defs/TrendLineInfo"
+          },
+          "title": "Active",
+          "type": "array"
+        },
+        "bars": {
+          "title": "Bars",
+          "type": "integer"
+        },
+        "breaks": {
+          "items": {
+            "$ref": "#/$defs/TrendBreakInfo"
+          },
+          "title": "Breaks",
+          "type": "array"
+        },
+        "interval": {
+          "title": "Interval",
+          "type": "string"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "market",
+        "symbol",
+        "interval",
+        "bars",
+        "active",
+        "breaks"
+      ],
+      "title": "TrendResponse",
+      "type": "object"
+    },
     "WhaleAlert": {
       "properties": {
         "details": {
@@ -2216,6 +2813,26 @@
       "auth": false,
       "response": "HealthResponse"
     },
+    "GET /v1/history/candles?market=&symbol=&interval=&bars=": {
+      "auth": true,
+      "response": "CandlesResponse"
+    },
+    "GET /v1/history/levels?market=&symbol=&interval=&bars=": {
+      "auth": true,
+      "response": "LevelsResponse"
+    },
+    "GET /v1/history/similar?market=&symbol=&interval=&bars=&window=&top_k=&horizons=": {
+      "auth": true,
+      "response": "SimilarResponse"
+    },
+    "GET /v1/history/status": {
+      "auth": true,
+      "response": "HistoryStatusResponse"
+    },
+    "GET /v1/history/trend?market=&symbol=&interval=&bars=": {
+      "auth": true,
+      "response": "TrendResponse"
+    },
     "GET /v1/market/status": {
       "auth": true,
       "response": "MarketStatusResponse"
@@ -2263,6 +2880,11 @@
     "POST /v1/engine/shutdown": {
       "auth": true,
       "response": "ShutdownResponse"
+    },
+    "POST /v1/history/sync": {
+      "auth": true,
+      "request": "HistorySyncRequest",
+      "response": "HistoryJobInfo"
     },
     "POST /v1/kill-switch/engage": {
       "auth": true,

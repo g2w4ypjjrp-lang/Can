@@ -48,16 +48,36 @@ Gerçek veriyle dayanıklılık testi (veri kaybı, yeniden senkron, gecikme öl
 uv run python scripts/live_soak.py --seconds 600 --report soak.json --verbose
 ```
 
-## Tarihsel veri (Aşama 5 — çekirdek)
+## Tarihsel veri ve grafik analizi (Aşama 5)
 
 Binance'in herkese açık arşivinden (`data.binance.vision`) sembolün listelendiği günden bugüne
-mumları indirir ve her dosyayı SHA-256 ile doğrular. Veriler `market/history.duckdb`
-dosyasında tutulur. Sonraki çalıştırmalarda yalnızca yeni dosyalar indirilir.
+mumları indirir ve her dosyayı SHA-256 ile doğrular. Arşivin kapsamadığı dönemler herkese açık
+REST ile tamamlanır:
+- arşivden önce listelenmiş sembollerin ilk günleri,
+- bugünün kapanmış mumları,
+- arşivde eksik kalan günler.
+
+Veriler `market/history.duckdb` dosyasındadır. Sonraki çalıştırmalarda yalnızca yeni veri
+alınır.
 
 ```bash
+# Motor kapalıyken (motor çalışırken dosya kilitlidir; API'yi kullanın)
 uv run ati-engine history-sync --market spot --symbol BTCUSDT ETHUSDT --interval 1h
-uv run ati-engine history-sync --market usdm_futures --symbol BTCUSDT --interval 1m
+# Balina radarını son 30 günün işlem arşivi üzerinde yeniden oynat (etki doğrulaması)
+uv run ati-engine history-replay --market usdm_futures --symbol BTCUSDT --days 30
 ```
+
+Yerel API:
+- `GET /v1/history/status`
+- `POST /v1/history/sync` (`{"market": "spot", "symbols": ["BTCUSDT"], "interval": "1h"}`)
+- `GET /v1/history/candles?symbol=BTCUSDT&interval=4h&bars=500`: depoda yoksa 1 dakikalıktan
+  üretilir.
+- `GET /v1/history/levels?...`: destek/direnç.
+- `GET /v1/history/trend?...`: aktif trend çizgileri ve kırılımlar.
+- `GET /v1/history/similar?symbol=BTCUSDT&window=48&horizons=6,24`: benzer geçmiş dönemler ve
+  sonrasındaki hareket.
+
+Benzerlik ve etki istatistikleri geçmişi anlatır; gelecekteki fiyatı **garanti etmez**.
 
 ## Coin tarama (Aşama 3)
 
