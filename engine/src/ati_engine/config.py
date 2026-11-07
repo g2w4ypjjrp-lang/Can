@@ -204,6 +204,47 @@ class ScannerSettings(BaseModel):
     tick_interval_s: float = Field(default=1.0, gt=0, le=10)
 
 
+class OnchainSettings(BaseModel):
+    """Zincir üstü büyük transfer izleme. Varsayılan KAPALI (onay kapısı G4: sağlayıcı seçimi)."""
+
+    enabled: bool = False
+    provider: Literal["blockchair_ethereum"] = "blockchair_ethereum"
+    min_usd: float = Field(default=5_000_000, ge=0)
+    interval_s: float = Field(default=120.0, ge=30)
+    labels_file: Path | None = None  # {zincir: {adres: borsa}} JSON dosyası
+
+
+class WhaleSettings(BaseModel):
+    """Balina radarı (Aşama 4). Tutarlar kote varlık (USDT) cinsindendir."""
+
+    enabled: bool = True
+    spot_floor_usd: float = Field(default=50_000, gt=0)
+    futures_floor_usd: float = Field(default=100_000, gt=0)
+    quantile: float = Field(default=0.999, gt=0.9, lt=1)
+    min_samples: int = Field(default=2_000, ge=100)
+    mega_multiple: float = Field(default=5.0, ge=1)
+    mega_min_usd: float = Field(default=1_000_000, ge=0)
+    cluster_window_s: int = Field(default=300, ge=30)
+    cluster_min_count: int = Field(default=3, ge=2)
+    cluster_min_usd: float = Field(default=500_000, ge=0)
+    wall_levels: int = Field(default=50, ge=10, le=500)
+    wall_multiple: float = Field(default=8.0, ge=2)
+    spot_wall_min_usd: float = Field(default=250_000, ge=0)
+    futures_wall_min_usd: float = Field(default=500_000, ge=0)
+    wall_max_distance_pct: float = Field(default=2.0, gt=0, le=20)
+    wall_min_lifetime_s: float = Field(default=5.0, ge=1)
+    liquidation_min_usd: float = Field(default=100_000, ge=0)
+    cascade_window_s: int = Field(default=60, ge=10)
+    cascade_min_usd: float = Field(default=1_000_000, ge=0)
+    cascade_min_count: int = Field(default=3, ge=2)
+    positioning: bool = True
+    positioning_interval_s: float = Field(default=300.0, ge=60)
+    positioning_top_n: int = Field(default=20, ge=1, le=100)
+    positioning_shift_pts: float = Field(default=5.0, gt=0)
+    alert_cooldown_s: float = Field(default=300.0, ge=0)
+    onchain: OnchainSettings = Field(default_factory=OnchainSettings)
+
+
 class EngineSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="ATI_",
@@ -230,6 +271,7 @@ class EngineSettings(BaseSettings):
     binance: BinanceEndpoints = Field(default_factory=BinanceEndpoints)
     market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
     scanner: ScannerSettings = Field(default_factory=ScannerSettings)
+    whales: WhaleSettings = Field(default_factory=WhaleSettings)
 
     @property
     def paths(self) -> DataPaths:

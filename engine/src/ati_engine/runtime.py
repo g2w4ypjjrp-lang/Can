@@ -19,6 +19,7 @@ from ati_engine.scanner.scanner import MarketScanner
 from ati_engine.security.vault import SecretVault
 from ati_engine.storage.audit import AuditLog
 from ati_engine.storage.database import Database
+from ati_engine.whales.radar import WhaleRadar
 
 
 @dataclass
@@ -35,6 +36,7 @@ class EngineRuntime:
     api_token: str
     market_data: dict[Market, MarketDataService] = field(default_factory=dict)
     scanner: MarketScanner | None = None
+    whales: WhaleRadar | None = None
     version: str = __version__
     started_monotonic: float = field(default_factory=time.monotonic)
     shutdown_requested: asyncio.Event = field(default_factory=asyncio.Event)

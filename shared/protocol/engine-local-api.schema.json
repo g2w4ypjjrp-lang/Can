@@ -219,6 +219,9 @@
         },
         {
           "$ref": "#/$defs/MarketSignal"
+        },
+        {
+          "$ref": "#/$defs/WhaleAlert"
         }
       ],
       "discriminator": {
@@ -235,7 +238,8 @@
           "StreamConnectionChanged": "#/$defs/StreamConnectionChanged",
           "SymbolDelisted": "#/$defs/SymbolDelisted",
           "SymbolListed": "#/$defs/SymbolListed",
-          "TradingModeChanged": "#/$defs/TradingModeChanged"
+          "TradingModeChanged": "#/$defs/TradingModeChanged",
+          "WhaleAlert": "#/$defs/WhaleAlert"
         },
         "propertyName": "type"
       }
@@ -384,6 +388,49 @@
         "trading_mode"
       ],
       "title": "Heartbeat",
+      "type": "object"
+    },
+    "ImpactInfo": {
+      "properties": {
+        "expected_direction": {
+          "title": "Expected Direction",
+          "type": "string"
+        },
+        "hit_rate": {
+          "title": "Hit Rate",
+          "type": "number"
+        },
+        "horizon_s": {
+          "title": "Horizon S",
+          "type": "integer"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "mean_directional_pct": {
+          "title": "Mean Directional Pct",
+          "type": "number"
+        },
+        "samples": {
+          "title": "Samples",
+          "type": "integer"
+        },
+        "std_pct": {
+          "title": "Std Pct",
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "expected_direction",
+        "horizon_s",
+        "samples",
+        "mean_directional_pct",
+        "std_pct",
+        "hit_rate"
+      ],
+      "title": "ImpactInfo",
       "type": "object"
     },
     "KillSwitchEngageRequest": {
@@ -806,6 +853,69 @@
         "reason"
       ],
       "title": "OrderBookResynced",
+      "type": "object"
+    },
+    "PositioningInfo": {
+      "properties": {
+        "divergence": {
+          "title": "Divergence",
+          "type": "boolean"
+        },
+        "global_long_change_pts": {
+          "title": "Global Long Change Pts",
+          "type": "number"
+        },
+        "global_long_pct": {
+          "title": "Global Long Pct",
+          "type": "number"
+        },
+        "global_ratio": {
+          "title": "Global Ratio",
+          "type": "number"
+        },
+        "open_interest_change_pct": {
+          "title": "Open Interest Change Pct",
+          "type": "number"
+        },
+        "open_interest_usd": {
+          "title": "Open Interest Usd",
+          "type": "number"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "timestamp_ms": {
+          "title": "Timestamp Ms",
+          "type": "integer"
+        },
+        "top_long_change_pts": {
+          "title": "Top Long Change Pts",
+          "type": "number"
+        },
+        "top_long_pct": {
+          "title": "Top Long Pct",
+          "type": "number"
+        },
+        "top_ratio": {
+          "title": "Top Ratio",
+          "type": "number"
+        }
+      },
+      "required": [
+        "symbol",
+        "timestamp_ms",
+        "top_long_pct",
+        "top_ratio",
+        "global_long_pct",
+        "global_ratio",
+        "open_interest_usd",
+        "top_long_change_pts",
+        "global_long_change_pts",
+        "open_interest_change_pct",
+        "divergence"
+      ],
+      "title": "PositioningInfo",
       "type": "object"
     },
     "ReadinessChanged": {
@@ -1735,6 +1845,325 @@
       "title": "TradingModeResponse",
       "type": "object"
     },
+    "WhaleAlert": {
+      "properties": {
+        "details": {
+          "default": {},
+          "type": "object"
+        },
+        "kind": {
+          "$ref": "#/$defs/WhaleAlertKind"
+        },
+        "market": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Market"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "notional": {
+          "type": "number"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "side": {
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "WhaleAlert"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "market",
+        "symbol",
+        "kind",
+        "severity",
+        "side",
+        "notional",
+        "message"
+      ],
+      "title": "WhaleAlert",
+      "type": "object"
+    },
+    "WhaleAlertInfo": {
+      "properties": {
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "market": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Market"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "notional": {
+          "title": "Notional",
+          "type": "number"
+        },
+        "severity": {
+          "title": "Severity",
+          "type": "string"
+        },
+        "side": {
+          "title": "Side",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "ts_ms": {
+          "title": "Ts Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ts_ms",
+        "market",
+        "symbol",
+        "kind",
+        "severity",
+        "side",
+        "notional",
+        "message",
+        "details"
+      ],
+      "title": "WhaleAlertInfo",
+      "type": "object"
+    },
+    "WhaleAlertKind": {
+      "enum": [
+        "accumulation",
+        "distribution",
+        "liquidation_cascade",
+        "mega_trade",
+        "onchain_transfer",
+        "positioning_shift",
+        "wall_eaten",
+        "wall_pulled"
+      ],
+      "title": "WhaleAlertKind"
+    },
+    "WhaleStatsInfo": {
+      "properties": {
+        "alerts": {
+          "title": "Alerts",
+          "type": "integer"
+        },
+        "impact_pending": {
+          "title": "Impact Pending",
+          "type": "integer"
+        },
+        "liquidations_5m": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Liquidations 5M",
+          "type": "object"
+        },
+        "onchain_enabled": {
+          "title": "Onchain Enabled",
+          "type": "boolean"
+        },
+        "orders_seen": {
+          "title": "Orders Seen",
+          "type": "integer"
+        },
+        "positioning_symbols": {
+          "title": "Positioning Symbols",
+          "type": "integer"
+        },
+        "tick_ms_max": {
+          "title": "Tick Ms Max",
+          "type": "number"
+        },
+        "ticks": {
+          "title": "Ticks",
+          "type": "integer"
+        },
+        "whale_trades": {
+          "title": "Whale Trades",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "orders_seen",
+        "whale_trades",
+        "alerts",
+        "impact_pending",
+        "ticks",
+        "tick_ms_max",
+        "liquidations_5m",
+        "positioning_symbols",
+        "onchain_enabled"
+      ],
+      "title": "WhaleStatsInfo",
+      "type": "object"
+    },
+    "WhaleSummaryResponse": {
+      "properties": {
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/WhaleSymbolSummary"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "stats": {
+          "$ref": "#/$defs/WhaleStatsInfo"
+        },
+        "window_s": {
+          "title": "Window S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "market",
+        "window_s",
+        "rows",
+        "stats"
+      ],
+      "title": "WhaleSummaryResponse",
+      "type": "object"
+    },
+    "WhaleSymbolSummary": {
+      "properties": {
+        "buy_usd": {
+          "title": "Buy Usd",
+          "type": "number"
+        },
+        "count": {
+          "title": "Count",
+          "type": "integer"
+        },
+        "largest_usd": {
+          "title": "Largest Usd",
+          "type": "number"
+        },
+        "last_ms": {
+          "title": "Last Ms",
+          "type": "integer"
+        },
+        "net_usd": {
+          "title": "Net Usd",
+          "type": "number"
+        },
+        "sell_usd": {
+          "title": "Sell Usd",
+          "type": "number"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "threshold_usd": {
+          "title": "Threshold Usd",
+          "type": "number"
+        }
+      },
+      "required": [
+        "symbol",
+        "count",
+        "buy_usd",
+        "sell_usd",
+        "net_usd",
+        "largest_usd",
+        "last_ms",
+        "threshold_usd"
+      ],
+      "title": "WhaleSymbolSummary",
+      "type": "object"
+    },
+    "WhaleTradeInfo": {
+      "properties": {
+        "avg_price": {
+          "title": "Avg Price",
+          "type": "number"
+        },
+        "fills": {
+          "title": "Fills",
+          "type": "integer"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "notional": {
+          "title": "Notional",
+          "type": "number"
+        },
+        "qty": {
+          "title": "Qty",
+          "type": "number"
+        },
+        "side": {
+          "title": "Side",
+          "type": "string"
+        },
+        "sweep_pct": {
+          "title": "Sweep Pct",
+          "type": "number"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "threshold": {
+          "title": "Threshold",
+          "type": "number"
+        },
+        "time_ms": {
+          "title": "Time Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "time_ms",
+        "market",
+        "symbol",
+        "side",
+        "notional",
+        "avg_price",
+        "qty",
+        "fills",
+        "sweep_pct",
+        "threshold"
+      ],
+      "title": "WhaleTradeInfo",
+      "type": "object"
+    },
     "WsAuthMessage": {
       "properties": {
         "token": {
@@ -1810,6 +2239,26 @@
     "GET /v1/trading-mode": {
       "auth": true,
       "response": "TradingModeResponse"
+    },
+    "GET /v1/whales/alerts?limit=": {
+      "auth": true,
+      "response": "WhaleAlertInfo[]"
+    },
+    "GET /v1/whales/impact": {
+      "auth": true,
+      "response": "ImpactInfo[]"
+    },
+    "GET /v1/whales/positioning": {
+      "auth": true,
+      "response": "PositioningInfo[]"
+    },
+    "GET /v1/whales/summary?market=&window_s=&limit=": {
+      "auth": true,
+      "response": "WhaleSummaryResponse"
+    },
+    "GET /v1/whales/trades?market=&symbol=&limit=": {
+      "auth": true,
+      "response": "WhaleTradeInfo[]"
     },
     "POST /v1/engine/shutdown": {
       "auth": true,

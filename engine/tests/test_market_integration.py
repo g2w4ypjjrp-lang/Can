@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -275,3 +276,67 @@ async def test_scanner_api_with_warmup(stack: Stack) -> None:
         signals = await client.get("/v1/scanner/signals")
         assert signals.status_code == 200
         assert isinstance(signals.json(), list)
+
+
+async def test_whale_radar_end_to_end(stack: Stack) -> None:
+    """Gerçek akış yolundan enjekte edilen büyük emir ve tasfiye zinciri API'de görünür."""
+    await wait_until(lambda: stack.state is EngineState.RUNNING)
+    runtime = stack.engine.runtime
+    assert runtime is not None
+    radar = runtime.whales
+    assert radar is not None
+    await wait_until(lambda: "btcusdt@aggTrade" in stack.fake.subscriptions())
+    now = time.time_ns() // 1_000_000
+    # Akışın sıradaki işlem kimliği: boşluk doldurucu sahte bir "kayıp" görmesin.
+    stack.fake._trade_ids["s:BTCUSDT"] += 1
+    trade_id = stack.fake._trade_ids["s:BTCUSDT"]
+    big = {
+        "e": "aggTrade",
+        "E": now,
+        "s": "BTCUSDT",
+        "a": trade_id,
+        "p": "100.0",
+        "q": "20000",
+        "f": 1,
+        "l": 1,
+        "T": now,
+        "m": False,
+    }
+    assert await stack.fake.inject("btcusdt@aggTrade", big) == 1
+    for i in range(3):
+        liquidation = {
+            "e": "forceOrder",
+            "E": now + i,
+            "o": {
+                "s": "ETHUSDT",
+                "S": "SELL",
+                "o": "LIMIT",
+                "f": "IOC",
+                "q": "200",
+                "p": "2000",
+                "ap": "2000",
+                "X": "FILLED",
+                "l": "200",
+                "z": "200",
+                "T": now + i,
+            },
+        }
+        assert await stack.fake.inject("!forceOrder@arr", liquidation, futures=True) == 1
+    await wait_until(
+        lambda: any(t.symbol == "BTCUSDT" and t.notional >= 2_000_000 for t in radar.trades)
+    )
+    await wait_until(lambda: any(a.kind.value == "liquidation_cascade" for a in radar.alerts))
+    async with stack.client() as client:
+        trades = (
+            await client.get("/v1/whales/trades", params={"market": "spot", "symbol": "btcusdt"})
+        ).json()
+        assert trades[0]["notional"] == pytest.approx(2_000_000)
+        assert trades[0]["side"] == "buy"
+        alerts = (await client.get("/v1/whales/alerts")).json()
+        kinds = {a["kind"] for a in alerts}
+        assert {"mega_trade", "liquidation_cascade"} <= kinds
+        summary = (await client.get("/v1/whales/summary", params={"market": "spot"})).json()
+        assert summary["rows"][0]["symbol"] == "BTCUSDT"
+        assert summary["stats"]["liquidations_5m"]["long"] == pytest.approx(1_200_000)
+        assert (await client.get("/v1/whales/impact")).status_code == 200
+        assert (await client.get("/v1/whales/positioning")).status_code == 200

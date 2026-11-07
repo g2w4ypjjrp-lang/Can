@@ -127,6 +127,18 @@ class FakeBinance:
             with contextlib.suppress(Exception):
                 await client.ws.send(msg)
 
+    async def inject(self, stream: str, payload: Any, *, futures: bool = False) -> int:
+        """Belirli bir akışa abone bağlantılara özel bir mesaj gönderir; alıcı sayısını döner."""
+        message = json.dumps({"stream": stream, "data": payload})
+        sent = 0
+        for client in list(self.clients):
+            is_futures = client.path.startswith(("/market", "/public"))
+            if is_futures == futures and stream in client.streams:
+                with contextlib.suppress(Exception):
+                    await client.ws.send(message)
+                    sent += 1
+        return sent
+
     def subscriptions(self) -> set[str]:
         return {s for c in self.clients for s in c.streams}
 

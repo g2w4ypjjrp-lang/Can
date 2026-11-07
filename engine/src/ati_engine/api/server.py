@@ -34,6 +34,7 @@ from ati_engine.api.schemas import (
     FocusRequest,
     FocusResponse,
     HealthResponse,
+    ImpactInfo,
     KillSwitchEngageRequest,
     KillSwitchInfo,
     KillSwitchReleaseRequest,
@@ -41,6 +42,7 @@ from ati_engine.api.schemas import (
     LoopLagInfo,
     MarketServiceInfo,
     MarketStatusResponse,
+    PositioningInfo,
     ReadinessInfo,
     ScannerStatsInfo,
     ScannerTopResponse,
@@ -53,6 +55,11 @@ from ati_engine.api.schemas import (
     TickersResponse,
     TradingModeRequest,
     TradingModeResponse,
+    WhaleAlertInfo,
+    WhaleStatsInfo,
+    WhaleSummaryResponse,
+    WhaleSymbolSummary,
+    WhaleTradeInfo,
     WsAuthMessage,
     WsAuthOk,
 )
@@ -63,6 +70,7 @@ from ati_engine.market.service import MarketDataService
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
 from ati_engine.scanner.scanner import MarketScanner, row_dict
+from ati_engine.whales.radar import WhaleRadar
 
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "[::1]", "::1"]
 WS_AUTH_TIMEOUT_S = 5.0
@@ -324,6 +332,92 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
                 details=s.details,
             )
             for s in items
+        ]
+
+    def whales_or_404() -> WhaleRadar:
+        if runtime.whales is None:
+            raise HTTPException(status_code=404, detail="Balina radarı etkin değil")
+        return runtime.whales
+
+    @app.get("/v1/whales/trades", response_model=list[WhaleTradeInfo])
+    async def whale_trades(
+        _: Auth,
+        market: Market | None = None,
+        symbol: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+    ) -> list[WhaleTradeInfo]:
+        radar = whales_or_404()
+        wanted = symbol.upper() if symbol else None
+        items = [
+            t
+            for t in reversed(radar.trades)
+            if (market is None or t.market is market) and (wanted is None or t.symbol == wanted)
+        ][:limit]
+        return [
+            WhaleTradeInfo(
+                time_ms=t.event_time_ms,
+                market=t.market,
+                symbol=t.symbol,
+                side=t.side,
+                notional=t.notional,
+                avg_price=t.avg_price,
+                qty=t.qty,
+                fills=t.fills,
+                sweep_pct=t.sweep_pct,
+                threshold=t.threshold,
+            )
+            for t in items
+        ]
+
+    @app.get("/v1/whales/alerts", response_model=list[WhaleAlertInfo])
+    async def whale_alerts(
+        _: Auth, limit: Annotated[int, Query(ge=1, le=1000)] = 100
+    ) -> list[WhaleAlertInfo]:
+        radar = whales_or_404()
+        return [
+            WhaleAlertInfo(
+                ts_ms=a.ts_ms,
+                market=a.market,
+                symbol=a.symbol,
+                kind=a.kind.value,
+                severity=a.severity.value,
+                side=a.side,
+                notional=a.notional,
+                message=a.message,
+                details=a.details,
+            )
+            for a in list(radar.alerts)[-limit:][::-1]
+        ]
+
+    @app.get("/v1/whales/summary", response_model=WhaleSummaryResponse)
+    async def whale_summary(
+        _: Auth,
+        market: Market = Market.SPOT,
+        window_s: Annotated[int, Query(ge=60, le=86_400)] = 3600,
+        limit: Annotated[int, Query(ge=1, le=500)] = 20,
+    ) -> WhaleSummaryResponse:
+        radar = whales_or_404()
+        return WhaleSummaryResponse(
+            market=market,
+            window_s=window_s,
+            rows=[
+                WhaleSymbolSummary.model_validate(r)
+                for r in radar.summary(market, window_s=window_s, limit=limit)
+            ],
+            stats=WhaleStatsInfo.model_validate(radar.stats()),
+        )
+
+    @app.get("/v1/whales/impact", response_model=list[ImpactInfo])
+    async def whale_impact(_: Auth) -> list[ImpactInfo]:
+        radar = whales_or_404()
+        return [ImpactInfo.model_validate(r) for r in radar.impact.summary()]
+
+    @app.get("/v1/whales/positioning", response_model=list[PositioningInfo])
+    async def whale_positioning(_: Auth) -> list[PositioningInfo]:
+        radar = whales_or_404()
+        return [
+            PositioningInfo.model_validate(vars(s))
+            for s in sorted(radar.positioning.values(), key=lambda s: -s.open_interest_usd)
         ]
 
     @app.websocket("/v1/events")

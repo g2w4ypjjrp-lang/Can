@@ -265,3 +265,85 @@ class SignalInfo(BaseModel):
     threshold: float
     message: str
     details: dict[str, object]
+
+
+# --- Balina radarı (Aşama 4) -------------------------------------------------------------------
+
+
+class WhaleTradeInfo(BaseModel):
+    time_ms: int
+    market: Market
+    symbol: str
+    side: str
+    notional: float
+    avg_price: float
+    qty: float
+    fills: int
+    sweep_pct: float
+    threshold: float
+
+
+class WhaleAlertInfo(BaseModel):
+    ts_ms: int
+    market: Market | None
+    symbol: str
+    kind: str
+    severity: str
+    side: str
+    notional: float
+    message: str
+    details: dict[str, object]
+
+
+class WhaleSymbolSummary(BaseModel):
+    symbol: str
+    count: int
+    buy_usd: float
+    sell_usd: float
+    net_usd: float
+    largest_usd: float
+    last_ms: int
+    threshold_usd: float
+
+
+class WhaleStatsInfo(BaseModel):
+    orders_seen: int
+    whale_trades: int
+    alerts: int
+    impact_pending: int
+    ticks: int
+    tick_ms_max: float
+    liquidations_5m: dict[str, float]
+    positioning_symbols: int
+    onchain_enabled: bool
+
+
+class WhaleSummaryResponse(BaseModel):
+    market: Market
+    window_s: int
+    rows: list[WhaleSymbolSummary]
+    stats: WhaleStatsInfo
+
+
+class ImpactInfo(BaseModel):
+    kind: str
+    expected_direction: str
+    horizon_s: int
+    samples: int
+    mean_directional_pct: float
+    std_pct: float
+    hit_rate: float
+
+
+class PositioningInfo(BaseModel):
+    symbol: str
+    timestamp_ms: int
+    top_long_pct: float
+    top_ratio: float
+    global_long_pct: float
+    global_ratio: float
+    open_interest_usd: float
+    top_long_change_pts: float
+    global_long_change_pts: float
+    open_interest_change_pct: float
+    divergence: bool

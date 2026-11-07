@@ -45,6 +45,8 @@ from ati_engine.storage.audit import AuditLog
 from ati_engine.storage.database import Database
 from ati_engine.storage.settings_store import SettingsStore
 from ati_engine.system.single_instance import SingleInstanceLock
+from ati_engine.whales.onchain import AddressLabels, BlockchairEthereumProvider, OnchainWatcher
+from ati_engine.whales.radar import WhaleRadar
 
 logger = logging.getLogger("ati_engine.app")
 
@@ -280,6 +282,30 @@ class Engine:
             runtime.supervisor.spawn(
                 "scanner",
                 lambda: scanner.run(services),
+                RestartPolicy(max_restarts=20, window_s=600, backoff_initial_s=1, backoff_max_s=30),
+            )
+
+        if settings.whales.enabled:
+            onchain_cfg = settings.whales.onchain
+            onchain = None
+            if onchain_cfg.enabled:
+                labels = (
+                    AddressLabels.load(onchain_cfg.labels_file)
+                    if onchain_cfg.labels_file
+                    else AddressLabels()
+                )
+                onchain = OnchainWatcher(
+                    BlockchairEthereumProvider(min_usd=onchain_cfg.min_usd), labels
+                )
+            radar = WhaleRadar(
+                settings=settings.whales, bus=runtime.bus, db=runtime.db, onchain=onchain
+            )
+            radar.attach()
+            runtime.whales = radar
+            whale_services = list(runtime.market_data.values())
+            runtime.supervisor.spawn(
+                "whale-radar",
+                lambda: radar.run(whale_services),
                 RestartPolicy(max_restarts=20, window_s=600, backoff_initial_s=1, backoff_max_s=30),
             )
 
