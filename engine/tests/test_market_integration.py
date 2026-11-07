@@ -153,6 +153,35 @@ async def test_disconnect_forces_safe_mode_and_recovers(stack: Stack) -> None:
     assert seen[:2] == [EngineState.SAFE_MODE, EngineState.RUNNING]
 
 
+async def test_lost_trades_are_recovered_from_rest(stack: Stack) -> None:
+    """Akışta kaybolan işlemler REST'ten geri alınır; sembol başına kimlikler kesintisiz olur."""
+    await wait_until(lambda: stack.state is EngineState.RUNNING)
+    runtime = stack.engine.runtime
+    assert runtime is not None
+    from ati_engine.market.events import AggTrade
+
+    seen: dict[tuple[str, str], set[int]] = {}
+
+    def record(event: AggTrade) -> None:
+        seen.setdefault((event.market.value, event.symbol), set()).add(event.trade_id)
+
+    runtime.bus.subscribe(AggTrade, record, name="t-trades")
+    await wait_until(lambda: len(seen) >= 6)
+    stack.fake.skip_trades = 7  # bir sonraki tikte her işlem akışında 7 mesaj "kaybolur"
+
+    def recovered() -> int:
+        return sum(s.gaps.stats.recovered_trades for s in runtime.market_data.values())
+
+    await wait_until(lambda: recovered() >= 7 * 6)
+    await asyncio.sleep(0.3)
+    for ids in seen.values():
+        assert ids == set(range(min(ids), max(ids) + 1))  # boşluk yok
+    for service in runtime.market_data.values():
+        assert service.gaps.stats.detected >= 3
+        assert service.gaps.stats.unrecovered_trades == 0
+    assert stack.fake.agg_trade_requests  # REST'ten istendi
+
+
 async def test_silent_feed_forces_safe_mode(stack: Stack) -> None:
     await wait_until(lambda: stack.state is EngineState.RUNNING)
     stack.fake.paused = True

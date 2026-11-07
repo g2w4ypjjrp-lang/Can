@@ -33,6 +33,8 @@ class MarketEndpoints:
     time_path: str
     exchange_info_path: str
     depth_path: str
+    agg_trades_path: str
+    agg_trades_weight: int
     exchange_info_weight: int
     ws_bases: dict[WsRoute, str]
 
@@ -74,6 +76,8 @@ def endpoints_for(market: Market, cfg: BinanceEndpoints) -> MarketEndpoints:
             time_path="/api/v3/time",
             exchange_info_path="/api/v3/exchangeInfo",
             depth_path="/api/v3/depth",
+            agg_trades_path="/api/v3/aggTrades",
+            agg_trades_weight=4,
             exchange_info_weight=20,
             ws_bases={WsRoute.DEFAULT: cfg.spot_market_data_ws},
         )
@@ -83,6 +87,8 @@ def endpoints_for(market: Market, cfg: BinanceEndpoints) -> MarketEndpoints:
         time_path="/fapi/v1/time",
         exchange_info_path="/fapi/v1/exchangeInfo",
         depth_path="/fapi/v1/depth",
+        agg_trades_path="/fapi/v1/aggTrades",
+        agg_trades_weight=20,  # yanıt başlığında gözlenen değer (2026-11-07)
         exchange_info_weight=1,
         ws_bases={WsRoute.PUBLIC: cfg.futures_ws_public, WsRoute.MARKET: cfg.futures_ws_market},
     )

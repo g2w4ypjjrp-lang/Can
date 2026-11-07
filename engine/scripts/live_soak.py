@@ -53,6 +53,8 @@ async def soak(args: argparse.Namespace) -> dict[str, object]:
         raise RuntimeError("motor başlatılamadı")
 
     last_trade: dict[tuple[str, str], int] = {}
+    seen_ids: dict[tuple[str, str], set[int]] = defaultdict(set)
+    recovered = 0
     gaps: dict[str, int] = defaultdict(int)
     gap_examples: list[str] = []
     duplicates = 0
@@ -63,9 +65,13 @@ async def soak(args: argparse.Namespace) -> dict[str, object]:
     readiness: list[str] = []
 
     def on_trade(event: AggTrade) -> None:
-        nonlocal trades, duplicates
-        trades += 1
+        nonlocal trades, duplicates, recovered
         key = (event.market.value, event.symbol)
+        seen_ids[key].add(event.trade_id)
+        if event.recovered:
+            recovered += 1
+            return
+        trades += 1
         prev = last_trade.get(key)
         if prev is not None:
             if event.trade_id <= prev:
@@ -118,14 +124,25 @@ async def soak(args: argparse.Namespace) -> dict[str, object]:
                 flush=True,
             )
 
+    # Bekleyen geri doldurmaların bitmesini bekle (en fazla 60 sn).
+    for _ in range(120):
+        if all(s.gaps.stats.pending == 0 for s in runtime.market_data.values()):
+            break
+        await asyncio.sleep(0.5)
+    missing_after_backfill = 0
+    missing_examples: list[str] = []
+    for key, ids in seen_ids.items():
+        missing = max(ids) - min(ids) + 1 - len(ids)
+        if missing:
+            missing_after_backfill += missing
+            if len(missing_examples) < 10:
+                missing_examples.append(f"{key}: {missing}")
+
     markets = {m.value: s.status() for m, s in runtime.market_data.items()}
-    # Kapanış sırasında oluşan olaylar rapora karışmasın diye listeler burada kopyalanır.
-    resyncs, disconnects, states, readiness = (
-        list(resyncs),
-        list(disconnects),
-        list(states),
-        list(readiness),
-    )
+    # Kapanış sırasında oluşan olaylar rapora karışmasın diye listeler burada kopyalanır
+    # (yeni adlarla: olay işleyicileri özgün listelere yazmaya devam eder).
+    snap_resyncs, snap_disconnects = list(resyncs), list(disconnects)
+    snap_states, snap_readiness = list(states), list(readiness)
     report = {
         "duration_s": round(time.monotonic() - start, 1),
         "time_to_running_s": running_since,
@@ -135,10 +152,13 @@ async def soak(args: argparse.Namespace) -> dict[str, object]:
         "agg_trade_gaps": dict(gaps),
         "agg_trade_gap_examples": gap_examples,
         "agg_trade_duplicates": duplicates,
-        "order_book_resyncs": resyncs,
-        "disconnects": disconnects,
-        "engine_state_changes": states,
-        "readiness_changes": readiness,
+        "recovered_trades": recovered,
+        "missing_after_backfill": missing_after_backfill,
+        "missing_examples": missing_examples,
+        "order_book_resyncs": snap_resyncs,
+        "disconnects": snap_disconnects,
+        "engine_state_changes": snap_states,
+        "readiness_changes": snap_readiness,
         "loop_lag_p99_ms_max_window": round(max(lag_samples, default=0.0), 2),
         "loop_lag_max_ms": round(runtime.loop_monitor.max_ms, 2),
         "markets": {
@@ -152,6 +172,7 @@ async def soak(args: argparse.Namespace) -> dict[str, object]:
                     (b["symbol"], b["state"], b["resyncs"], b["applied"]) for b in st["order_books"]
                 ],
                 "rest_budget": st["rest_budget"],
+                "trade_gaps": st["trade_gaps"],
             }
             for m, (name, st) in zip(runtime.market_data, markets.items(), strict=True)
         },

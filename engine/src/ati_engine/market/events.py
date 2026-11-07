@@ -34,6 +34,9 @@ class AggTrade(MarketDataEvent, frozen=True, kw_only=True):
     qty: float
     trade_time_ms: int
     buyer_is_maker: bool  # True ise agresif taraf satıcıdır (taker SELL)
+    # Bağlantı kesintisinde kaçırılıp REST ile geri alınan işlem. Bu işlemler canlı akıştan
+    # sonra (sırası dışında) gelebilir; tüketiciler trade_id ile sıralamalıdır.
+    recovered: bool = False
 
     @property
     def quote_qty(self) -> float:

@@ -57,6 +57,8 @@ class FakeBinance:
         self.spot_info = json.loads((FIXTURES / "spot_exchange_info.json").read_text())
         self.futures_info = json.loads((FIXTURES / "futures_exchange_info.json").read_text())
         self.depth_requests: list[str] = []
+        self.agg_trade_requests: list[tuple[str, int, int]] = []
+        self.skip_trades = 0  # bir sonraki tikte her işlem akışında atlanacak kimlik sayısı
 
     # --- Adresler ------------------------------------------------------------------------
 
@@ -155,16 +157,24 @@ class FakeBinance:
             await asyncio.sleep(self.interval_s)
             if self.paused:
                 continue
+            # Gerçek Binance gibi: her (piyasa, akış) için tikte tek mesaj üretilir ve o akışa
+            # abone tüm bağlantılara aynısı gönderilir (yenileme örtüşmesinde tekrar oluşur).
+            skip = self.skip_trades
+            self.skip_trades = 0
+            produced: dict[tuple[bool, str], str] = {}
             for client in list(self.clients):
                 futures = client.path.startswith(("/market", "/public"))
                 for stream in sorted(client.streams):
-                    payload = self._message(stream, futures)
-                    if payload is None:
-                        continue
+                    key = (futures, stream)
+                    if key not in produced:
+                        payload = self._message(stream, futures, skip)
+                        if payload is None:
+                            continue
+                        produced[key] = json.dumps({"stream": stream, "data": payload})
                     with contextlib.suppress(Exception):
-                        await client.ws.send(json.dumps({"stream": stream, "data": payload}))
+                        await client.ws.send(produced[key])
 
-    def _message(self, stream: str, futures: bool) -> Any:
+    def _message(self, stream: str, futures: bool, skip: int = 0) -> Any:
         now = _now()
         symbol, _, kind = stream.partition("@")
         sym = symbol.upper()
@@ -220,12 +230,13 @@ class FakeBinance:
                 },
             }
         if kind == "aggTrade":
-            self._trade_ids[stream] += 1
+            trade_key = f"{'f' if futures else 's'}:{sym}"
+            self._trade_ids[trade_key] += 1 + skip  # skip > 0: mesaj kaybı canlandırması
             return {
                 "e": "aggTrade",
                 "E": now,
                 "s": sym,
-                "a": self._trade_ids[stream],
+                "a": self._trade_ids[trade_key],
                 "p": "100.1",
                 "q": "0.5",
                 "f": 1,
@@ -283,6 +294,23 @@ class FakeBinance:
         @app.get("/fapi/v1/depth")
         async def futures_depth(symbol: str, limit: int = 100) -> JSONResponse:
             return depth("f", symbol)
+
+        def agg_trades(prefix: str, symbol: str, from_id: int, limit: int) -> JSONResponse:
+            self.agg_trade_requests.append((f"{prefix}:{symbol}", from_id, limit))
+            last = self._trade_ids[f"{prefix}:{symbol}"]
+            rows = [
+                {"a": i, "p": "100.1", "q": "0.5", "f": 1, "l": 1, "T": _now(), "m": True}
+                for i in range(from_id, min(from_id + limit, last + 1))
+            ]
+            return JSONResponse(rows, headers=headers)
+
+        @app.get("/api/v3/aggTrades")
+        async def spot_agg_trades(symbol: str, fromId: int, limit: int = 500) -> JSONResponse:
+            return agg_trades("s", symbol, fromId, limit)
+
+        @app.get("/fapi/v1/aggTrades")
+        async def futures_agg_trades(symbol: str, fromId: int, limit: int = 500) -> JSONResponse:
+            return agg_trades("f", symbol, fromId, limit)
 
         @app.get("/api/v3/time")
         @app.get("/fapi/v1/time")

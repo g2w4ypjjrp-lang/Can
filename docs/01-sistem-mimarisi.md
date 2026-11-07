@@ -199,20 +199,24 @@ durumsuz FastAPI örnekleri; yönetilen PostgreSQL ve yönetilen Redis. Sorumlul
   kontrolü ve acil durdurma. iOS uygulaması işlem motoru değildir; masaüstündeki motorun
   uzaktan kumandası ve izleme ekranıdır.
 
-## 4. Binance veri motoru tasarımı (Aşama 2 önizlemesi)
+## 4. Binance veri motoru (Aşama 2 — uygulandı)
 
-Gerçek ölçüm (2026-11-07, `data-api.binance.vision`): Binance Spot'ta **518** adet
-`TRADING` durumunda USDT paritesi vardır. Futures sayısı da yüzlerle ifade edilir. Bu yüzden
-"her şeyi en yüksek çözünürlükte izlemek" yerine **katmanlı abonelik** uygulanır:
+Gerçek ölçüm (2026-11-07): Binance Spot'ta **518** `TRADING` durumunda USDT paritesi,
+USDⓈ-M Futures'ta **522** USDT sürekli kontrat (PERPETUAL) vardır. Futures'ta altın/gümüş gibi
+`TRADIFI_PERPETUAL` kontratlar ve kapanmakta olan (`SETTLING`) kontratlar da listelenir; bunlar
+evrenden çıkarılır. "Her şeyi en yüksek çözünürlükte izlemek" yerine **katmanlı abonelik**
+uygulanır:
 
 | Katman | Kapsam | Akışlar | Güncelleme |
 |---|---|---|---|
 | 0 — Pazar geneli | Tüm semboller, tek akış | Spot `!miniTicker@arr`; Futures `!ticker@arr`, `!markPrice@arr@1s`, `!forceOrder@arr` (tasfiyeler) | 1 sn |
 | 1 — Tüm semboller | Her USDT paritesi | `<s>@kline_1m`, `<s>@aggTrade` (büyük işlem, alıcı/satıcı hacmi) | Gerçek zamanlı / 1-2 sn |
-| 2 — Odak listesi | Fırsat puanı en yüksek ~30-50 sembol (dinamik) | `<s>@depth@100ms` + REST anlık görüntü ile yerel emir defteri | 100 ms |
-| REST (zamanlanmış) | Futures | Açık pozisyon (OI), long/short oranları, taker oranı | 5 dk periyotlu veri |
+| 2 — Odak listesi | Ayarlanabilir semboller (Aşama 3'ten itibaren fırsat puanına göre dinamik) | `<s>@depth@100ms` + REST anlık görüntü ile yerel emir defteri | 100 ms |
+| REST (zamanlanmış) | Futures | Açık pozisyon (OI), long/short oranları, taker oranı | Aşama 3-4 |
 
-Doğrulanmış borsa kuralları (2026-11-07, resmi belgeler):
+Tüm semboller izlendiğinde motor **2094 akışı 13 bağlantıda** taşır (Spot 6, Futures 7).
+
+Doğrulanmış borsa kuralları (2026-11-07, resmi belgeler ve canlı deneme):
 
 | Kural | Spot | USDⓈ-M Futures |
 |---|---|---|
@@ -221,34 +225,44 @@ Doğrulanmış borsa kuralları (2026-11-07, resmi belgeler):
 | Bağlantı ömrü | 24 saat | 24 saat |
 | Sunucu ping aralığı | 20 sn | 3 dk |
 | Bağlantı açma limiti | 300 / 5 dk / IP | — |
-| WebSocket adresleri | `wss://stream.binance.com:9443`, yalnızca piyasa verisi için `wss://data-stream.binance.vision` | **2026'da bölündü:** `wss://fstream.binance.com/public`, `/market`, `/private`. Eski `/ws` ve `/stream` adresleri 2026-04-23'te kapatıldı. |
-| REST ağırlık limiti | 6000/dk (exchangeInfo'dan okunur) | exchangeInfo `rateLimits`'ten **çalışma anında** okunur |
+| WebSocket adresleri | Yalnızca piyasa verisi için `wss://data-stream.binance.vision` | **2026'da bölündü:** `/public` (derinlik, bookTicker) ve `/market` (işlemler, mumlar, mark price, ticker, tasfiye). Yönlendirme bu ortamda deneyle de doğrulandı. Eski `/ws` ve `/stream` adresleri 2026-04-23'te kapatıldı. |
+| REST ağırlık limiti | 6000/dk | 2400/dk |
 
-Tasarım kararları:
+Uygulanan tasarım (`engine/src/ati_engine/exchange/`, `market/`):
 
-* **Limitler kodda sabit değildir.** `exchangeInfo.rateLimits` ve yanıt başlıklarındaki
-  `X-MBX-USED-WEIGHT-*` değerleri okunur; ağırlık bütçesi belirteç kovası (token bucket) ile
-  yönetilir, %80 doluluğun üstünde düşük öncelikli istekler ertelenir. HTTP 429 alınınca
-  `Retry-After` beklenir; 418 (IP yasağı) alınınca tüm REST trafiği durdurulup güvenli moda
-  geçilir.
-* **Bağlantı parçalama:** Bağlantı başına ~200 akış (sınır 1024) kullanılarak yük
-  dağıtılır ve tek bir kopuşun etkisi küçültülür. Abone olma mesajları 5/sn (spot)
-  sınırının altında, sıraya alınarak gönderilir.
-* **Yeniden bağlanma:** Üstel geri çekilme + rastgele sapma; 24 saat dolmadan planlı
-  yenileme (önce yeni bağlantı, sonra eskisini kapatma: kesintisiz geçiş); `serverShutdown`
-  olayında hemen yeni bağlantı. Kopuşta ilgili hazırlık koşulu bozulur → motor SAFE_MODE'a
-  iner.
-* **Emir defteri senkronu:** Binance'in belgelediği algoritma (önce akışı tamponla, REST
-  anlık görüntüsünü al, `lastUpdateId` ile birleştir, sıra boşluğu görürsen yeniden
-  senkronla).
-* **Performans:** JSON çözümleme `msgspec` ile yapılır. Gerekirse sembol grupları ayrı
-  işlemcilere (süreçlere) dağıtılır. Olay döngüsü gecikmesi sürekli ölçülür
-  (`observability/loop_monitor.py`). Ölçüm darboğaz gösterirse sıcak yollar (emir defteri,
-  gösterge hesapları) Rust/PyO3 modülüne taşınır.
-* **Tarihsel veri:** Tam geçmiş, REST yerine `data.binance.vision` aylık/günlük ZIP
-  arşivlerinden (CHECKSUM doğrulamalı) indirilir; aradaki boşluk REST ile, canlı kısım
-  WebSocket ile tamamlanır. Senkron durumu `history_sync_state` tablosundadır: **her
-  güncellemede yalnızca yeni veri işlenir.**
+* **Limitler kodda sabit değildir.** `exchangeInfo.rateLimits` okunur; her yanıttaki
+  `X-MBX-USED-WEIGHT-1M` başlığı bütçeyi düzeltir (aynı IP'deki başka programların tüketimi
+  de görülür). Öncelikler: arka plan işleri %60, normal istekler %80, emir/pozisyon (Aşama 10)
+  %95 doluluğa kadar gönderilir. HTTP 429'da `Retry-After` süresince hiçbir istek gönderilmez;
+  HTTP 418'de (IP yasağı) yasak bitene kadar REST trafiği tamamen durur.
+* **Bağlantı parçalama:** Bağlantı başına en fazla 200 akış (sınır 1024); tek bir kopuşun
+  etkisi küçülür. Abonelik mesajları 100'lük partiler halinde ve bağlantı başına saniyede
+  en fazla 3 (Spot) / 6 (Futures) mesajla gönderilir.
+* **Yeniden bağlanma:** Üstel geri çekilme + rastgele sapma; bağlantı açma denemeleri IP
+  limitine karşı paylaşılan bir sınırlayıcıdan geçer. `serverShutdown` olayında beklemeden
+  yeniden bağlanılır. 30 sn veri gelmeyen bağlantı ölü sayılıp yeniden açılır.
+* **Kesintisiz 24 saat yenilemesi:** Ömür dolmadan önce yeni bağlantı açılır, abone olunur,
+  ilk veri gelince eskisi kapatılır. Örtüşmede oluşan tekrar işlemler elenir.
+* **Güvenli mod:** Herhangi bir bağlantı koptuğu anda ilgili hazırlık koşulu
+  (`market_data.spot` / `market_data.usdm_futures`) bozulur ve motor SAFE_MODE'a iner;
+  bağlantı düzelince RUNNING'e döner.
+* **Kaçırılan işlemlerin geri alınması:** WebSocket, kopma sırasında kaçırılan mesajları tekrar
+  göndermez. Motor her sembolün ardışık işlem kimliğini (`a`) izler; atlama görürse eksik
+  aralığı `aggTrades?fromId=` ile REST'ten düşük öncelikle geri alır ve `recovered=True`
+  işaretli olaylar olarak yayımlar.
+* **Emir defteri senkronu:** Binance'in belgelediği algoritmalar birebir uygulanır (Spot:
+  `U`/`u` sürekliliği; Futures: `pu` zinciri ve anlık görüntüden sonraki ilk olayın örtüşme
+  koşulu). Boşluk veya çaprazlanmış defter görülünce defter atılır ve yeniden senkronlanır.
+* **Masaüstüne yük bindirmeme:** Saniyede binlerce piyasa olayı yalnızca motor içinde dolaşır;
+  masaüstü akışına yalnızca sistem olayları (bağlantı, listeleme, yeniden senkron) gider.
+  Piyasa verisi arayüze `/v1/market/*` uç noktalarıyla sunulur.
+* **Performans:** JSON çözümleme `msgspec` ile tek geçişte yapılır. Olay döngüsü gecikmesi
+  sürekli ölçülür. Ölçüm darboğaz gösterirse sembol grupları ayrı süreçlere, sıcak yollar
+  Rust/PyO3 modülüne taşınır.
+* **Tarihsel veri (Aşama 5):** Tam geçmiş `data.binance.vision` aylık/günlük arşivlerinden
+  (CHECKSUM doğrulamalı) indirilir; aradaki boşluk REST ile, canlı kısım WebSocket ile
+  tamamlanır. Senkron durumu `history_sync_state` tablosundadır: **her güncellemede yalnızca
+  yeni veri işlenir.**
 
 ## 5. Gecikme bütçesi (hedef 100 ms – 1 sn)
 

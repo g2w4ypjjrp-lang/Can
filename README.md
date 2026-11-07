@@ -12,7 +12,7 @@ işlem platformu.
 
 | Bileşen | Klasör | Teknoloji | Durum |
 |---|---|---|---|
-| İşlem motoru (kullanıcının Windows bilgisayarında) | [`engine/`](engine/) | Python 3.12+, asyncio | ✅ Çekirdek (Aşama 1) |
+| İşlem motoru (kullanıcının Windows bilgisayarında) | [`engine/`](engine/) | Python 3.12+, asyncio | ✅ Çekirdek + Binance veri motoru (Aşama 1-2) |
 | Bulut servisi: lisans, hesap, ödeme, aktarma | [`cloud/`](cloud/) | FastAPI, PostgreSQL 16 | ✅ Şema + iskelet (Aşama 1) |
 | Paylaşılan protokol | [`shared/protocol/`](shared/protocol/) | JSON Schema | ✅ |
 | Windows masaüstü uygulaması | [`desktop/`](desktop/) | Tauri 2, React, TypeScript | 🔜 Aşama 12 |
@@ -36,6 +36,8 @@ işlem platformu.
 * Binance API anahtarları kullanıcının bilgisayarından **hiç çıkmaz**, Windows DPAPI ile
   şifrelenir. Para çekme yetkisi açık anahtarlar reddedilir.
 * Acil durdurma kalıcıdır, her yerden devreye alınabilir, yalnızca açık onayla kaldırılır.
+* Piyasa verisi koptuğunda veya gecikirse motor otomatik olarak güvenli moda geçer; bu modda
+  yeni pozisyon açılmaz.
 * Kritik işlemler hash zincirli, değiştirilemez denetim kaydına yazılır.
 
 ## Hızlı başlangıç (geliştirici)

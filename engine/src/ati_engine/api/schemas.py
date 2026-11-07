@@ -153,6 +153,15 @@ class RestBudgetInfo(BaseModel):
     total_used: int
 
 
+class TradeGapInfo(BaseModel):
+    detected: int
+    recovered_trades: int
+    unrecovered_gaps: int
+    unrecovered_trades: int
+    duplicates: int
+    pending: int
+
+
 class MarketServiceInfo(BaseModel):
     market: Market
     ready: bool
@@ -161,6 +170,7 @@ class MarketServiceInfo(BaseModel):
     connections: list[ConnectionInfo]
     message_rates_per_s: dict[str, float]
     order_books: list[OrderBookInfo]
+    trade_gaps: TradeGapInfo
     focus: list[str]
     rest_budget: RestBudgetInfo
     last_discovery_error: str | None

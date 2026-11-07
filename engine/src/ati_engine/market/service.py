@@ -29,6 +29,7 @@ from ati_engine.exchange.rate_limit import (
 from ati_engine.exchange.rest import BinanceRestClient
 from ati_engine.market.discovery import SymbolRegistry, parse_exchange_info
 from ati_engine.market.events import (
+    AggTrade,
     DepthDiff,
     MarkPrice,
     MarkPriceBatch,
@@ -38,6 +39,7 @@ from ati_engine.market.events import (
     Ticker24h,
     TickerBatch,
 )
+from ati_engine.market.gapfill import TradeGapFiller
 from ati_engine.market.orderbook import (
     BookSynchronizer,
     DepthSnapshot,
@@ -308,6 +310,9 @@ class MarketDataService:
             stale_after_s=self._cfg.stale_after_s,
             attempt_limiter=attempt_limiter,
         )
+        self.gaps = TradeGapFiller(
+            market=market, endpoints=self.endpoints, rest=self.rest, publish=bus.publish
+        )
         self._discovered = False
         self._focus: list[str] = list(self._cfg.focus_symbols)
         self.last_discovery_error: str | None = None
@@ -353,7 +358,10 @@ class MarketDataService:
             if isinstance(event, DepthDiff):
                 await self.books.on_diff(event)
                 continue
-            if isinstance(event, TickerBatch):
+            if isinstance(event, AggTrade):
+                if not self.gaps.accept(event):
+                    continue  # bağlantı yenilemesindeki tekrar
+            elif isinstance(event, TickerBatch):
                 for ticker in event.tickers:
                     self.state.tickers[ticker.symbol] = ticker
             elif isinstance(event, MarkPriceBatch):
@@ -441,6 +449,7 @@ class MarketDataService:
                 group.create_task(self._discovery_loop(), name=f"discovery-{self.market.value}")
                 group.create_task(self.streams.run(), name=f"streams-{self.market.value}")
                 group.create_task(self.books.run(), name=f"books-{self.market.value}")
+                group.create_task(self.gaps.run(), name=f"gapfill-{self.market.value}")
         finally:
             with contextlib.suppress(Exception):
                 await self._on_ready(False, "piyasa verisi servisi durdu")
@@ -458,6 +467,7 @@ class MarketDataService:
             "connections": [vars(c) for c in self.streams.status()],
             "message_rates_per_s": self.state.rates(),
             "order_books": [vars(b) for b in self.books.status()],
+            "trade_gaps": vars(self.gaps.stats).copy(),
             "focus": self.focus,
             "rest_budget": self.rest.budget.snapshot(),
             "last_discovery_error": self.last_discovery_error,
