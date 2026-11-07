@@ -79,6 +79,29 @@ Yerel API:
 
 Benzerlik ve etki istatistikleri geçmişi anlatır; gelecekteki fiyatı **garanti etmez**.
 
+## Analiz motoru ve model (Aşama 6)
+
+- **Göstergeler:** RSI, MACD, EMA 9/21/50/200, Bollinger, ATR, OBV, Stochastic RSI,
+  Ichimoku, VWAP, Fibonacci. Artımlı hesaplanır ve TA-Lib ile birebir doğrulanmıştır.
+- **Özellikler:** aynı kodla hem eğitimde hem canlıda üretilir.
+- **Model:** LightGBM; yürüyen pencereyle (zaman sızıntısı olmadan) eğitilir, ONNX olarak
+  saklanır.
+
+```bash
+uv run ati-engine model-train --symbol BTCUSDT ETHUSDT --interval 1h --horizon 4 --side long
+uv run ati-engine model-train --market usdm_futures --symbol BTCUSDT --with-futures --since 2022-01-01
+```
+
+Yerel API:
+- `GET /v1/analysis/snapshot?symbol=BTCUSDT&interval=1h`: göstergeler ve özellikler.
+- `POST /v1/analysis/train`, `GET /v1/analysis/jobs`
+- `GET /v1/analysis/models`: örneklem dışı metrikler ve kalibrasyon.
+- `GET /v1/analysis/predict?model_id=...&symbol=BTCUSDT`
+
+Rapordaki metrikler geçmiş veride ölçülür. Gerçek veride eğitilen modeller rastgeleden iyi
+ama **işlem maliyeti sonrası kârlı değil** (ayrıntı: `docs/05-gelistirme-plani.md`, Aşama 6).
+Model çıktısı tek başına işlem kararı değildir.
+
 ## Coin tarama (Aşama 3)
 
 İzlenen tüm semboller için saniyede bir yenilenen tablo (1/5/15 dk ve 24 saat değişim, hacim

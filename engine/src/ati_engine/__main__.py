@@ -10,6 +10,8 @@ Kullanım::
                                        # Binance arşivinden tarihsel mumları indir/güncelle
     ati-engine history-replay --symbol BTCUSDT --days 30
                                        # balina radarını işlem arşivi üzerinde yeniden oynat
+    ati-engine model-train --symbol BTCUSDT ETHUSDT --interval 1h --horizon 4 --side long
+                                       # yürüyen pencereyle model eğit, ONNX olarak kaydet
     ati-engine version
 """
 
@@ -226,6 +228,100 @@ def _cmd_history_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_model_train(args: argparse.Namespace) -> int:
+    from datetime import UTC, datetime
+
+    import duckdb
+
+    from ati_engine.analysis.service import AnalysisService
+    from ati_engine.config import EngineSettings
+    from ati_engine.core.models import Market
+    from ati_engine.exchange.endpoints import endpoints_for
+    from ati_engine.exchange.rate_limit import WeightBudget
+    from ati_engine.exchange.rest import BinanceRestClient
+    from ati_engine.history.service import HistoryService
+    from ati_engine.history.store import KlineStore
+    from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT
+    from ati_engine.ml.registry import ModelRegistry
+    from ati_engine.storage.database import Database
+
+    overrides: dict[str, object] = {}
+    if args.data_dir:
+        overrides["data_dir"] = Path(args.data_dir)
+    settings = EngineSettings(**overrides)  # type: ignore[arg-type]
+    settings.paths.ensure()
+    market = Market(args.market)
+    since_ms = (
+        int(datetime.fromisoformat(args.since).replace(tzinfo=UTC).timestamp() * 1000)
+        if args.since
+        else None
+    )
+
+    async def _train() -> int:
+        try:
+            store = KlineStore(settings.paths.history_db)
+        except duckdb.IOException:
+            print(
+                "Tarihsel veri dosyası kullanımda (motor çalışıyor olabilir). Motor çalışırken "
+                "eğitim için yerel API'yi kullanın: POST /v1/analysis/train",
+                file=sys.stderr,
+            )
+            return 4
+        db = Database(settings.paths.database)
+        await db.open()
+        await db.migrate()
+        endpoints = endpoints_for(market, settings.binance)
+        rest = BinanceRestClient(
+            endpoints.rest_base, budget=WeightBudget(DEFAULT_WEIGHT_LIMIT[market])
+        )
+        history = HistoryService(store, db, rest={market: (rest, endpoints)}, owned_rest=[rest])
+        service = AnalysisService(history, ModelRegistry(settings.paths.models_dir))
+        try:
+            job = service.start_training(
+                market,
+                args.symbol,
+                args.interval,
+                horizon=args.horizon,
+                side=args.side,
+                with_futures=args.with_futures,
+                since_ms=since_ms,
+                cost=args.cost,
+            )
+            await service.wait()
+        finally:
+            await service.close()
+            await history.close()
+            await db.close()
+        if job.state != "done" or job.model_id is None:
+            print(f"Eğitim başarısız: {job.error}", file=sys.stderr)
+            return 1
+        model = next(m for m in service.models() if m["id"] == job.model_id)
+        print(
+            json.dumps(
+                {
+                    "model_id": job.model_id,
+                    "oos": model["oos"],
+                    "calibration": model["calibration"],
+                    "top_features": model["top_features"],
+                    "folds": [
+                        {k: f[k] for k in ("fold", "test_start_ms", "n_test", "auc", "base_rate")}
+                        for f in json.loads(
+                            (settings.paths.models_dir / job.model_id / "meta.json").read_text(
+                                encoding="utf-8"
+                            )
+                        )["report"]["folds"]
+                    ],
+                    "disclaimer": model["disclaimer"],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
+    return asyncio.run(_train())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ati-engine", description="AI Trading Intelligence motoru"
@@ -266,6 +362,18 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--floor", type=float, help="Balina alt sınırı (USDT)")
     replay.add_argument("--report", help="JSON raporun yazılacağı dosya")
     replay.set_defaults(func=_cmd_history_replay)
+
+    train = sub.add_parser("model-train", help="Yürüyen pencereyle model eğit (ONNX)")
+    train.add_argument("--data-dir")
+    train.add_argument("--market", choices=["spot", "usdm_futures"], default="spot")
+    train.add_argument("--symbol", nargs="+", required=True)
+    train.add_argument("--interval", default="1h")
+    train.add_argument("--horizon", type=int, default=4, help="Etiket ufku (mum sayısı)")
+    train.add_argument("--side", choices=["long", "short"], default="long")
+    train.add_argument("--with-futures", action="store_true", help="Futures bağlam özellikleri")
+    train.add_argument("--since", help="Başlangıç tarihi (YYYY-AA-GG)")
+    train.add_argument("--cost", type=float, help="Gidiş-dönüş maliyet (ör. 0.0025)")
+    train.set_defaults(func=_cmd_model_train)
 
     version = sub.add_parser("version", help="Sürümü yazdır")
     version.set_defaults(func=lambda _: print(__version__) or 0)

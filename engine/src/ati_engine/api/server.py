@@ -27,7 +27,9 @@ from pydantic import ValidationError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.websockets import WebSocketDisconnect
 
+from ati_engine.analysis.service import AnalysisService, TrainJob
 from ati_engine.api.schemas import (
+    AnalysisSnapshotResponse,
     AuditEntry,
     CandlesResponse,
     CheckInfo,
@@ -51,7 +53,9 @@ from ati_engine.api.schemas import (
     LoopLagInfo,
     MarketServiceInfo,
     MarketStatusResponse,
+    ModelInfo,
     PositioningInfo,
+    PredictionResponse,
     ReadinessInfo,
     ScannerStatsInfo,
     ScannerTopResponse,
@@ -66,6 +70,8 @@ from ati_engine.api.schemas import (
     TickersResponse,
     TradingModeRequest,
     TradingModeResponse,
+    TrainJobInfo,
+    TrainRequest,
     TrendBreakInfo,
     TrendLineInfo,
     TrendResponse,
@@ -82,6 +88,7 @@ from ati_engine.core.events import Event, SystemEvent, encode_event
 from ati_engine.core.models import Market
 from ati_engine.history.service import HistoryService, SyncJob
 from ati_engine.market.service import MarketDataService
+from ati_engine.ml.registry import ModelError
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
 from ati_engine.scanner.scanner import MarketScanner, row_dict
@@ -629,6 +636,86 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
                 for f in result.forward
             ],
         )
+
+    # --- Analiz ve model (Aşama 6) --------------------------------------------------------
+
+    def analysis_or_404() -> AnalysisService:
+        if runtime.analysis is None:
+            raise HTTPException(status_code=404, detail="Analiz servisi etkin değil")
+        return runtime.analysis
+
+    def train_job_info(job: TrainJob) -> TrainJobInfo:
+        return TrainJobInfo(
+            id=job.id,
+            market=job.market,
+            symbols=job.symbols,
+            interval=job.interval,
+            horizon=job.horizon,
+            side=job.side,
+            with_futures=job.with_futures,
+            state=job.state,
+            stage=job.stage,
+            started_ms=job.started_ms,
+            finished_ms=job.finished_ms,
+            model_id=job.model_id,
+            oos=job.oos,
+            error=job.error,
+        )
+
+    @app.get("/v1/analysis/snapshot", response_model=AnalysisSnapshotResponse)
+    async def analysis_snapshot(
+        _: Auth, symbol: str, market: Market = Market.SPOT, interval: str = "1h"
+    ) -> AnalysisSnapshotResponse:
+        analysis = analysis_or_404()
+        try:
+            data = await analysis.snapshot(market, symbol, interval)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return AnalysisSnapshotResponse.model_validate(data)
+
+    @app.post(
+        "/v1/analysis/train", response_model=TrainJobInfo, status_code=status.HTTP_202_ACCEPTED
+    )
+    async def analysis_train(body: TrainRequest, _: Auth) -> TrainJobInfo:
+        analysis = analysis_or_404()
+        symbols = [s.strip().upper() for s in body.symbols]
+        if not all(s.isalnum() and len(s) <= 30 for s in symbols):
+            raise HTTPException(status_code=422, detail="Geçersiz sembol")
+        try:
+            job = analysis.start_training(
+                body.market,
+                symbols,
+                body.interval,
+                horizon=body.horizon,
+                side=body.side,
+                with_futures=body.with_futures,
+                since_ms=body.since_ms,
+                cost=body.cost,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return train_job_info(job)
+
+    @app.get("/v1/analysis/jobs", response_model=list[TrainJobInfo])
+    async def analysis_jobs(_: Auth) -> list[TrainJobInfo]:
+        analysis = analysis_or_404()
+        return [train_job_info(j) for j in sorted(analysis.jobs.values(), key=lambda j: -j.id)]
+
+    @app.get("/v1/analysis/models", response_model=list[ModelInfo])
+    async def analysis_models(_: Auth) -> list[ModelInfo]:
+        analysis = analysis_or_404()
+        return [ModelInfo.model_validate(m) for m in await asyncio.to_thread(analysis.models)]
+
+    @app.get("/v1/analysis/predict", response_model=PredictionResponse)
+    async def analysis_predict(_: Auth, model_id: str, symbol: str) -> PredictionResponse:
+        analysis = analysis_or_404()
+        try:
+            data = await analysis.predict(model_id, symbol)
+        except ModelError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return PredictionResponse.model_validate(data)
 
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:

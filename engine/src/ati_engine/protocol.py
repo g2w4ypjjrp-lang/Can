@@ -55,6 +55,11 @@ _API_MODELS: tuple[type[BaseModel], ...] = (
     schemas.LevelsResponse,
     schemas.TrendResponse,
     schemas.SimilarResponse,
+    schemas.AnalysisSnapshotResponse,
+    schemas.TrainRequest,
+    schemas.TrainJobInfo,
+    schemas.ModelInfo,
+    schemas.PredictionResponse,
 )
 
 
@@ -141,6 +146,21 @@ def build_protocol_schema() -> dict[str, Any]:
             },
             "GET /v1/history/similar?market=&symbol=&interval=&bars=&window=&top_k=&horizons=": {
                 "response": "SimilarResponse",
+                "auth": True,
+            },
+            "GET /v1/analysis/snapshot?market=&symbol=&interval=": {
+                "response": "AnalysisSnapshotResponse",
+                "auth": True,
+            },
+            "POST /v1/analysis/train": {
+                "request": "TrainRequest",
+                "response": "TrainJobInfo",
+                "auth": True,
+            },
+            "GET /v1/analysis/jobs": {"response": "TrainJobInfo[]", "auth": True},
+            "GET /v1/analysis/models": {"response": "ModelInfo[]", "auth": True},
+            "GET /v1/analysis/predict?model_id=&symbol=": {
+                "response": "PredictionResponse",
                 "auth": True,
             },
             "POST /v1/market/focus": {

@@ -34,8 +34,9 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── history/                   ✅ 5  arşiv + CHECKSUM, DuckDB, artımlı eşitleme + REST
 │   │   │                                    onarımı, destek/direnç, trend kırılımı, benzerlik,
 │   │   │                                    balina yeniden oynatma
-│   │   ├── analysis/                  🔜 6  göstergeler (artımlı), özellikler, modeller
-│   │   ├── strategies/                🔜 6,9 10+ strateji, yarışma ve ağırlıklandırma
+│   │   ├── analysis/                  ✅ 6  artımlı göstergeler (TA-Lib ile doğrulanmış), özellikler
+│   │   ├── ml/                        ✅ 6  veri kümesi, yürüyen pencere LightGBM, ONNX kayıt defteri
+│   │   ├── strategies/                🔜 7,9 10+ strateji, yarışma ve ağırlıklandırma
 │   │   ├── scoring/                   🔜 7  fırsat puanı 0-100
 │   │   ├── backtest/                  🔜 8  olay güdümlü geriye dönük test, walk-forward
 │   │   ├── execution/                 🔜 9-10 paper/testnet/live yürütücüler, emir yöneticisi
@@ -43,7 +44,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
 │   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
 │   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
-│   └── tests/                         ✅ 270 test (birim, gerçek mesaj fikstürleri, sahte Binance
+│   └── tests/                         ✅ 311 test (birim, gerçek mesaj fikstürleri, sahte Binance
 │                                          sunucusuyla uçtan uca, alt süreç duman testi)
 │
 ├── cloud/                             ✅ Bulut servisi (FastAPI) — yönetilen bulutta çalışır

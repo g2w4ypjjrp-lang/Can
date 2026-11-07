@@ -6,7 +6,7 @@ masaüstü (TypeScript) ve iOS (Swift) istemcileri tiplerini bu şemadan üretir
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -473,3 +473,79 @@ class SimilarResponse(BaseModel):
     matches: list[SimilarMatchInfo]
     forward: list[ForwardStatInfo]
     disclaimer: str = "Geçmişteki benzer dönemlerin sonucudur; gelecekteki fiyatı garanti etmez."
+
+
+# --- Analiz ve model (Aşama 6) ------------------------------------------------------------
+
+
+class AnalysisSnapshotResponse(BaseModel):
+    market: Market
+    symbol: str
+    interval: str
+    bar_open_time_ms: int
+    indicators: dict[str, Any]
+    features: dict[str, float | None]
+
+
+class TrainRequest(BaseModel):
+    market: Market = Market.SPOT
+    symbols: list[str] = Field(min_length=1, max_length=50)
+    interval: str = "1h"
+    horizon: int = Field(default=4, ge=1, le=500)
+    side: Literal["long", "short"] = "long"
+    with_futures: bool = False
+    since_ms: int | None = None
+    cost: float | None = Field(default=None, ge=0, le=0.05)
+
+
+class TrainJobInfo(BaseModel):
+    id: int
+    market: Market
+    symbols: list[str]
+    interval: str
+    horizon: int
+    side: str
+    with_futures: bool
+    state: str
+    stage: str
+    started_ms: int
+    finished_ms: int | None
+    model_id: str | None
+    oos: dict[str, Any]
+    error: str | None
+
+
+class ModelInfo(BaseModel):
+    id: str
+    created_ms: int
+    market: str
+    symbols: list[str]
+    interval: str
+    horizon: int
+    side: str
+    threshold: float
+    cost: float
+    feature_names: list[str]
+    train_start_ms: int
+    train_end_ms: int
+    rows: int
+    onnx_sha256: str
+    parity_max_abs_diff: float
+    oos: dict[str, Any]
+    calibration: list[dict[str, Any]]
+    top_features: dict[str, float]
+    disclaimer: str
+
+
+class PredictionResponse(BaseModel):
+    model_id: str
+    symbol: str
+    interval: str
+    side: str
+    horizon_bars: int
+    bar_open_time_ms: int
+    probability: float
+    base_rate: float | None
+    oos_auc: float | None
+    missing_features: list[str]
+    disclaimer: str

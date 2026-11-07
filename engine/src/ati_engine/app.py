@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from ati_engine import __version__
+from ati_engine.analysis.service import AnalysisService
 from ati_engine.api.server import bind_socket, build_server, create_app
 from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus, OverflowPolicy
@@ -38,6 +39,7 @@ from ati_engine.history.store import KlineStore
 from ati_engine.history.sync import RestSource
 from ati_engine.market.discovery import SymbolRegistry, UniverseFilter
 from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT, MarketDataService
+from ati_engine.ml.registry import ModelRegistry
 from ati_engine.observability.logging import configure_logging
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.runtime import EngineRuntime
@@ -159,6 +161,7 @@ class Engine:
                 self._start_market_data(runtime)
             if settings.history.enabled:
                 runtime.history = self._create_history(runtime)
+                runtime.analysis = AnalysisService(runtime.history, ModelRegistry(paths.models_dir))
 
             supervisor.spawn("loop-lag-monitor", loop_monitor.run)
             supervisor.spawn(
@@ -258,6 +261,9 @@ class Engine:
                 for service in runtime.market_data.values():
                     with contextlib.suppress(Exception):
                         await service.close()
+                if runtime.analysis is not None:
+                    with contextlib.suppress(Exception):
+                        await runtime.analysis.close()
                 if runtime.history is not None:
                     with contextlib.suppress(Exception):
                         await runtime.history.close()

@@ -29,8 +29,8 @@ kısıtı).
 | 3 | Coin tarama sistemi | ✅ **Tamamlandı** |
 | 4 | Balina takip sistemi | ✅ **Tamamlandı** |
 | 5 | Tarihsel veri ve grafik motoru | ✅ **Tamamlandı** |
-| 6 | Yapay zekâ analiz motoru | ⏭️ Sıradaki |
-| 7 | Fırsat tespit sistemi | |
+| 6 | Yapay zekâ analiz motoru | ✅ **Tamamlandı** |
+| 7 | Fırsat tespit sistemi | ⏭️ Sıradaki |
 | 8 | Backtest | |
 | 9 | Paper Trading | |
 | 10 | Otomatik işlem motoru | |
@@ -191,12 +191,68 @@ seçimi ve onayınız (G4) beklenmektedir.
   +%15,7). Bu yüzden medyan da raporlanıyor ve her yanıtta "geçmiş sonuç, garanti değildir"
   uyarısı var.
 
-### Aşama 6 — Yapay zekâ analiz motoru
-Artımlı göstergeler (RSI, MACD, EMA 9/21/50/200, Bollinger, Fibonacci, VWAP, ATR, OBV,
-Ichimoku, Stochastic RSI) — referans uygulamalarla sayısal doğrulama. Futures özellikleri
-(OI, funding, long/short, tasfiye, emir defteri dengesizliği, taker hacmi). Özellik
-deposu, model eğitimi (LightGBM/PyTorch), ONNX dışa aktarma. **Kabul:** göstergelerin
-referans değerlerle eşleşmesi; gelecekteki veriye bakma (look-ahead) testleri.
+### Aşama 6 — Yapay zekâ analiz motoru ✅
+
+**Çıktılar (uygulandı):**
+
+- **`analysis/indicators.py`:** artımlı göstergeler; her mumda O(1), ısınmada `None`.
+  - RSI, MACD, EMA 9/21/50/200, SMA, Bollinger, ATR, OBV
+  - Stochastic RSI (ham, %K, %D), Ichimoku (bulut 26 mum önceden hesaplanır), oturum VWAP,
+    Fibonacci geri çekilme
+- **`analysis/features.py`:** 28 durağan özellik ve 7 Futures özelliği. Aynı kod eğitimde ve
+  canlıda çalışır, böylece eğitim/canlı farkı olmaz.
+  - Durağan özellikler: uzaklıklar ATR'ye, getiriler log orana, hacim kendi geçmişine göre
+    ölçeklenir.
+  - Futures özellikleri: funding, açık pozisyon değişimi, büyük oyuncu ve genel long/short,
+    agresif alış/satış oranı.
+- **`history/futures_data.py`:** Binance arşivinden 5 dakikalık metrikler ve funding.
+  - Mumlarla ASOF birleştirme: kapanış anında bilinen son kayıt kullanılır.
+  - Bayat veri sınırı: metrik 15 dk, funding 9 saat.
+  - Daha geriden başlayan isteklerde eksik baş dönem tamamlanır.
+- **`ml/`:**
+  - Veri kümesi: ileri getiri etiketi; veri boşluğunda etiket üretilmez.
+  - LightGBM ile yürüyen pencere eğitimi: ambargo, eğitim dönemi içinden erken durdurma.
+  - Örneklem dışı rapor: AUC, log kaybı ve bilgisiz temel karşılaştırması, Brier,
+    kalibrasyon, en iyi %10'luk dilimin maliyet sonrası getirisi, özellik önemleri.
+  - ONNX dışa aktarma: LightGBM ile eşleşme doğrulanmadan model kaydedilmez.
+  - SHA-256 korumalı model kayıt defteri.
+- **Komut ve API:**
+  - `ati-engine model-train`
+  - `/v1/analysis/snapshot|train|jobs|models|predict`
+
+PyTorch eklenmedi: LightGBM tablo verisinde yeterli ve hafif. Derin model ihtiyacı Aşama 16'da
+(öğrenme sistemi) değerlendirilecek.
+
+Tasfiye ve emir defteri dengesizliği **canlıda** mevcut (Aşama 3-4) ama Binance arşivinde
+geçmişi yok; bu yüzden modele değil, Aşama 7'deki puanlamaya canlı veriden girecek.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Göstergelerin referans değerlerle eşleşmesi | ✅ TA-Lib ile gerçek BTC verisi ve rastgele yürüyüş üzerinde (göreli fark < 1e-9). EMA (4 periyot), SMA, RSI, ATR, OBV, Bollinger ve Stochastic RSI birebir; MACD tohum farkı söndükten sonra (400. mumdan itibaren). Ichimoku ve VWAP tanımdan yazılmış vektörel referansla |
+| İleriye bakma testleri | ✅ Gelecekteki mumlar değiştirildiğinde geçmiş gösterge ve özellik değerleri birebir aynı kalıyor. Futures metrikleri gelecekteki kaydı kullanmıyor (ASOF testi). Yürüyen pencerede eğitim ile test arasında ambargo var |
+| Sızıntı kontrolü | ✅ Saf gürültüde örneklem dışı AUC 0,45-0,56 aralığında kalıyor; öğrenilebilir yapay sinyalde AUC > 0,7 |
+| ONNX dışa aktarma | ✅ ONNX ve LightGBM tahminleri arasındaki en büyük fark 1,7e-7; değiştirilmiş model dosyası yüklenmiyor |
+
+**Gerçek veriyle model sonuçları** (yürüyen pencere, 5 kat, tamamı örneklem dışı):
+
+| Model | Veri | AUC | En iyi %10, maliyet sonrası |
+|---|---|---|---|
+| Spot long, 1s, 4 saat ufuk | BTC+ETH 2017-2026, 96.732 test satırı | 0,579 | **-%0,078** |
+| Spot short | aynı | 0,566 | **-%0,144** |
+| Futures long + Futures özellikleri | BTC+ETH 2022-2026, 50.766 test satırı | 0,547 | **-%0,087** |
+
+Yorum:
+- Modeller rastgeleden istatistiksel olarak daha iyi ve iyi kalibre. Her kat 0,54-0,60
+  arasında; tahmin %44 → gerçekleşen %43.
+- En önemli özellik oynaklık (`atr_pct`). Model çoğunlukla "büyük hareket olacak mı"yı
+  öğreniyor, yönü değil.
+- **En güvenli tahminlerde bile işlem maliyeti sonrası getiri negatif.** Bu modeller tek başına
+  kârlı bir işlem sinyali değildir.
+- Futures özelliklerinden büyük oyuncu long/short oranı 5. sırada; sonucu değiştirmiyor.
+- Modeller Aşama 7'deki puanın bileşenlerinden biri olacak. Gerçek değerlendirmeyi Aşama 8'deki
+  maliyetli backtest yapacak.
 
 ### Aşama 7 — Fırsat tespit sistemi
 Teknik, hacim, balina, likidite, trend, emir defteri, tarihsel benzerlik, risk/getiri ve

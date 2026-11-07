@@ -52,6 +52,20 @@ _COLUMNS = (
 )
 
 
+# Ek tablolar: sütun adı ve türü (``symbol`` hariç, sırasıyla).
+_EXTRA_TABLES: dict[str, tuple[tuple[str, str], ...]] = {
+    "futures_metrics": (
+        ("time_ms", "BIGINT"),
+        ("oi_usd", "DOUBLE"),
+        ("top_ls_accounts", "DOUBLE"),
+        ("top_ls_positions", "DOUBLE"),
+        ("global_ls", "DOUBLE"),
+        ("taker_ls", "DOUBLE"),
+    ),
+    "funding_rates": (("time_ms", "BIGINT"), ("rate", "DOUBLE"), ("interval_h", "INTEGER")),
+}
+
+
 @dataclass(frozen=True)
 class Coverage:
     rows: int
@@ -134,6 +148,104 @@ class KlineStore:
                 expected = (int(last) - int(first)) // INTERVAL_MS[interval] + 1
                 missing = expected - count
             return Coverage(rows=count, first_open_ms=first, last_open_ms=last, missing=missing)
+
+        return await self._run(run)
+
+    # --- Ek tablolar (futures bağlamı) -----------------------------------------------------
+
+    def execute_script(self, statements: Sequence[str]) -> None:
+        """Şema oluşturma (açılışta, döngü başlamadan önce çağrılır)."""
+        for statement in statements:
+            self._con.execute(statement)
+
+    async def insert_rows(self, table: str, symbol: str, rows: Sequence[Sequence[Any]]) -> int:
+        """``(time_ms, ...)`` satırlarını sembolle birlikte toplu ekler (aynı zaman varsa yok
+        sayılır). Satır satır ekleme DuckDB'de çok yavaş olduğundan geçici CSV kullanılır."""
+        columns = _EXTRA_TABLES.get(table)
+        if columns is None or not rows:
+            return 0
+
+        def run() -> int:
+            fd, name = tempfile.mkstemp(suffix=".csv", dir=self._tmp_dir)
+            try:
+                with os.fdopen(fd, "w", newline="", encoding="ascii") as handle:
+                    writer = csv.writer(handle)
+                    for row in rows:
+                        writer.writerow(["" if v is None else v for v in row])
+                count_sql = f"SELECT count(*) FROM {table} WHERE symbol = ?"  # noqa: S608
+                before = self._con.execute(count_sql, [symbol]).fetchone()
+                spec = ", ".join(f"'{col}': '{kind}'" for col, kind in columns)
+                self._con.execute(
+                    f"INSERT OR IGNORE INTO {table} SELECT ?, * FROM read_csv(?, header = false, "  # noqa: S608
+                    f"nullstr = '', columns = {{{spec}}})",
+                    [symbol, name],
+                )
+                after = self._con.execute(count_sql, [symbol]).fetchone()
+                return int(after[0] if after else 0) - int(before[0] if before else 0)
+            finally:
+                Path(name).unlink(missing_ok=True)
+
+        return await self._run(run)
+
+    async def bars_with_futures(
+        self,
+        symbol: str,
+        interval: str,
+        *,
+        start_ms: int | None = None,
+        end_ms: int | None = None,
+        metrics_max_age_ms: int = 15 * 60_000,
+        funding_max_age_ms: int = 9 * 3_600_000,
+    ) -> list[tuple[Any, ...]]:
+        """Futures mumları + kapanış anında bilinen son metrik ve funding kaydı (ASOF).
+        Kayıt verilen yaştan eskiyse ``NULL`` döner (bayat veri kullanılmaz).
+
+        Sütunlar: open_time, open, high, low, close, volume, quote_volume, taker_buy_quote,
+        funding_rate, oi_usd, top_ls_positions, global_ls, taker_ls.
+        """
+
+        def run() -> list[tuple[Any, ...]]:
+            for table in ("futures_metrics", "funding_rates"):
+                exists = self._con.execute(
+                    "SELECT count(*) FROM information_schema.tables WHERE table_name = ?",
+                    [table],
+                ).fetchone()
+                if not exists or not exists[0]:
+                    return []
+            sql = """
+                WITH k AS (
+                    SELECT open_time, open, high, low, close, volume, quote_volume,
+                           taker_buy_quote, close_time
+                    FROM klines
+                    WHERE market = 'usdm_futures' AND symbol = $symbol AND interval = $interval
+                      AND open_time >= $start AND open_time < $end
+                ),
+                m AS (SELECT * FROM futures_metrics WHERE symbol = $symbol),
+                f AS (SELECT * FROM funding_rates WHERE symbol = $symbol)
+                SELECT k.open_time, k.open, k.high, k.low, k.close, k.volume, k.quote_volume,
+                       k.taker_buy_quote,
+                       CASE WHEN k.close_time - f.time_ms <= $funding_age THEN f.rate END,
+                       CASE WHEN k.close_time - m.time_ms <= $metrics_age THEN m.oi_usd END,
+                       CASE WHEN k.close_time - m.time_ms <= $metrics_age
+                            THEN m.top_ls_positions END,
+                       CASE WHEN k.close_time - m.time_ms <= $metrics_age THEN m.global_ls END,
+                       CASE WHEN k.close_time - m.time_ms <= $metrics_age THEN m.taker_ls END
+                FROM k
+                ASOF LEFT JOIN m ON k.close_time >= m.time_ms
+                ASOF LEFT JOIN f ON k.close_time >= f.time_ms
+                ORDER BY k.open_time
+            """
+            return self._con.execute(
+                sql,
+                {
+                    "symbol": symbol,
+                    "interval": interval,
+                    "start": start_ms if start_ms is not None else 0,
+                    "end": end_ms if end_ms is not None else 2**62,
+                    "funding_age": funding_max_age_ms,
+                    "metrics_age": metrics_max_age_ms,
+                },
+            ).fetchall()
 
         return await self._run(run)
 
