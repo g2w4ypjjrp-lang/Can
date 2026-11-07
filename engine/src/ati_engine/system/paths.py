@@ -62,6 +62,10 @@ class DataPaths:
         return self.market_dir / "history.duckdb"
 
     @property
+    def backtests_dir(self) -> Path:
+        return self.root / "backtests"
+
+    @property
     def scoring_dir(self) -> Path:
         return self.root / "scoring"
 

@@ -31,8 +31,8 @@ kısıtı).
 | 5 | Tarihsel veri ve grafik motoru | ✅ **Tamamlandı** |
 | 6 | Yapay zekâ analiz motoru | ✅ **Tamamlandı** |
 | 7 | Fırsat tespit sistemi | ✅ **Tamamlandı** |
-| 8 | Backtest | ⏭️ Sıradaki |
-| 9 | Paper Trading | |
+| 8 | Backtest | ✅ **Tamamlandı** |
+| 9 | Paper Trading | ⏭️ Sıradaki |
 | 10 | Otomatik işlem motoru | |
 | 11 | Risk yönetimi | |
 | 12 | Windows EXE | |
@@ -324,11 +324,63 @@ Yorum:
 olay döngüsünde küçük parçalara bölündü (her 25 mumda bir döngüye söz verilir); p99 30 ms'ye
 indi.
 
-### Aşama 8 — Backtest
-Olay güdümlü motor (aynı strateji kodu, `ManualClock`), gerçekçi maliyet ve kayma modeli,
-walk-forward ve arındırılmış çapraz doğrulama; metrikler: başarı oranı, Profit Factor,
-Sharpe, Sortino, Maksimum Düşüş. **Kabul:** bilinen sonuçlu sentetik senaryolarda doğru
-metrikler; look-ahead yok.
+### Aşama 8 — Backtest ✅
+
+**Çıktılar (uygulandı):** `backtest/`.
+
+- **Olay güdümlü motor:**
+  - Canlıdaki strateji defteri ve stratejilerle aynı kod.
+  - Sinyal mum kapanışında üretilir, emir sonraki açılışta dolar.
+  - Zarar durdur/hedef mum içi en yüksek/en düşükle denetlenir. Aynı mumda ikisi de görülürse
+    önce zarar durdur varsayılır. Boşlukta açılış fiyatından dolum.
+- **Maliyetler:** iki yön komisyon, likiditeye göre spread + kayma, vadelide funding (00/08/16
+  UTC).
+- **Pozisyon ve risk:** risk tabanlı pozisyon büyüklüğü, kaldıraç ve eşzamanlı pozisyon
+  sınırı; Spot yalnızca long.
+- **Vadelide tasfiye:** mum içi en kötü fiyatta bakım teminatı altı → tüm pozisyonlar kapanır.
+  Hesap eksiye düşmez; açık "sigorta fonu" olarak raporlanır.
+- **Metrikler:** başarı oranı, Profit Factor, beklenti, ortalama R, toplam getiri, CAGR,
+  Sharpe, Sortino, maksimum düşüş (% ve süre), piyasada kalma, ücret ve funding toplamı.
+- **Doğrulama:**
+  - Yürüyen pencere: parametre geçmişte seçilir, gelecekte sınanır; test dönemleri tek
+    sermaye eğrisinde birleşir.
+  - Arındırılmış k-katlı çapraz doğrulama: ambargo ve aşırı uyum olasılığı (PBO).
+- **Strateji kayıt defteri:** sonuçlar `strategy_metrics` tablosuna yazılır. Örneklem dışı
+  ≥30 işlem, PF ≥ 1,1, Sharpe ≥ 0,5, düşüş ≤ %30 olan strateji `walk_forward` aşamasına
+  terfi eder. `live` aşamasına otomatik geçiş kodda ve veritabanı kısıtında engellidir.
+- **Komut ve API:**
+  - `ati-engine backtest`
+  - `/v1/backtest/run|jobs|reports`, `/v1/strategies`
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Bilinen sonuçlu sentetik senaryolarda doğru metrikler | ✅ Elle hesaplanmış senaryolar: hedef (+2R), aynı mumda stop+hedef (stop), boşluk (-3R), komisyon+kayma tam değer, short + funding, Spot'ta short yok sayılması, süre ve ters sinyal çıkışı, portföy/kaldıraç sınırı, tasfiye ve sigorta fonu açığı. Sharpe/Sortino/düşüş/CAGR/PF elle hesaplanan değerlerle eşleşiyor |
+| İleriye bakma yok | ✅ Gelecek mumlar değiştirildiğinde kesimden önce kapanan işlemler birebir aynı; her giriş sinyal mumundan sonraki açılışta |
+| Walk-forward ve arındırılmış CV | ✅ Parametre yalnızca geçmişten seçiliyor, test dönemleri çakışmıyor; test ile örtüşen işlemler (± ambargo) seçimden çıkarılıyor |
+
+**Gerçek veri sonuçları** (BTC+ETH, 1 saat, 2021-2026, %1 risk/işlem, 24 mum en uzun tutma):
+
+| | Spot (yalnız long, %0,10 ücret) | Futures (long+short, %0,05 ücret, funding) |
+|---|---|---|
+| Al ve tut | +%181, düşüş -%77 | **-%99,9 (tasfiye: 2021 funding'i + 2022 çöküşü)** |
+| Tek stratejiler (tam dönem) | 12 stratejiden 11'i zararda; çoğu -%60…-%99 (ücretler: ör. EMA trend 2.931 işlem, 13.601 $ ücret) | Hacimli itki +%16 (PF 1,69); diğerlerinin çoğu zararda |
+| **Hacimli itki, yürüyen pencere (örneklem dışı)** | 85 işlem, PF 0,84, -%7,6 | **47 işlem, PF 1,62, +%12,5, Sharpe 0,68, düşüş %4,9 → terfi** |
+| Puan eşiği, tam dönem (seçim yanlılığı var) | ≥70: +%12,4 | ≥70: +%36,4 |
+| **Puan eşiği, yürüyen pencere (eşik geçmişte seçildi)** | **-%18,5**, PF 0,86 | +%10,3, PF 1,03, Sharpe 0,21 (terfi yok) |
+| Puan eşiği, arındırılmış CV | ortalama R -0,03, **PBO 0,6** | ortalama R +0,01, PBO 0,4 |
+
+Yorum:
+- Saatlik mumlarda sık işlem yapan klasik stratejiler, maliyetler nedeniyle sistematik
+  olarak zarar ediyor. Bu yüzden canlı işlemde **seçicilik ve maliyet kontrolü zorunlu**.
+- Spot'ta "puan ≥70 kârlı" görünümü, tam dönem sonucundan eşik seçmenin yarattığı **seçim
+  yanlılığıydı**. Örneklem dışında zarara döndü; PBO 0,6 aşırı uyumu gösteriyor.
+- Futures'ta hacimli itki örneklem dışında da kârlı ama **örnek küçük (47 işlem)**. Terfi yalnızca
+  bir sonraki sınamaya (Aşama 9, sanal işlem) geçiş demektir. Gerçek para kullanımı değildir;
+  canlı aşama kullanıcı onayı (G1/G2) gerektirir.
+- Uzun süreli vadeli long (al ve tut), funding ve sert düşüşte tasfiye riskiyle **yok
+  olabiliyor**. Model bu riski artık gösteriyor.
 
 ### Aşama 9 — Paper Trading ve strateji yarışması
 10+ stratejinin aynı canlı veriyi bağımsız değerlendirmesi; sanal yürütücü (emir defteri

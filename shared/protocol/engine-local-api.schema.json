@@ -115,6 +115,177 @@
       "title": "AuditEntry",
       "type": "object"
     },
+    "BacktestJobInfo": {
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error"
+        },
+        "finished_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Finished Ms"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "interval": {
+          "title": "Interval",
+          "type": "string"
+        },
+        "market": {
+          "title": "Market",
+          "type": "string"
+        },
+        "report_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Report Name"
+        },
+        "since_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Since Ms"
+        },
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        },
+        "started_ms": {
+          "title": "Started Ms",
+          "type": "integer"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "symbols": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Symbols",
+          "type": "array"
+        },
+        "walk_forward": {
+          "title": "Walk Forward",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "market",
+        "symbols",
+        "interval",
+        "since_ms",
+        "walk_forward",
+        "state",
+        "stage",
+        "started_ms",
+        "finished_ms",
+        "report_name",
+        "error"
+      ],
+      "title": "BacktestJobInfo",
+      "type": "object"
+    },
+    "BacktestRequest": {
+      "properties": {
+        "interval": {
+          "default": "1h",
+          "title": "Interval",
+          "type": "string"
+        },
+        "leverage": {
+          "default": 1.0,
+          "maximum": 5.0,
+          "minimum": 1.0,
+          "title": "Leverage",
+          "type": "number"
+        },
+        "market": {
+          "$ref": "#/$defs/Market",
+          "default": "spot"
+        },
+        "max_hold_bars": {
+          "default": 24,
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Max Hold Bars",
+          "type": "integer"
+        },
+        "max_positions": {
+          "default": 5,
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Max Positions",
+          "type": "integer"
+        },
+        "risk_per_trade": {
+          "default": 0.01,
+          "exclusiveMinimum": 0,
+          "maximum": 0.05,
+          "title": "Risk Per Trade",
+          "type": "number"
+        },
+        "since_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since Ms"
+        },
+        "symbols": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Symbols",
+          "type": "array"
+        },
+        "walk_forward": {
+          "default": true,
+          "title": "Walk Forward",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "symbols"
+      ],
+      "title": "BacktestRequest",
+      "type": "object"
+    },
     "CandlesResponse": {
       "properties": {
         "columns": {
@@ -2830,6 +3001,58 @@
       "title": "StrategyInfo",
       "type": "object"
     },
+    "StrategyRegistryInfo": {
+      "properties": {
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "live_approved": {
+          "title": "Live Approved",
+          "type": "boolean"
+        },
+        "metrics": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Metrics",
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        },
+        "stage_changed_at": {
+          "title": "Stage Changed At",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "title",
+        "category",
+        "stage",
+        "stage_changed_at",
+        "live_approved",
+        "metrics"
+      ],
+      "title": "StrategyRegistryInfo",
+      "type": "object"
+    },
     "StreamConnectionChanged": {
       "properties": {
         "connected": {
@@ -3869,6 +4092,18 @@
       "auth": true,
       "response": "AuditEntry[]"
     },
+    "GET /v1/backtest/jobs": {
+      "auth": true,
+      "response": "BacktestJobInfo[]"
+    },
+    "GET /v1/backtest/reports": {
+      "auth": true,
+      "response": "string[]"
+    },
+    "GET /v1/backtest/reports/{name}": {
+      "auth": true,
+      "response": "object"
+    },
     "GET /v1/health": {
       "auth": false,
       "response": "HealthResponse"
@@ -3933,6 +4168,10 @@
       "auth": true,
       "response": "StatusResponse"
     },
+    "GET /v1/strategies": {
+      "auth": true,
+      "response": "StrategyRegistryInfo[]"
+    },
     "GET /v1/trading-mode": {
       "auth": true,
       "response": "TradingModeResponse"
@@ -3961,6 +4200,11 @@
       "auth": true,
       "request": "TrainRequest",
       "response": "TrainJobInfo"
+    },
+    "POST /v1/backtest/run": {
+      "auth": true,
+      "request": "BacktestRequest",
+      "response": "BacktestJobInfo"
     },
     "POST /v1/engine/shutdown": {
       "auth": true,

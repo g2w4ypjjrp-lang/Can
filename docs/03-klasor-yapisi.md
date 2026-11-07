@@ -39,13 +39,14 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── strategies/                ✅ 7  14 strateji + sembol defteri (yarışma: 🔜 9)
 │   │   ├── scoring/                   ✅ 7  maliyet modeli, açıklanabilir 0-100 puan, kalibrasyon,
 │   │   │                                    canlı fırsat motoru
-│   │   ├── backtest/                  🔜 8  olay güdümlü geriye dönük test, walk-forward
+│   │   ├── backtest/                  ✅ 8  olay güdümlü motor, metrikler, yürüyen pencere, arındırılmış CV,
+│   │   │                                    strateji kayıt defteri ve terfi
 │   │   ├── execution/                 🔜 9-10 paper/testnet/live yürütücüler, emir yöneticisi
 │   │   ├── risk/                      🔜 11 risk kapısı ve bağımsız risk bekçisi
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
 │   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
 │   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
-│   └── tests/                         ✅ 330 test (birim, gerçek mesaj fikstürleri, sahte Binance
+│   └── tests/                         ✅ 350 test (birim, gerçek mesaj fikstürleri, sahte Binance
 │                                          sunucusuyla uçtan uca, alt süreç duman testi)
 │
 ├── cloud/                             ✅ Bulut servisi (FastAPI) — yönetilen bulutta çalışır

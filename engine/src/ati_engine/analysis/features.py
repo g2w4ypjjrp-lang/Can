@@ -100,7 +100,7 @@ class FuturesContext:
     taker_long_short: float | None = None  # agresif alış/satış hacim oranı
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Snapshot:
     """Bir mum kapanışındaki gösterge değerleri (stratejilerin okuduğu görünüm)."""
 

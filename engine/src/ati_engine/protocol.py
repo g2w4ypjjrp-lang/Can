@@ -65,6 +65,9 @@ _API_MODELS: tuple[type[BaseModel], ...] = (
     schemas.OpportunityDetail,
     schemas.StrategyInfo,
     schemas.OpportunityStatsResponse,
+    schemas.BacktestRequest,
+    schemas.BacktestJobInfo,
+    schemas.StrategyRegistryInfo,
 )
 
 
@@ -188,6 +191,15 @@ def build_protocol_schema() -> dict[str, Any]:
                 "response": "OpportunityStatsResponse",
                 "auth": True,
             },
+            "POST /v1/backtest/run": {
+                "request": "BacktestRequest",
+                "response": "BacktestJobInfo",
+                "auth": True,
+            },
+            "GET /v1/backtest/jobs": {"response": "BacktestJobInfo[]", "auth": True},
+            "GET /v1/backtest/reports": {"response": "string[]", "auth": True},
+            "GET /v1/backtest/reports/{name}": {"response": "object", "auth": True},
+            "GET /v1/strategies": {"response": "StrategyRegistryInfo[]", "auth": True},
             "POST /v1/market/focus": {
                 "request": "FocusRequest",
                 "response": "FocusResponse",

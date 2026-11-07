@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from ati_engine import __version__
 from ati_engine.analysis.service import AnalysisService
+from ati_engine.backtest.service import BacktestService
 from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus
 from ati_engine.core.models import Market
@@ -43,6 +44,7 @@ class EngineRuntime:
     history: HistoryService | None = None
     analysis: AnalysisService | None = None
     opportunities: OpportunityEngine | None = None
+    backtests: BacktestService | None = None
     version: str = __version__
     started_monotonic: float = field(default_factory=time.monotonic)
     shutdown_requested: asyncio.Event = field(default_factory=asyncio.Event)

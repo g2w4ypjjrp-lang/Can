@@ -642,3 +642,44 @@ class OpportunityStatsResponse(BaseModel):
     incomplete_bars: int
     calibration_loaded: dict[str, bool]
     models_loaded: dict[str, list[str]]
+
+
+# --- Backtest ve strateji kayıt defteri (Aşama 8) ---------------------------------------------
+
+
+class BacktestRequest(BaseModel):
+    market: Market = Market.SPOT
+    symbols: list[str] = Field(min_length=1, max_length=20)
+    interval: str = "1h"
+    since_ms: int | None = None
+    walk_forward: bool = True
+    risk_per_trade: float = Field(default=0.01, gt=0, le=0.05)
+    max_positions: int = Field(default=5, ge=1, le=50)
+    leverage: float = Field(default=1.0, ge=1.0, le=5.0)
+    max_hold_bars: int = Field(default=24, ge=1, le=10_000)
+
+
+class BacktestJobInfo(BaseModel):
+    id: int
+    market: str
+    symbols: list[str]
+    interval: str
+    since_ms: int | None
+    walk_forward: bool
+    state: str
+    stage: str
+    started_ms: int
+    finished_ms: int | None
+    report_name: str | None
+    error: str | None
+
+
+class StrategyRegistryInfo(BaseModel):
+    id: str
+    name: str
+    title: str
+    category: str
+    stage: str
+    stage_changed_at: int
+    live_approved: bool
+    metrics: dict[str, dict[str, Any]]

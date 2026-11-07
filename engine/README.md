@@ -79,6 +79,29 @@ Yerel API:
 
 Benzerlik ve etki istatistikleri geçmişi anlatır; gelecekteki fiyatı **garanti etmez**.
 
+## Backtest (Aşama 8)
+
+Stratejiler, puan eşikleri ve al-ve-tut aynı geçmiş üzerinde canlıdakiyle aynı kodla sınanır.
+- **Maliyetler:** komisyon, spread, kayma ve funding.
+- **Tasfiye:** vadelide modellenir.
+- **İleriye bakma yok:** sinyal mum kapanışında, emir sonraki açılışta.
+- **Doğrulama:** yürüyen pencere (parametre geçmişte seçilip gelecekte sınanır) ve arındırılmış
+  çapraz doğrulama (aşırı uyum olasılığı, PBO).
+
+```bash
+uv run ati-engine backtest --symbol BTCUSDT ETHUSDT --since 2021-01-01
+uv run ati-engine backtest --market usdm_futures --symbol BTCUSDT ETHUSDT --since 2021-01-01
+```
+
+Raporlar `backtests/` dizinine yazılır; sonuçlar strateji kayıt defterine (`/v1/strategies`)
+işlenir. Örneklem dışı ölçütleri karşılayan strateji `walk_forward` aşamasına geçer. **Canlı
+aşamaya otomatik geçiş yoktur.**
+
+Yerel API:
+- `POST /v1/backtest/run`, `GET /v1/backtest/jobs`
+- `GET /v1/backtest/reports`, `GET /v1/backtest/reports/{ad}`
+- `GET /v1/strategies`
+
 ## Fırsat puanı (Aşama 7)
 
 Tüm semboller her saat (ayarlanabilir) 14 stratejiyle değerlendirilir ve 0-100 arası

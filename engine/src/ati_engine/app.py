@@ -26,6 +26,7 @@ from typing import Any
 from ati_engine import __version__
 from ati_engine.analysis.service import AnalysisService
 from ati_engine.api.server import bind_socket, build_server, create_app
+from ati_engine.backtest.service import BacktestService
 from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus, OverflowPolicy
 from ati_engine.core.events import Alert, Heartbeat
@@ -163,6 +164,7 @@ class Engine:
             if settings.history.enabled:
                 runtime.history = self._create_history(runtime)
                 runtime.analysis = AnalysisService(runtime.history, ModelRegistry(paths.models_dir))
+                runtime.backtests = BacktestService(runtime.history, db, paths.backtests_dir)
             if settings.scoring.enabled:
                 self._start_scoring(runtime)
 
@@ -289,6 +291,9 @@ class Engine:
                 for service in runtime.market_data.values():
                     with contextlib.suppress(Exception):
                         await service.close()
+                if runtime.backtests is not None:
+                    with contextlib.suppress(Exception):
+                        await runtime.backtests.close()
                 if runtime.opportunities is not None:
                     with contextlib.suppress(Exception):
                         await runtime.opportunities.close()

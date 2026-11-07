@@ -31,6 +31,8 @@ from ati_engine.analysis.service import AnalysisService, TrainJob
 from ati_engine.api.schemas import (
     AnalysisSnapshotResponse,
     AuditEntry,
+    BacktestJobInfo,
+    BacktestRequest,
     CandlesResponse,
     CheckInfo,
     ErrorResponse,
@@ -69,6 +71,7 @@ from ati_engine.api.schemas import (
     SimilarResponse,
     StatusResponse,
     StrategyInfo,
+    StrategyRegistryInfo,
     TaskInfo,
     TickerInfo,
     TickersResponse,
@@ -87,6 +90,8 @@ from ati_engine.api.schemas import (
     WsAuthMessage,
     WsAuthOk,
 )
+from ati_engine.backtest.engine import BacktestConfig
+from ati_engine.backtest.service import BacktestJob, BacktestService
 from ati_engine.core.bus import OverflowPolicy
 from ati_engine.core.events import Event, SystemEvent, encode_event
 from ati_engine.core.models import Market
@@ -822,6 +827,69 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             calibration_loaded={m: bool(c) for m, c in engine.calibration.items()},
             models_loaded={m.value: sorted(p) for m, p in engine.predictors.items()},
         )
+
+    # --- Backtest ve strateji kayıt defteri (Aşama 8) --------------------------------------
+
+    def backtests_or_404() -> BacktestService:
+        if runtime.backtests is None:
+            raise HTTPException(status_code=404, detail="Backtest servisi etkin değil")
+        return runtime.backtests
+
+    def backtest_job_info(job: BacktestJob) -> BacktestJobInfo:
+        return BacktestJobInfo.model_validate(vars(job))
+
+    @app.post(
+        "/v1/backtest/run", response_model=BacktestJobInfo, status_code=status.HTTP_202_ACCEPTED
+    )
+    async def backtest_run(body: BacktestRequest, _: Auth) -> BacktestJobInfo:
+        service = backtests_or_404()
+        symbols = [s.strip().upper() for s in body.symbols]
+        if not all(s.isalnum() and len(s) <= 30 for s in symbols):
+            raise HTTPException(status_code=422, detail="Geçersiz sembol")
+        futures = body.market is Market.USDM_FUTURES
+        config = BacktestConfig(
+            market="usdm_futures" if futures else "spot",
+            risk_per_trade=body.risk_per_trade,
+            max_positions=body.max_positions,
+            max_leverage=body.leverage if futures else 1.0,
+            max_hold_bars=body.max_hold_bars,
+        )
+        try:
+            job = service.start(
+                body.market.value,
+                symbols,
+                body.interval,
+                since_ms=body.since_ms,
+                walk_forward=body.walk_forward,
+                config=config,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return backtest_job_info(job)
+
+    @app.get("/v1/backtest/jobs", response_model=list[BacktestJobInfo])
+    async def backtest_jobs(_: Auth) -> list[BacktestJobInfo]:
+        service = backtests_or_404()
+        return [backtest_job_info(j) for j in sorted(service.jobs.values(), key=lambda j: -j.id)]
+
+    @app.get("/v1/backtest/reports", response_model=list[str])
+    async def backtest_reports(_: Auth) -> list[str]:
+        return backtests_or_404().reports()
+
+    @app.get("/v1/backtest/reports/{name}")
+    async def backtest_report(name: str, _: Auth) -> dict[str, Any]:
+        service = backtests_or_404()
+        try:
+            return await asyncio.to_thread(service.report, name)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Rapor bulunamadı") from exc
+
+    @app.get("/v1/strategies", response_model=list[StrategyRegistryInfo])
+    async def strategy_registry(_: Auth) -> list[StrategyRegistryInfo]:
+        service = backtests_or_404()
+        return [StrategyRegistryInfo.model_validate(s) for s in await service.strategies()]
 
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:

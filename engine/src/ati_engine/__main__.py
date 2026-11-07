@@ -14,6 +14,8 @@ Kullanım::
                                        # yürüyen pencereyle model eğit, ONNX olarak kaydet
     ati-engine score-calibrate --symbol BTCUSDT ETHUSDT
                                        # fırsat puanının geçmişteki maliyet sonrası sonucu
+    ati-engine backtest --symbol BTCUSDT ETHUSDT --since 2021-01-01
+                                       # tüm stratejiler + yürüyen pencere, kayıt defterine yaz
     ati-engine version
 """
 
@@ -423,6 +425,105 @@ def _cmd_score_calibrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_backtest(args: argparse.Namespace) -> int:
+    import time
+    from datetime import UTC, datetime
+
+    import duckdb
+
+    from ati_engine.backtest.engine import BacktestConfig
+    from ati_engine.backtest.service import (
+        SuiteOptions,
+        ensure_strategies,
+        prepare_records,
+        run_suite,
+    )
+    from ati_engine.config import EngineSettings
+    from ati_engine.core.models import Market
+    from ati_engine.exchange.endpoints import endpoints_for
+    from ati_engine.exchange.rate_limit import WeightBudget
+    from ati_engine.exchange.rest import BinanceRestClient
+    from ati_engine.history.archive import INTERVAL_MS
+    from ati_engine.history.service import HistoryService
+    from ati_engine.history.store import KlineStore
+    from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT
+    from ati_engine.storage.database import Database
+    from ati_engine.strategies.base import MarketKind
+
+    overrides: dict[str, object] = {}
+    if args.data_dir:
+        overrides["data_dir"] = Path(args.data_dir)
+    settings = EngineSettings(**overrides)  # type: ignore[arg-type]
+    settings.paths.ensure()
+    market = Market(args.market)
+    futures = market is Market.USDM_FUTURES
+    kind: MarketKind = "usdm_futures" if futures else "spot"
+    since_ms = (
+        int(datetime.fromisoformat(args.since).replace(tzinfo=UTC).timestamp() * 1000)
+        if args.since
+        else None
+    )
+    interval_ms = INTERVAL_MS[args.interval]
+    config = BacktestConfig(
+        market=kind,
+        risk_per_trade=args.risk,
+        max_positions=args.max_positions,
+        max_leverage=args.leverage if futures else 1.0,
+        max_hold_bars=args.max_hold,
+    )
+
+    async def _run() -> dict[str, object] | None:
+        try:
+            store = KlineStore(settings.paths.history_db)
+        except duckdb.IOException:
+            print("Tarihsel veri dosyası kullanımda (motor çalışıyor olabilir).", file=sys.stderr)
+            return None
+        db = Database(settings.paths.database)
+        await db.open()
+        await db.migrate()
+        endpoints = endpoints_for(market, settings.binance)
+        rest = BinanceRestClient(
+            endpoints.rest_base, budget=WeightBudget(DEFAULT_WEIGHT_LIMIT[market])
+        )
+        history = HistoryService(store, db, rest={market: (rest, endpoints)}, owned_rest=[rest])
+        try:
+            started = time.perf_counter()
+            data = await prepare_records(
+                history,
+                market.value,
+                args.symbol,
+                args.interval,
+                since_ms=since_ms,
+                progress=lambda m: print(m, file=sys.stderr),
+            )
+            print(f"Veri hazır ({time.perf_counter() - started:.1f} sn)", file=sys.stderr)
+            await ensure_strategies(db)
+            options = SuiteOptions(
+                market=kind,
+                interval=args.interval,
+                interval_ms=interval_ms,
+                walk_forward=not args.no_walk_forward,
+                strategies=tuple(args.strategies) if args.strategies else None,
+            )
+            return await run_suite(
+                data, options, config, db=db, progress=lambda m: print(m, file=sys.stderr)
+            )
+        finally:
+            await history.close()
+            await db.close()
+
+    report = asyncio.run(_run())
+    if report is None:
+        return 4
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    target = settings.paths.backtests_dir / f"{stamp}-{market.value}-{args.interval}.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    print(f"Rapor: {target}", file=sys.stderr)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ati-engine", description="AI Trading Intelligence motoru"
@@ -485,6 +586,20 @@ def build_parser() -> argparse.ArgumentParser:
     calibrate.add_argument("--interval", help="Varsayılan: scoring.interval")
     calibrate.add_argument("--horizon", type=int, help="Varsayılan: scoring.horizon_bars")
     calibrate.set_defaults(func=_cmd_score_calibrate)
+
+    backtest = sub.add_parser("backtest", help="Stratejileri geçmiş veride sına")
+    backtest.add_argument("--data-dir")
+    backtest.add_argument("--market", choices=["spot", "usdm_futures"], default="spot")
+    backtest.add_argument("--symbol", nargs="+", required=True)
+    backtest.add_argument("--interval", default="1h")
+    backtest.add_argument("--since", help="Başlangıç tarihi (YYYY-AA-GG)")
+    backtest.add_argument("--strategies", nargs="+", help="Yalnızca bu stratejiler")
+    backtest.add_argument("--risk", type=float, default=0.01, help="İşlem başına risk oranı")
+    backtest.add_argument("--max-positions", type=int, default=5)
+    backtest.add_argument("--leverage", type=float, default=1.0, help="Yalnızca vadeli")
+    backtest.add_argument("--max-hold", type=int, default=24, help="En uzun tutma (mum)")
+    backtest.add_argument("--no-walk-forward", action="store_true")
+    backtest.set_defaults(func=_cmd_backtest)
 
     version = sub.add_parser("version", help="Sürümü yazdır")
     version.set_defaults(func=lambda _: print(__version__) or 0)
