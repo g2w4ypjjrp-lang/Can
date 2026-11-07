@@ -1,0 +1,781 @@
+{
+  "$defs": {
+    "Alert": {
+      "properties": {
+        "context": {
+          "default": {},
+          "type": "object"
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "title": {
+          "type": "string"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "Alert"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "severity",
+        "title",
+        "message"
+      ],
+      "title": "Alert",
+      "type": "object"
+    },
+    "AuditEntry": {
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "actor": {
+          "title": "Actor",
+          "type": "string"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "ts": {
+          "title": "Ts",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "ts",
+        "actor",
+        "action",
+        "details"
+      ],
+      "title": "AuditEntry",
+      "type": "object"
+    },
+    "CheckInfo": {
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "passed",
+        "message"
+      ],
+      "title": "CheckInfo",
+      "type": "object"
+    },
+    "EngineEvent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EngineStateChanged"
+        },
+        {
+          "$ref": "#/$defs/TradingModeChanged"
+        },
+        {
+          "$ref": "#/$defs/KillSwitchEngaged"
+        },
+        {
+          "$ref": "#/$defs/KillSwitchReleased"
+        },
+        {
+          "$ref": "#/$defs/ReadinessChanged"
+        },
+        {
+          "$ref": "#/$defs/ServiceHealthChanged"
+        },
+        {
+          "$ref": "#/$defs/Heartbeat"
+        },
+        {
+          "$ref": "#/$defs/Alert"
+        }
+      ],
+      "discriminator": {
+        "mapping": {
+          "Alert": "#/$defs/Alert",
+          "EngineStateChanged": "#/$defs/EngineStateChanged",
+          "Heartbeat": "#/$defs/Heartbeat",
+          "KillSwitchEngaged": "#/$defs/KillSwitchEngaged",
+          "KillSwitchReleased": "#/$defs/KillSwitchReleased",
+          "ReadinessChanged": "#/$defs/ReadinessChanged",
+          "ServiceHealthChanged": "#/$defs/ServiceHealthChanged",
+          "TradingModeChanged": "#/$defs/TradingModeChanged"
+        },
+        "propertyName": "type"
+      }
+    },
+    "EngineState": {
+      "enum": [
+        "halted",
+        "running",
+        "safe_mode",
+        "starting",
+        "stopped",
+        "stopping"
+      ],
+      "title": "EngineState"
+    },
+    "EngineStateChanged": {
+      "properties": {
+        "current": {
+          "$ref": "#/$defs/EngineState"
+        },
+        "previous": {
+          "$ref": "#/$defs/EngineState"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "EngineStateChanged"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "previous",
+        "current",
+        "reason"
+      ],
+      "title": "EngineStateChanged",
+      "type": "object"
+    },
+    "ErrorResponse": {
+      "properties": {
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "detail"
+      ],
+      "title": "ErrorResponse",
+      "type": "object"
+    },
+    "HealthResponse": {
+      "properties": {
+        "status": {
+          "const": "ok",
+          "default": "ok",
+          "title": "Status",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "title": "HealthResponse",
+      "type": "object"
+    },
+    "Heartbeat": {
+      "properties": {
+        "loop_lag_ms": {
+          "type": "number"
+        },
+        "state": {
+          "$ref": "#/$defs/EngineState"
+        },
+        "trading_mode": {
+          "$ref": "#/$defs/TradingMode"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "Heartbeat"
+          ]
+        },
+        "uptime_s": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "uptime_s",
+        "loop_lag_ms",
+        "state",
+        "trading_mode"
+      ],
+      "title": "Heartbeat",
+      "type": "object"
+    },
+    "KillSwitchEngageRequest": {
+      "properties": {
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "KillSwitchEngageRequest",
+      "type": "object"
+    },
+    "KillSwitchEngaged": {
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "KillSwitchEngaged"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "reason",
+        "actor"
+      ],
+      "title": "KillSwitchEngaged",
+      "type": "object"
+    },
+    "KillSwitchInfo": {
+      "properties": {
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "engaged": {
+          "title": "Engaged",
+          "type": "boolean"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "since_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since Ms"
+        }
+      },
+      "required": [
+        "engaged"
+      ],
+      "title": "KillSwitchInfo",
+      "type": "object"
+    },
+    "KillSwitchReleaseRequest": {
+      "properties": {
+        "confirmation": {
+          "maxLength": 100,
+          "title": "Confirmation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "confirmation"
+      ],
+      "title": "KillSwitchReleaseRequest",
+      "type": "object"
+    },
+    "KillSwitchReleased": {
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "KillSwitchReleased"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "actor"
+      ],
+      "title": "KillSwitchReleased",
+      "type": "object"
+    },
+    "KillSwitchResponse": {
+      "properties": {
+        "changed": {
+          "title": "Changed",
+          "type": "boolean"
+        },
+        "engine_state": {
+          "$ref": "#/$defs/EngineState"
+        },
+        "kill_switch": {
+          "$ref": "#/$defs/KillSwitchInfo"
+        }
+      },
+      "required": [
+        "changed",
+        "kill_switch",
+        "engine_state"
+      ],
+      "title": "KillSwitchResponse",
+      "type": "object"
+    },
+    "LoopLagInfo": {
+      "properties": {
+        "last_ms": {
+          "title": "Last Ms",
+          "type": "number"
+        },
+        "max_ms": {
+          "title": "Max Ms",
+          "type": "number"
+        },
+        "p99_ms": {
+          "title": "P99 Ms",
+          "type": "number"
+        }
+      },
+      "required": [
+        "last_ms",
+        "p99_ms",
+        "max_ms"
+      ],
+      "title": "LoopLagInfo",
+      "type": "object"
+    },
+    "ReadinessChanged": {
+      "properties": {
+        "condition": {
+          "type": "string"
+        },
+        "detail": {
+          "default": "",
+          "type": "string"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "ReadinessChanged"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "condition",
+        "ready"
+      ],
+      "title": "ReadinessChanged",
+      "type": "object"
+    },
+    "ReadinessInfo": {
+      "properties": {
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "ready": {
+          "title": "Ready",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "ready",
+        "detail"
+      ],
+      "title": "ReadinessInfo",
+      "type": "object"
+    },
+    "ServiceHealthChanged": {
+      "properties": {
+        "detail": {
+          "default": "",
+          "type": "string"
+        },
+        "healthy": {
+          "type": "boolean"
+        },
+        "service": {
+          "type": "string"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "ServiceHealthChanged"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "service",
+        "healthy"
+      ],
+      "title": "ServiceHealthChanged",
+      "type": "object"
+    },
+    "Severity": {
+      "enum": [
+        "critical",
+        "info",
+        "warning"
+      ],
+      "title": "Severity"
+    },
+    "ShutdownResponse": {
+      "properties": {
+        "accepted": {
+          "default": true,
+          "title": "Accepted",
+          "type": "boolean"
+        }
+      },
+      "title": "ShutdownResponse",
+      "type": "object"
+    },
+    "StatusResponse": {
+      "properties": {
+        "can_manage_positions": {
+          "title": "Can Manage Positions",
+          "type": "boolean"
+        },
+        "can_open_positions": {
+          "title": "Can Open Positions",
+          "type": "boolean"
+        },
+        "engine_state": {
+          "$ref": "#/$defs/EngineState"
+        },
+        "kill_switch": {
+          "$ref": "#/$defs/KillSwitchInfo"
+        },
+        "loop_lag": {
+          "$ref": "#/$defs/LoopLagInfo"
+        },
+        "readiness": {
+          "items": {
+            "$ref": "#/$defs/ReadinessInfo"
+          },
+          "title": "Readiness",
+          "type": "array"
+        },
+        "state_reason": {
+          "title": "State Reason",
+          "type": "string"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/TaskInfo"
+          },
+          "title": "Tasks",
+          "type": "array"
+        },
+        "trading_mode": {
+          "$ref": "#/$defs/TradingMode"
+        },
+        "uptime_s": {
+          "title": "Uptime S",
+          "type": "number"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "engine_state",
+        "state_reason",
+        "trading_mode",
+        "can_open_positions",
+        "can_manage_positions",
+        "kill_switch",
+        "readiness",
+        "tasks",
+        "loop_lag",
+        "uptime_s"
+      ],
+      "title": "StatusResponse",
+      "type": "object"
+    },
+    "TaskInfo": {
+      "properties": {
+        "last_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Error"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "restarts": {
+          "title": "Restarts",
+          "type": "integer"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "state",
+        "restarts"
+      ],
+      "title": "TaskInfo",
+      "type": "object"
+    },
+    "TradingMode": {
+      "description": "İşlem modu. Varsayılan her zaman PAPER'dır (sanal işlem).",
+      "enum": [
+        "live",
+        "paper",
+        "testnet"
+      ],
+      "title": "TradingMode"
+    },
+    "TradingModeChanged": {
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "current": {
+          "$ref": "#/$defs/TradingMode"
+        },
+        "previous": {
+          "$ref": "#/$defs/TradingMode"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "TradingModeChanged"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "previous",
+        "current",
+        "actor"
+      ],
+      "title": "TradingModeChanged",
+      "type": "object"
+    },
+    "TradingModeRequest": {
+      "properties": {
+        "acknowledgement": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Acknowledgement"
+        },
+        "mode": {
+          "$ref": "#/$defs/TradingMode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "TradingModeRequest",
+      "type": "object"
+    },
+    "TradingModeResponse": {
+      "properties": {
+        "accepted": {
+          "title": "Accepted",
+          "type": "boolean"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/CheckInfo"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "mode": {
+          "$ref": "#/$defs/TradingMode"
+        }
+      },
+      "required": [
+        "accepted",
+        "mode",
+        "checks"
+      ],
+      "title": "TradingModeResponse",
+      "type": "object"
+    },
+    "WsAuthMessage": {
+      "properties": {
+        "token": {
+          "title": "Token",
+          "type": "string"
+        },
+        "type": {
+          "const": "auth",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "token"
+      ],
+      "title": "WsAuthMessage",
+      "type": "object"
+    },
+    "WsAuthOk": {
+      "properties": {
+        "type": {
+          "const": "auth_ok",
+          "default": "auth_ok",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "title": "WsAuthOk",
+      "type": "object"
+    }
+  },
+  "$id": "https://ati.local/protocol/engine-local-api.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI Trading Intelligence - Engine Local API Protocol",
+  "x-protocol-version": 1,
+  "x-rest-endpoints": {
+    "GET /v1/audit": {
+      "auth": true,
+      "response": "AuditEntry[]"
+    },
+    "GET /v1/health": {
+      "auth": false,
+      "response": "HealthResponse"
+    },
+    "GET /v1/status": {
+      "auth": true,
+      "response": "StatusResponse"
+    },
+    "GET /v1/trading-mode": {
+      "auth": true,
+      "response": "TradingModeResponse"
+    },
+    "POST /v1/engine/shutdown": {
+      "auth": true,
+      "response": "ShutdownResponse"
+    },
+    "POST /v1/kill-switch/engage": {
+      "auth": true,
+      "request": "KillSwitchEngageRequest",
+      "response": "KillSwitchResponse"
+    },
+    "POST /v1/kill-switch/release": {
+      "auth": true,
+      "request": "KillSwitchReleaseRequest",
+      "response": "KillSwitchResponse"
+    },
+    "POST /v1/trading-mode": {
+      "auth": true,
+      "request": "TradingModeRequest",
+      "response": "TradingModeResponse"
+    }
+  },
+  "x-websocket": {
+    "client_first_message": "WsAuthMessage",
+    "path": "/v1/events",
+    "server_auth_reply": "WsAuthOk",
+    "server_messages": "EngineEvent"
+  }
+}

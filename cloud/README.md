@@ -1,0 +1,30 @@
+# ati-cloud — Lisans, Hesap, Ödeme ve Aktarma Servisi
+
+Yönetilen bulut altyapısında (kiralık VDS değil) çalışan FastAPI servisi. İşlem motoru
+**burada çalışmaz**; motor kullanıcının Windows bilgisayarındadır. Bu servis yalnızca
+hesapları, lisansları, cihaz aktivasyonlarını, ödemeleri ve iOS ↔ masaüstü aktarmasını
+yönetir. Mimari: [`../docs/01-sistem-mimarisi.md`](../docs/01-sistem-mimarisi.md),
+şema: [`../docs/04-veritabani-semasi.md`](../docs/04-veritabani-semasi.md).
+
+## Geliştirme
+
+```bash
+cd cloud
+uv sync
+# Testler gerçek bir PostgreSQL 16 ister:
+export ATI_TEST_DATABASE_URL=postgresql://ati_test:ati_test@127.0.0.1:5432/ati_test
+uv run pytest
+uv run ruff check . && uv run mypy
+```
+
+## Geçişler (migrations)
+
+```bash
+export ATI_DATABASE_URL=postgresql://...
+uv run ati-cloud-migrate          # bekleyen geçişleri uygular
+uv run ati-cloud-migrate --check  # yalnızca durumu raporlar
+```
+
+Geçişler `src/ati_cloud/db/migrations/NNNN_ad.sql` dosyalarıdır. Uygulanmış bir geçiş
+dosyası değiştirilirse (özet uyuşmazlığı) çalıştırıcı hata verir. Aynı anda birden fazla
+örnek açılırsa PostgreSQL advisory lock ile yalnızca biri geçiş uygular.

@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: Motor (${{ matrix.os }}, Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Motor üretimde Windows'ta çalışır; Windows testleri DPAPI ve dosya kilidini de doğrular.
+        os: [windows-latest, ubuntu-latest]
+        python: ["3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest
+
+  cloud:
+    name: Bulut servisi (PostgreSQL 16)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ati_test
+          POSTGRES_PASSWORD: ati_test
+          POSTGRES_DB: ati_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ati_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ATI_TEST_DATABASE_URL: postgresql://ati_test:ati_test@127.0.0.1:5432/ati_test
+    defaults:
+      run:
+        working-directory: cloud
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest
