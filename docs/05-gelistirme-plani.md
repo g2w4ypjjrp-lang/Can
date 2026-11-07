@@ -27,8 +27,8 @@ kısıtı).
 | 1 | Sistem mimarisi | ✅ **Tamamlandı** |
 | 2 | Binance veri motoru | ✅ **Tamamlandı** |
 | 3 | Coin tarama sistemi | ✅ **Tamamlandı** |
-| 4 | Balina takip sistemi | ⏭️ Sıradaki |
-| 5 | Tarihsel veri ve grafik motoru | |
+| 4 | Balina takip sistemi | ✅ **Tamamlandı** |
+| 5 | Tarihsel veri ve grafik motoru | ⏭️ Sıradaki |
 | 6 | Yapay zekâ analiz motoru | |
 | 7 | Fırsat tespit sistemi | |
 | 8 | Backtest | |
@@ -107,18 +107,41 @@ Sinyaller masaüstüne bildirilir ve `market_signals` tablosuna kaydedilir. Yere
 | Tüm semboller için ≤ 1 sn yenileme | ✅ 1040 sembollük tur testte ~6 ms, gerçek yük altında 12-24 ms |
 | Yanlış alarm önlemleri | ✅ Pencere ve temel çizgi dolmadan sinyal yok; sinyal başına bekleme süresi; stabil coin pariteleri evrende yok |
 
-### Aşama 4 — Balina takip sistemi
-Binance kaynaklı: büyük `aggTrade` işlemleri (sembole göre uyarlanır eşik), emir defteri
-duvarları ve çekilmeleri, tasfiye akışı, büyük oyuncu long/short oranları. Zincir üstü:
-borsa giriş/çıkışları ve büyük transferler (sağlayıcı seçimi **G4**). Aynı coinde birden
-fazla büyük hareket kümelenmesi, geçmiş fiyat etkisi istatistiği. **Kabul:** olayların
-`whale_events` tablosuna yazılması; etki istatistiklerinin tarihsel veriyle doğrulanması.
+### Aşama 4 — Balina takip sistemi ✅
+
+**Çıktılar (uygulandı):** `whales/`. Yalnızca herkese açık Binance verisi:
+- büyük işlemler: aynı milisaniyedeki parçalı dolumlar tek emir sayılır; eşik sembole göre
+  öğrenilir (%99,9'luk dilim, alt sınır 50 bin $ Spot / 100 bin $ Futures);
+- kümelenme: birikim/dağıtım uyarısı ve Spot-Futures çapraz teyidi;
+- emir defteri duvarları: çekilme ve yenilme ayrı ayrı izlenir, kısa ömürlü duvarlar elenir;
+- tasfiye zincirleri: Binance saniyede tek tasfiye yayınladığı için toplamlar alt sınırdır;
+- büyük oyuncu ve genel long/short oranları, açık pozisyon ve ayrışma uyarısı;
+- fiyat etkisi: 1/5/15/60 dk sonraki yönlü getiri, isabet oranı ve standart sapma.
+
+Zincir üstü katman sağlayıcıdan bağımsız bir arayüz ve adres etiketleriyle hazırdır, ancak
+**varsayılan olarak kapalıdır** (G4). Kayıtlar `whale_alerts` ve `whale_impacts`
+tablolarına yazılır. Yerel API: `/v1/whales/trades|alerts|summary|impact|positioning`.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Olayların veritabanına yazılması | ✅ `whale_alerts`, `whale_impacts`; motor yeniden başlayınca etki istatistikleri geri yüklenir |
+| Algılayıcıların doğrulanması | ✅ 20 birim/entegrasyon testi + uçtan uca test (sahte Binance) + gerçek Blockchair yanıt fikstürü |
+| Gerçek veriyle çalışma | ✅ 6 dk canlı deneme: ~97 bin emir, 29 balina emri, 11 uyarı (duvar çekilmesi/yenilmesi, birikim, dağıtım), 20 sembolün konumlanma verisi; uyarı/hata logu 0, döngü gecikmesi p99 17,9 ms |
+| Etki istatistiklerinin tarihsel veriyle doğrulanması | ⏩ Ölçüm düzeneği canlı veride çalıştı (60 sn ufkunda 27 örnek). Birkaç dakikalık örnek istatistiksel sonuç için yetersizdir; aylarca geriye giden doğrulama Aşama 5'in arşiv motoruyla yapılacak ve Aşama 5'in kabul kriterine eklendi |
+
+Not: Etki istatistiği geçmişte ne olduğunu ölçer; gelecekteki fiyatı **garanti etmez**.
+Zincir üstü veri için denenen ücretsiz bir servis, paylaşılan IP nedeniyle 430 hatası verdi;
+ücretsiz planlar genellikle ticari kullanıma da izin vermez. Bu yüzden anahtarlı bir sağlayıcı
+seçimi ve onayınız (G4) beklenmektedir.
 
 ### Aşama 5 — Tarihsel veri ve grafik motoru
 `data.binance.vision` toplu arşiv indirme (CHECKSUM), Parquet/DuckDB deposu, artımlı
 güncelleme (`history_sync_state`), destek/direnç, trend kırılımı, benzer piyasa koşulu
 arama. **Kabul:** listelenme tarihinden bugüne tam geçmiş; ikinci çalıştırmada yalnızca yeni
-veri işlenmesi; sorgu performans testleri.
+veri işlenmesi; sorgu performans testleri; balina radarının arşiv işlemleri üzerinde yeniden
+oynatılarak fiyat etkisi istatistiklerinin (Aşama 4) uzun dönemli doğrulanması.
 
 ### Aşama 6 — Yapay zekâ analiz motoru
 Artımlı göstergeler (RSI, MACD, EMA 9/21/50/200, Bollinger, Fibonacci, VWAP, ATR, OBV,

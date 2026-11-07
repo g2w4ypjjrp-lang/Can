@@ -106,6 +106,7 @@ class StreamConnection:
         backoff_initial_s: float = 1.0,
         backoff_max_s: float = 60.0,
         open_timeout_s: float = 10.0,
+        check_interval_s: float = 1.0,
     ) -> None:
         self.name = name
         self.url = url
@@ -121,6 +122,7 @@ class StreamConnection:
         self._backoff_initial = backoff_initial_s
         self._backoff_max = backoff_max_s
         self._open_timeout = open_timeout_s
+        self._check_interval = check_interval_s  # ölü bağlantı / ömür kontrol sıklığı
 
         self.desired: set[str] = set()
         self.subscribed: set[str] = set()
@@ -315,7 +317,9 @@ class StreamConnection:
             while not self._stopping:
                 waiter = asyncio.create_task(self._changed.wait())
                 done, _ = await asyncio.wait(
-                    {reader, waiter}, timeout=1.0, return_when=asyncio.FIRST_COMPLETED
+                    {reader, waiter},
+                    timeout=self._check_interval,
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
                 if waiter not in done:
                     waiter.cancel()

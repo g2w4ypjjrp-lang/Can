@@ -29,7 +29,8 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── exchange/                  ✅ 2  REST istemcisi, HMAC/Ed25519 imzalama, ağırlık bütçesi, uç noktalar
 │   │   ├── market/                    ✅ 2  keşif, WebSocket akışları, emir defteri, boşluk doldurma, servis
 │   │   ├── scanner/                   ✅ 3  coin tarama: artımlı istatistikler, sinyal kuralları, ısınma
-│   │   ├── whales/                    🔜 4  balina radarı (Binance + zincir üstü)
+│   │   ├── whales/                    ✅ 4  balina radarı: büyük işlem, küme, duvar, tasfiye,
+│   │   │                                    konumlanma, fiyat etkisi, zincir üstü arayüzü
 │   │   ├── history/                   🔜 5  toplu arşiv indirme, Parquet/DuckDB, artımlı güncelleme
 │   │   ├── analysis/                  🔜 6  göstergeler (artımlı), özellikler, modeller
 │   │   ├── strategies/                🔜 6,9 10+ strateji, yarışma ve ağırlıklandırma
@@ -40,7 +41,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
 │   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
 │   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
-│   └── tests/                         ✅ 219 test (birim, gerçek mesaj fikstürleri, sahte Binance
+│   └── tests/                         ✅ 241 test (birim, gerçek mesaj fikstürleri, sahte Binance
 │                                          sunucusuyla uçtan uca, alt süreç duman testi)
 │
 ├── cloud/                             ✅ Bulut servisi (FastAPI) — yönetilen bulutta çalışır

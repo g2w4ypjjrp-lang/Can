@@ -166,17 +166,27 @@ async def test_stale_connection_is_detected_and_replaced(fake: FakeBinance) -> N
 
 async def test_lifetime_renewal_is_seamless(fake: FakeBinance) -> None:
     sink = Sink()
-    conn = make_connection(fake, sink, max_lifetime_s=0.5)
+    conn = make_connection(fake, sink, max_lifetime_s=0.5, check_interval_s=0.05)
     conn.update(["btcusdt@aggTrade"])
     health: list[bool] = []
-    async with running(conn):
-        for _ in range(100):
+
+    async def sample() -> None:
+        while True:
             health.append(conn.healthy())
             await asyncio.sleep(0.02)
-        assert fake.connections_opened >= 3  # en az iki planlı yenileme
+
+    async with running(conn):
+        await wait_until(conn.healthy)
+        sampler = asyncio.create_task(sample())
+        try:
+            # Sabit süre değil koşul beklenir: yavaş CI makinelerinde de kararlı.
+            await wait_until(lambda: fake.connections_opened >= 3, within=15)
+            await wait_until(lambda: len(fake.clients) == 1, within=5)
+        finally:
+            sampler.cancel()
         assert conn.reconnects == 0  # planlı yenileme kopma sayılmaz
-        assert all(health[10:])  # yenileme sırasında sağlık bozulmadı
-        assert len(fake.clients) == 1  # eski bağlantılar kapatıldı
+        assert health
+        assert all(health)  # yenileme sırasında sağlık hiç bozulmadı
         assert [s for s in sink.states if not s[1]] == []  # yenileme kopma bildirmedi
 
 

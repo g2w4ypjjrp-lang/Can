@@ -12,7 +12,7 @@ işlem platformu.
 
 | Bileşen | Klasör | Teknoloji | Durum |
 |---|---|---|---|
-| İşlem motoru (kullanıcının Windows bilgisayarında) | [`engine/`](engine/) | Python 3.12+, asyncio | ✅ Çekirdek, Binance veri motoru, coin tarayıcı (Aşama 1-3) |
+| İşlem motoru (kullanıcının Windows bilgisayarında) | [`engine/`](engine/) | Python 3.12+, asyncio | ✅ Çekirdek, Binance veri motoru, coin tarayıcı, balina radarı (Aşama 1-4) |
 | Bulut servisi: lisans, hesap, ödeme, aktarma | [`cloud/`](cloud/) | FastAPI, PostgreSQL 16 | ✅ Şema + iskelet (Aşama 1) |
 | Paylaşılan protokol | [`shared/protocol/`](shared/protocol/) | JSON Schema | ✅ |
 | Windows masaüstü uygulaması | [`desktop/`](desktop/) | Tauri 2, React, TypeScript | 🔜 Aşama 12 |

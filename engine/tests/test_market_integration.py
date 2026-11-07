@@ -241,6 +241,53 @@ async def test_unreachable_exchange_keeps_engine_safe(tmp_path: Path) -> None:
         await asyncio.wait_for(task, timeout=15)
 
 
+async def test_discovery_failure_reason_replaces_initial_detail(tmp_path: Path) -> None:
+    """Windows'ta görülen sıralamanın her platformda yeniden üretilmesi (CI regresyonu).
+
+    REST yavaş başarısız olur (bağlantıyı kabul edip 1.5 sn sonra kapatır); bu sırada akış
+    sağlığı kontrolü önce çalışır ve "semboller keşfediliyor" nedenini bildirir. Keşif sonradan
+    başarısız olunca hazır olmama *nedeni* değişir ve bu değişiklik de bildirilmelidir.
+    """
+
+    async def hang_then_close(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await reader.read(1024)
+        await asyncio.sleep(1.5)
+        writer.close()
+
+    server = await asyncio.start_server(hang_then_close, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    settings = EngineSettings(
+        data_dir=tmp_path / "data",
+        log_to_console=False,
+        api=LocalApiSettings(port=0),
+        markets=[Market.SPOT],
+        binance=BinanceEndpoints(
+            spot_market_data_rest=f"http://127.0.0.1:{port}", spot_market_data_ws="ws://127.0.0.1:9"
+        ),
+        market_data=MarketDataSettings(enabled=True),
+    )
+    engine = Engine(settings)
+    task = asyncio.create_task(engine.run())
+    await asyncio.wait_for(engine.ready.wait(), timeout=10)
+    runtime = engine.runtime
+    assert runtime is not None
+
+    def detail() -> str:
+        return next(
+            (c.detail for c in runtime.safety.conditions() if c.name == "market_data.spot"), ""
+        )
+
+    try:
+        await wait_until(lambda: "keşfediliyor" in detail())  # önce sağlık kontrolü bildirir
+        await wait_until(lambda: "keşif başarısız" in detail())  # sonra neden güncellenir
+        assert runtime.safety.state.state is EngineState.SAFE_MODE
+    finally:
+        runtime.request_shutdown()
+        await asyncio.wait_for(task, timeout=15)
+        server.close()
+        await server.wait_closed()
+
+
 async def test_scanner_api_with_warmup(stack: Stack) -> None:
     await wait_until(lambda: stack.state is EngineState.RUNNING)
     runtime = stack.engine.runtime

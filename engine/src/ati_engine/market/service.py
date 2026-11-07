@@ -318,6 +318,7 @@ class MarketDataService:
         self._focus: list[str] = list(self._cfg.focus_symbols)
         self.last_discovery_error: str | None = None
         self._ready: bool | None = None
+        self._ready_detail: str | None = None
 
     # --- Akış seçimi -------------------------------------------------------------------
 
@@ -395,8 +396,11 @@ class MarketDataService:
             detail = self.last_discovery_error or "semboller keşfediliyor"
         else:
             detail = self.streams.health_detail()
-        if ready != self._ready:
+        # Durum aynı kalsa bile neden değişirse bildirilir (ör. "keşfediliyor" → "keşif
+        # başarısız"); aksi halde arayüz yanlış nedeni gösterir.
+        if ready != self._ready or detail != self._ready_detail:
             self._ready = ready
+            self._ready_detail = detail
             await self._on_ready(ready, detail)
 
     # --- Keşif -------------------------------------------------------------------------
@@ -449,6 +453,7 @@ class MarketDataService:
 
     async def run(self) -> None:
         self._ready = None
+        self._ready_detail = None
         try:
             async with asyncio.TaskGroup() as group:
                 group.create_task(self._discovery_loop(), name=f"discovery-{self.market.value}")
