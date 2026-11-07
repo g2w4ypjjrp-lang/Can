@@ -25,9 +25,9 @@ kısıtı).
 | # | Aşama | Durum |
 |---|---|---|
 | 1 | Sistem mimarisi | ✅ **Tamamlandı** |
-| 2 | Binance veri motoru | ⏭️ Sıradaki |
-| 3 | Coin tarama sistemi | |
-| 4 | Balina takip sistemi | |
+| 2 | Binance veri motoru | ✅ **Tamamlandı** |
+| 3 | Coin tarama sistemi | ✅ **Tamamlandı** |
+| 4 | Balina takip sistemi | ⏭️ Sıradaki |
 | 5 | Tarihsel veri ve grafik motoru | |
 | 6 | Yapay zekâ analiz motoru | |
 | 7 | Fırsat tespit sistemi | |
@@ -56,37 +56,56 @@ Bulut: gerçek PostgreSQL 16'da 53 test. `ruff` ve sıkı mod `mypy` hatasız. M
 olarak başlayıp API üzerinden durdurulabiliyor; SIGTERM ile düzgün kapanıyor. LIVE modu
 teknik olarak engelli.
 
-### Aşama 2 — Binance veri motoru
+### Aşama 2 — Binance veri motoru ✅
 
 **Hedef:** Spot ve USDⓈ-M Futures'ta tüm aktif USDT paritelerini keşfetmek ve gerçek
 zamanlı, kesintiye dayanıklı veri akışı sağlamak.
 
-**Çıktılar:**
-* `exchange/`: REST istemcisi (httpx), istek imzalama (HMAC-SHA256 ve Ed25519), sunucu
-  saati senkronu, ağırlık bütçesi yöneticisi (exchangeInfo `rateLimits` + yanıt
-  başlıkları), 429/418 yönetimi.
-* `market/discovery.py`: exchangeInfo'dan sembol keşfi, filtre ayrıştırma
-  (`SymbolInfo`), `exchange_symbols` tablosuna yazma, yeni listeleme/delist tespiti.
-* `market/streams.py`: Parçalı WebSocket bağlantı yöneticisi; abonelik mesaj hız sınırı;
-  24 saat dolmadan kesintisiz yenileme; `serverShutdown`; üstel geri çekilme; Futures
-  `/public`, `/market` yönlendirmeleri.
-* `market/orderbook.py`: Belgelenmiş algoritmayla yerel emir defteri senkronu.
-* Normalleştirilmiş olaylar: `TickerUpdate`, `KlineUpdate`, `AggTrade`, `BookDepth`,
-  `MarkPrice`, `Liquidation`.
-* Hazırlık koşulları: `market_data.spot`, `market_data.futures`.
+**Çıktılar (uygulandı):**
+* `exchange/`: REST istemcisi, HMAC-SHA256 ve Ed25519 imzalama, sunucu saati senkronu,
+  ağırlık bütçesi (exchangeInfo `rateLimits` + `X-MBX-USED-WEIGHT-1M`, öncelik seviyeleri),
+  429/418 yönetimi, piyasaya göre uç noktalar ve Futures `/public` / `/market` yönlendirmesi.
+* `market/discovery.py`: sembol keşfi, filtre ayrıştırma, evren filtresi (USDT; Futures'ta
+  kripto PERPETUAL; stabil coin tabanlıları hariç), yeni listeleme ve kapanma tespiti.
+* `market/streams.py`: parçalı bağlantılar, hız sınırlı abonelik, yeniden bağlanma,
+  `serverShutdown`, veri gelmeyen bağlantı tespiti, kesintisiz 24 saat yenilemesi.
+* `market/orderbook.py`: Spot ve Futures yerel emir defteri algoritmaları.
+* `market/gapfill.py`: kopmada kaçırılan işlemlerin REST ile geri alınması, tekrarların elenmesi.
+* Hazırlık koşulları `market_data.spot` / `market_data.usdm_futures`; yerel API
+  `/v1/market/status`, `/v1/market/tickers`, `/v1/market/focus`.
 
-**Kabul kriterleri:**
-* Kaydedilmiş gerçek Binance mesajlarıyla birim testler (çözümleme, emir defteri
-  boşluk tespiti, yeniden senkron).
-* Sahte WebSocket sunucusuyla: kopma → yeniden bağlanma → motor SAFE_MODE → RUNNING testi.
-* Herkese açık veri uç noktalarına karşı canlı duman testi (`data-api.binance.vision`):
-  518+ spot USDT paritesinin keşfi, 10 dakikalık akışta veri kaybı/sıra hatası yok.
-* Olay döngüsü gecikmesi p99 < 50 ms (tüm semboller, katman 0-1 akışları).
+**Kabul kriterleri ve sonuçlar:**
 
-### Aşama 3 — Coin tarama sistemi
-Hacim anomalisi (z-skor, saatlik/24 saatlik), ani fiyat hareketi, likidite değişimi, yeni
-listeleme, alıcı/satıcı hacmi dengesizliği; tüm semboller paralel. **Kabul:** kayıtlı
-veride bilinen olayların tespiti; tüm semboller için ≤ 1 sn yenileme.
+| Kriter | Sonuç |
+|---|---|
+| Gerçek Binance mesajlarıyla birim testler | ✅ 11 mesaj türü, gerçek fikstürlerle |
+| Sahte sunucuyla kopma → yeniden bağlanma → SAFE_MODE → RUNNING | ✅ Kopma, sunucu kapanışı, sessiz akış, kesintisiz yenileme senaryoları |
+| Tüm spot USDT paritelerinin keşfi | ✅ 518 Spot + 522 Futures sembolü, 2094 akış, 13 bağlantı |
+| 10 dakikalık akışta veri kaybı / sıra hatası yok | ✅ 292.482 işlem, **0 eksik**, 0 tekrar, 0 emir defteri yeniden senkronu |
+| Olay döngüsü gecikmesi p99 < 50 ms | ✅ En kötü 1 dakikalık pencerede **6,9 ms** |
+
+Not: İlk 10 dakikalık denemede 3 bağlantı kopması oldu ve 45 noktada işlem kaçırıldı. Motor
+her kopmada doğru şekilde güvenli moda geçip geri döndü. Bunun üzerine boşluk doldurucu
+eklendi. Temiz tekrarlanan denemede kopma olmadığı için boşluk doldurucu canlıda devreye
+girmedi; mesaj kaybı senaryoları sahte sunucuyla doğrulandı.
+
+### Aşama 3 — Coin tarama sistemi ✅
+
+**Çıktılar (uygulandı):** `scanner/`. 1040 sembolün her biri için saniyede bir yenilenen
+tablo: 1/5/15 dk ve 24 saat değişim, 60 sn hacim ve hacim z-skoru (sembolün son 4 saatlik
+dakika dağılımına göre), fiyat z-skoru (dakikalık oynaklığa göre), 60 sn / 5 dk agresif
+alış-satış dengesizliği, odak sembollerinde spread, derinlik ve defter dengesizliği. Sinyaller:
+hacim patlaması, ani fiyat hareketi, alıcı/satıcı baskısı, derinlik düşüşü, yeni listeleme.
+Sinyaller masaüstüne bildirilir ve `market_signals` tablosuna kaydedilir. Yerel API:
+`/v1/scanner/top`, `/v1/scanner/signals`.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Kayıtlı veride bilinen olayların tespiti | ✅ Enjekte edilen hacim patlaması, ani hareket, tek yönlü akış ve derinlik çekilmesi tespit edildi; sakin veride sinyal yok. Gerçek Binance mumlarında en büyük hareketli dakika en yüksek z-skorunu aldı |
+| Tüm semboller için ≤ 1 sn yenileme | ✅ 1040 sembollük tur testte ~6 ms, gerçek yük altında 12-24 ms |
+| Yanlış alarm önlemleri | ✅ Pencere ve temel çizgi dolmadan sinyal yok; sinyal başına bekleme süresi; stabil coin pariteleri evrende yok |
 
 ### Aşama 4 — Balina takip sistemi
 Binance kaynaklı: büyük `aggTrade` işlemleri (sembole göre uyarlanır eşik), emir defteri
