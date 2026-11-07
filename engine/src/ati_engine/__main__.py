@@ -119,7 +119,18 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _force_utf8_stdio() -> None:
+    """Windows konsolu/borusu varsayılan olarak cp1252 gibi kod sayfaları kullanır ve
+    Türkçe karakterlerde (ı, ş, ğ) ``UnicodeEncodeError`` ile çöker. Çıktı ve loglar
+    her zaman UTF-8 yazılır; kodlanamayan karakter çökme yerine değiştirilir."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):

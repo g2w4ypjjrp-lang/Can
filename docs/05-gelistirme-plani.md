@@ -51,7 +51,7 @@ maskeleme, SQLite + geçişler + hash zincirli denetim kaydı, yerel REST/WS API
 kilidi, CLI), bulut PostgreSQL şeması (lisans/cihaz/ödeme/admin/denetim) ve geçiş
 çalıştırıcısı, paylaşılan protokol şeması, CI (Windows + Linux).
 
-**Kabul kriterleri (sağlandı):** Motor: 101 test, 1 test yalnızca Windows'ta çalışır (DPAPI).
+**Kabul kriterleri (sağlandı):** Motor: 102 test (Windows ve Linux CI; DPAPI testi yalnızca Windows'ta, SIGTERM testi yalnızca POSIX'te çalışır).
 Bulut: gerçek PostgreSQL 16'da 53 test. `ruff` ve sıkı mod `mypy` hatasız. Motor alt süreç
 olarak başlayıp API üzerinden durdurulabiliyor; SIGTERM ile düzgün kapanıyor. LIVE modu
 teknik olarak engelli.

@@ -104,6 +104,21 @@ def test_engine_stops_gracefully_on_sigterm(tmp_path: Path) -> None:
     assert not (data_dir / "runtime" / "local-api.json").exists()
 
 
+def test_cli_output_survives_legacy_console_encoding(tmp_path: Path) -> None:
+    """Windows'ta yönlendirilmiş çıktı cp1252 olur; Türkçe mesajlar çökmemeli (CI'da yakalandı)."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ATI_")}
+    env["PYTHONIOENCODING"] = "cp1252"
+    result = subprocess.run(
+        [sys.executable, "-m", "ati_engine", "verify-audit", "--data-dir", str(tmp_path / "d")],
+        capture_output=True,
+        env=env,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
+    assert "Denetim kaydı sağlam" in result.stdout.decode("utf-8")
+
+
 def test_cli_version_and_config() -> None:
     out = subprocess.run(
         [sys.executable, "-m", "ati_engine", "version"],

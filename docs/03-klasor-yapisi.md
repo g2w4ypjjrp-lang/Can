@@ -38,7 +38,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── risk/                      🔜 11 risk kapısı ve bağımsız risk bekçisi
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
 │   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
-│   └── tests/                         ✅ 101 test (birim + gerçek HTTP/WS + alt süreç duman testi)
+│   └── tests/                         ✅ 102 test (birim + gerçek HTTP/WS + alt süreç duman testi)
 │
 ├── cloud/                             ✅ Bulut servisi (FastAPI) — yönetilen bulutta çalışır
 │   ├── pyproject.toml, uv.lock
