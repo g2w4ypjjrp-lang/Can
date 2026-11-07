@@ -238,3 +238,40 @@ async def test_unreachable_exchange_keeps_engine_safe(tmp_path: Path) -> None:
     finally:
         runtime.request_shutdown()
         await asyncio.wait_for(task, timeout=15)
+
+
+async def test_scanner_api_with_warmup(stack: Stack) -> None:
+    await wait_until(lambda: stack.state is EngineState.RUNNING)
+    runtime = stack.engine.runtime
+    assert runtime is not None
+    scanner = runtime.scanner
+    assert scanner is not None
+    await wait_until(
+        lambda: (
+            scanner.warmup_done.get("spot") == 3 and scanner.warmup_done.get("usdm_futures") == 3
+        )
+    )
+    assert stack.fake.kline_requests == 6
+    # Isınmadan sonraki ilk turu bekle (tablo saniyede bir yenilenir).
+    await wait_until(
+        lambda: (
+            len(scanner.rows) >= 6 and all(r.baseline_minutes >= 240 for r in scanner.rows.values())
+        )
+    )
+    async with stack.client() as client:
+        top = (
+            await client.get(
+                "/v1/scanner/top", params={"market": "spot", "sort": "quote_volume_60s"}
+            )
+        ).json()
+        assert {r["symbol"] for r in top["rows"]} == {"BTCUSDT", "ETHUSDT", "SOLUSDT"}
+        row = top["rows"][0]
+        assert row["baseline_minutes"] >= 240  # REST ısınması (kapanmamış mum hariç)
+        # 60 sn'lik akış verisi dolmadan hacim z-skoru hesaplanmaz (yanlış alarm önlemi).
+        assert row["volume_z_60s"] is None
+        assert top["stats"]["tick_ms_last"] < 50
+        bad = await client.get("/v1/scanner/top", params={"sort": "yok"})
+        assert bad.status_code == 422
+        signals = await client.get("/v1/scanner/signals")
+        assert signals.status_code == 200
+        assert isinstance(signals.json(), list)

@@ -207,3 +207,61 @@ class FocusRequest(BaseModel):
 class FocusResponse(BaseModel):
     market: Market
     focus: list[str]
+
+
+# --- Coin tarayıcı (Aşama 3) ---------------------------------------------------------------
+
+
+class ScanRowInfo(BaseModel):
+    market: Market
+    symbol: str
+    last_price: float | None
+    change_1m_pct: float | None
+    change_5m_pct: float | None
+    change_15m_pct: float | None
+    change_24h_pct: float | None
+    quote_volume_24h: float | None
+    quote_volume_60s: float
+    volume_z_60s: float | None
+    price_z_60s: float | None
+    volatility_1m_pct: float | None
+    imbalance_60s: float | None
+    imbalance_300s: float | None
+    buy_quote_300s: float
+    sell_quote_300s: float
+    spread_bps: float | None
+    book_imbalance_10: float | None
+    book_notional_10: float | None
+    baseline_minutes: int
+    listed_at_ms: int | None
+    signals: list[str]
+    updated_ms: int
+
+
+class ScannerStatsInfo(BaseModel):
+    symbols: int
+    ticks: int
+    tick_ms_last: float
+    tick_ms_max: float
+    signals: int
+    warmup_done: dict[str, int]
+
+
+class ScannerTopResponse(BaseModel):
+    market: Market
+    sort: str
+    count: int
+    rows: list[ScanRowInfo]
+    stats: ScannerStatsInfo
+
+
+class SignalInfo(BaseModel):
+    ts_ms: int
+    market: Market
+    symbol: str
+    kind: str
+    severity: str
+    value: float
+    threshold: float
+    message: str
+    details: dict[str, object]

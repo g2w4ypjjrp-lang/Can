@@ -35,6 +35,7 @@ class MarketEndpoints:
     depth_path: str
     agg_trades_path: str
     agg_trades_weight: int
+    klines_path: str
     exchange_info_weight: int
     ws_bases: dict[WsRoute, str]
 
@@ -55,6 +56,17 @@ class MarketEndpoints:
         if limit <= 500:
             return 10
         return 20
+
+    def klines_weight(self, limit: int) -> int:
+        if self.market is Market.SPOT:
+            return 2
+        if limit < 100:
+            return 1
+        if limit < 500:
+            return 2
+        if limit <= 1000:
+            return 5
+        return 10
 
     def route_for(self, stream: str) -> WsRoute:
         if self.market is Market.SPOT:
@@ -78,6 +90,7 @@ def endpoints_for(market: Market, cfg: BinanceEndpoints) -> MarketEndpoints:
             depth_path="/api/v3/depth",
             agg_trades_path="/api/v3/aggTrades",
             agg_trades_weight=4,
+            klines_path="/api/v3/klines",
             exchange_info_weight=20,
             ws_bases={WsRoute.DEFAULT: cfg.spot_market_data_ws},
         )
@@ -89,6 +102,7 @@ def endpoints_for(market: Market, cfg: BinanceEndpoints) -> MarketEndpoints:
         depth_path="/fapi/v1/depth",
         agg_trades_path="/fapi/v1/aggTrades",
         agg_trades_weight=20,  # yanıt başlığında gözlenen değer (2026-11-07)
+        klines_path="/fapi/v1/klines",
         exchange_info_weight=1,
         ws_bases={WsRoute.PUBLIC: cfg.futures_ws_public, WsRoute.MARKET: cfg.futures_ws_market},
     )

@@ -143,6 +143,29 @@ class MarketDataSettings(BaseModel):
     futures_contract_types: list[str] = Field(default_factory=lambda: ["PERPETUAL"])
     symbol_allowlist: list[str] | None = None
     max_symbols: int | None = Field(default=None, ge=1)
+    # Stabil coin / fiat tabanlı pariteler (ör. USDCUSDT) işlem fırsatı taşımaz; evrene alınmaz.
+    excluded_base_assets: list[str] = Field(
+        default_factory=lambda: [
+            "USDC",
+            "FDUSD",
+            "TUSD",
+            "USDP",
+            "DAI",
+            "USDS",
+            "USDE",
+            "USDEB",
+            "USD1",
+            "RLUSD",
+            "BFUSD",
+            "XUSD",
+            "RWUSD",
+            "PYUSD",
+            "BUSD",
+            "EUR",
+            "EURI",
+            "AEUR",
+        ]
+    )
 
     @field_validator("kline_intervals")
     @classmethod
@@ -153,10 +176,32 @@ class MarketDataSettings(BaseModel):
             raise ValueError(f"Geçersiz mum aralığı: {bad}")
         return value
 
-    @field_validator("focus_symbols", "symbol_allowlist")
+    @field_validator("focus_symbols", "symbol_allowlist", "excluded_base_assets")
     @classmethod
     def _upper(cls, value: list[str] | None) -> list[str] | None:
         return None if value is None else [v.strip().upper() for v in value if v.strip()]
+
+
+class ScannerSettings(BaseModel):
+    """Coin tarama sistemi (Aşama 3) eşikleri.
+
+    Z-skorlar sembolün kendi geçmişine göredir: BTC için %1'lik hareket olağanüstü olabilirken
+    küçük bir coin için sıradandır. Tüm tutarlar kote varlık (USDT) cinsindendir.
+    """
+
+    enabled: bool = True
+    baseline_minutes: int = Field(default=240, ge=30, le=1440)
+    min_baseline_minutes: int = Field(default=30, ge=10)
+    warmup: bool = True  # açılışta son ``baseline_minutes`` mumu REST'ten yükle
+    volume_z_threshold: float = Field(default=4.0, gt=0)
+    volume_min_quote: float = Field(default=50_000, ge=0)
+    price_z_threshold: float = Field(default=5.0, gt=0)
+    price_min_move_pct: float = Field(default=1.0, ge=0)
+    imbalance_threshold: float = Field(default=0.6, gt=0, le=1)
+    imbalance_min_quote: float = Field(default=100_000, ge=0)
+    liquidity_drop_pct: float = Field(default=50.0, gt=0, lt=100)
+    signal_cooldown_s: float = Field(default=300.0, ge=0)
+    tick_interval_s: float = Field(default=1.0, gt=0, le=10)
 
 
 class EngineSettings(BaseSettings):
@@ -184,6 +229,7 @@ class EngineSettings(BaseSettings):
     api: LocalApiSettings = Field(default_factory=LocalApiSettings)
     binance: BinanceEndpoints = Field(default_factory=BinanceEndpoints)
     market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
+    scanner: ScannerSettings = Field(default_factory=ScannerSettings)
 
     @property
     def paths(self) -> DataPaths:

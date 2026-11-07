@@ -39,6 +39,7 @@ from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.safety.kill_switch import KillSwitch
 from ati_engine.safety.state import EngineStateMachine
 from ati_engine.safety.trading_mode import TradingModeController
+from ati_engine.scanner.scanner import MarketScanner
 from ati_engine.security.vault import SecretVault, default_cipher
 from ati_engine.storage.audit import AuditLog
 from ati_engine.storage.database import Database
@@ -247,6 +248,7 @@ class Engine:
                 futures_contract_types=frozenset(cfg.futures_contract_types),
                 allowlist=frozenset(cfg.symbol_allowlist) if cfg.symbol_allowlist else None,
                 max_symbols=cfg.max_symbols,
+                excluded_bases=frozenset(cfg.excluded_base_assets),
             ),
         )
         for market in settings.markets:
@@ -268,6 +270,17 @@ class Engine:
                 f"market-data-{market.value}",
                 service.run,
                 RestartPolicy(max_restarts=20, window_s=600, backoff_initial_s=1, backoff_max_s=60),
+            )
+
+        if settings.scanner.enabled:
+            scanner = MarketScanner(settings=settings.scanner, bus=runtime.bus, db=runtime.db)
+            scanner.attach()
+            runtime.scanner = scanner
+            services = list(runtime.market_data.values())
+            runtime.supervisor.spawn(
+                "scanner",
+                lambda: scanner.run(services),
+                RestartPolicy(max_restarts=20, window_s=600, backoff_initial_s=1, backoff_max_s=30),
             )
 
     @staticmethod

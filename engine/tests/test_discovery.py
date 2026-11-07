@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from msgspec.structs import replace as msgspec_replace
 
 from ati_engine.core.bus import EventBus
 from ati_engine.core.events import Event
@@ -57,6 +58,9 @@ def test_universe_filter() -> None:
     assert universe.accepts(fut["BTCUSDT"])
     assert not universe.accepts(fut["BTCUSDC"])  # USDC
     assert not universe.accepts(fut["XAUUSDT"])  # altın: TRADIFI_PERPETUAL, coin değil
+    stable = msgspec_replace(spot["BTCUSDT"], symbol="USDCUSDT", base_asset="USDC")
+    assert universe.accepts(stable)
+    assert not UniverseFilter(excluded_bases=frozenset({"USDC"})).accepts(stable)
     only = UniverseFilter(allowlist=frozenset({"ETHUSDT"}))
     assert not only.accepts(spot["BTCUSDT"])
     assert only.accepts(spot["ETHUSDT"])

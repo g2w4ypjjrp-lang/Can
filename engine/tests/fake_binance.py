@@ -58,6 +58,7 @@ class FakeBinance:
         self.futures_info = json.loads((FIXTURES / "futures_exchange_info.json").read_text())
         self.depth_requests: list[str] = []
         self.agg_trade_requests: list[tuple[str, int, int]] = []
+        self.kline_requests = 0
         self.skip_trades = 0  # bir sonraki tikte her işlem akışında atlanacak kimlik sayısı
 
     # --- Adresler ------------------------------------------------------------------------
@@ -311,6 +312,37 @@ class FakeBinance:
         @app.get("/fapi/v1/aggTrades")
         async def futures_agg_trades(symbol: str, fromId: int, limit: int = 500) -> JSONResponse:
             return agg_trades("f", symbol, fromId, limit)
+
+        def klines(limit: int) -> JSONResponse:
+            now = _now()
+            start = now - now % 60_000 - limit * 60_000
+            rows = [
+                [
+                    start + i * 60_000,
+                    "100",
+                    "101",
+                    "99",
+                    "100.5",
+                    "10",
+                    start + i * 60_000 + 59_999,
+                    str(1000 + i),
+                    5,
+                    "5",
+                    "500",
+                    "0",
+                ]
+                for i in range(limit + 1)  # sonuncusu henüz kapanmamış mum
+            ]
+            self.kline_requests += 1
+            return JSONResponse(rows, headers=headers)
+
+        @app.get("/api/v3/klines")
+        async def spot_klines(symbol: str, interval: str, limit: int = 500) -> JSONResponse:
+            return klines(limit)
+
+        @app.get("/fapi/v1/klines")
+        async def futures_klines(symbol: str, interval: str, limit: int = 500) -> JSONResponse:
+            return klines(limit)
 
         @app.get("/api/v3/time")
         @app.get("/fapi/v1/time")

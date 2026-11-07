@@ -314,6 +314,7 @@ class MarketDataService:
             market=market, endpoints=self.endpoints, rest=self.rest, publish=bus.publish
         )
         self._discovered = False
+        self.discovered = asyncio.Event()  # ilk keşif tamamlandığında kurulur
         self._focus: list[str] = list(self._cfg.focus_symbols)
         self.last_discovery_error: str | None = None
         self._ready: bool | None = None
@@ -341,6 +342,9 @@ class MarketDataService:
     @property
     def focus(self) -> list[str]:
         return list(self._focus)
+
+    def tracked_symbols(self) -> list[str]:
+        return [s.symbol for s in self._registry.tracked(self.market)]
 
     def tickers(self, limit: int, *, focus_only: bool = False) -> list[Ticker24h]:
         """İzlenen evrendeki semboller, 24 saatlik işlem hacmine göre azalan."""
@@ -409,6 +413,7 @@ class MarketDataService:
         symbols = parse_exchange_info(self.market, payload)
         diff = await self._registry.apply(self.market, symbols)
         self._discovered = True
+        self.discovered.set()
         self.last_discovery_error = None
         if diff.changed or diff.initial:
             self.streams.set_streams(self.desired_streams())

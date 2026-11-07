@@ -216,6 +216,9 @@
         },
         {
           "$ref": "#/$defs/OrderBookResynced"
+        },
+        {
+          "$ref": "#/$defs/MarketSignal"
         }
       ],
       "discriminator": {
@@ -225,6 +228,7 @@
           "Heartbeat": "#/$defs/Heartbeat",
           "KillSwitchEngaged": "#/$defs/KillSwitchEngaged",
           "KillSwitchReleased": "#/$defs/KillSwitchReleased",
+          "MarketSignal": "#/$defs/MarketSignal",
           "OrderBookResynced": "#/$defs/OrderBookResynced",
           "ReadinessChanged": "#/$defs/ReadinessChanged",
           "ServiceHealthChanged": "#/$defs/ServiceHealthChanged",
@@ -615,6 +619,9 @@
         "tracked_symbols": {
           "title": "Tracked Symbols",
           "type": "integer"
+        },
+        "trade_gaps": {
+          "$ref": "#/$defs/TradeGapInfo"
         }
       },
       "required": [
@@ -625,11 +632,61 @@
         "connections",
         "message_rates_per_s",
         "order_books",
+        "trade_gaps",
         "focus",
         "rest_budget",
         "last_discovery_error"
       ],
       "title": "MarketServiceInfo",
+      "type": "object"
+    },
+    "MarketSignal": {
+      "properties": {
+        "details": {
+          "default": {},
+          "type": "object"
+        },
+        "kind": {
+          "$ref": "#/$defs/SignalKind"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "MarketSignal"
+          ]
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "market",
+        "symbol",
+        "kind",
+        "severity",
+        "value",
+        "threshold",
+        "message"
+      ],
+      "title": "MarketSignal",
       "type": "object"
     },
     "MarketStatusResponse": {
@@ -841,6 +898,311 @@
       "title": "RestBudgetInfo",
       "type": "object"
     },
+    "ScanRowInfo": {
+      "properties": {
+        "baseline_minutes": {
+          "title": "Baseline Minutes",
+          "type": "integer"
+        },
+        "book_imbalance_10": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Book Imbalance 10"
+        },
+        "book_notional_10": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Book Notional 10"
+        },
+        "buy_quote_300s": {
+          "title": "Buy Quote 300S",
+          "type": "number"
+        },
+        "change_15m_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change 15M Pct"
+        },
+        "change_1m_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change 1M Pct"
+        },
+        "change_24h_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change 24H Pct"
+        },
+        "change_5m_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change 5M Pct"
+        },
+        "imbalance_300s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Imbalance 300S"
+        },
+        "imbalance_60s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Imbalance 60S"
+        },
+        "last_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Price"
+        },
+        "listed_at_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Listed At Ms"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "price_z_60s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Price Z 60S"
+        },
+        "quote_volume_24h": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quote Volume 24H"
+        },
+        "quote_volume_60s": {
+          "title": "Quote Volume 60S",
+          "type": "number"
+        },
+        "sell_quote_300s": {
+          "title": "Sell Quote 300S",
+          "type": "number"
+        },
+        "signals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Signals",
+          "type": "array"
+        },
+        "spread_bps": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Spread Bps"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "updated_ms": {
+          "title": "Updated Ms",
+          "type": "integer"
+        },
+        "volatility_1m_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Volatility 1M Pct"
+        },
+        "volume_z_60s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Volume Z 60S"
+        }
+      },
+      "required": [
+        "market",
+        "symbol",
+        "last_price",
+        "change_1m_pct",
+        "change_5m_pct",
+        "change_15m_pct",
+        "change_24h_pct",
+        "quote_volume_24h",
+        "quote_volume_60s",
+        "volume_z_60s",
+        "price_z_60s",
+        "volatility_1m_pct",
+        "imbalance_60s",
+        "imbalance_300s",
+        "buy_quote_300s",
+        "sell_quote_300s",
+        "spread_bps",
+        "book_imbalance_10",
+        "book_notional_10",
+        "baseline_minutes",
+        "listed_at_ms",
+        "signals",
+        "updated_ms"
+      ],
+      "title": "ScanRowInfo",
+      "type": "object"
+    },
+    "ScannerStatsInfo": {
+      "properties": {
+        "signals": {
+          "title": "Signals",
+          "type": "integer"
+        },
+        "symbols": {
+          "title": "Symbols",
+          "type": "integer"
+        },
+        "tick_ms_last": {
+          "title": "Tick Ms Last",
+          "type": "number"
+        },
+        "tick_ms_max": {
+          "title": "Tick Ms Max",
+          "type": "number"
+        },
+        "ticks": {
+          "title": "Ticks",
+          "type": "integer"
+        },
+        "warmup_done": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Warmup Done",
+          "type": "object"
+        }
+      },
+      "required": [
+        "symbols",
+        "ticks",
+        "tick_ms_last",
+        "tick_ms_max",
+        "signals",
+        "warmup_done"
+      ],
+      "title": "ScannerStatsInfo",
+      "type": "object"
+    },
+    "ScannerTopResponse": {
+      "properties": {
+        "count": {
+          "title": "Count",
+          "type": "integer"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/ScanRowInfo"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "sort": {
+          "title": "Sort",
+          "type": "string"
+        },
+        "stats": {
+          "$ref": "#/$defs/ScannerStatsInfo"
+        }
+      },
+      "required": [
+        "market",
+        "sort",
+        "count",
+        "rows",
+        "stats"
+      ],
+      "title": "ScannerTopResponse",
+      "type": "object"
+    },
     "ServiceHealthChanged": {
       "properties": {
         "detail": {
@@ -888,6 +1250,69 @@
       },
       "title": "ShutdownResponse",
       "type": "object"
+    },
+    "SignalInfo": {
+      "properties": {
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "title": "Severity",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "threshold": {
+          "title": "Threshold",
+          "type": "number"
+        },
+        "ts_ms": {
+          "title": "Ts Ms",
+          "type": "integer"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "ts_ms",
+        "market",
+        "symbol",
+        "kind",
+        "severity",
+        "value",
+        "threshold",
+        "message",
+        "details"
+      ],
+      "title": "SignalInfo",
+      "type": "object"
+    },
+    "SignalKind": {
+      "enum": [
+        "flow_imbalance",
+        "liquidity_drop",
+        "new_listing",
+        "price_move",
+        "volume_spike"
+      ],
+      "title": "SignalKind"
     },
     "StatusResponse": {
       "properties": {
@@ -1184,6 +1609,44 @@
       "title": "TickersResponse",
       "type": "object"
     },
+    "TradeGapInfo": {
+      "properties": {
+        "detected": {
+          "title": "Detected",
+          "type": "integer"
+        },
+        "duplicates": {
+          "title": "Duplicates",
+          "type": "integer"
+        },
+        "pending": {
+          "title": "Pending",
+          "type": "integer"
+        },
+        "recovered_trades": {
+          "title": "Recovered Trades",
+          "type": "integer"
+        },
+        "unrecovered_gaps": {
+          "title": "Unrecovered Gaps",
+          "type": "integer"
+        },
+        "unrecovered_trades": {
+          "title": "Unrecovered Trades",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "detected",
+        "recovered_trades",
+        "unrecovered_gaps",
+        "unrecovered_trades",
+        "duplicates",
+        "pending"
+      ],
+      "title": "TradeGapInfo",
+      "type": "object"
+    },
     "TradingMode": {
       "description": "İşlem modu. Varsayılan her zaman PAPER'dır (sanal işlem).",
       "enum": [
@@ -1331,6 +1794,14 @@
     "GET /v1/market/tickers?market=&limit=&focus_only=": {
       "auth": true,
       "response": "TickersResponse"
+    },
+    "GET /v1/scanner/signals?limit=": {
+      "auth": true,
+      "response": "SignalInfo[]"
+    },
+    "GET /v1/scanner/top?market=&sort=&limit=&min_quote_volume_24h=": {
+      "auth": true,
+      "response": "ScannerTopResponse"
     },
     "GET /v1/status": {
       "auth": true,

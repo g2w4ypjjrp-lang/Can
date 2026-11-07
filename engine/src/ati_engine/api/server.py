@@ -42,7 +42,11 @@ from ati_engine.api.schemas import (
     MarketServiceInfo,
     MarketStatusResponse,
     ReadinessInfo,
+    ScannerStatsInfo,
+    ScannerTopResponse,
+    ScanRowInfo,
     ShutdownResponse,
+    SignalInfo,
     StatusResponse,
     TaskInfo,
     TickerInfo,
@@ -58,6 +62,7 @@ from ati_engine.core.models import Market
 from ati_engine.market.service import MarketDataService
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
+from ati_engine.scanner.scanner import MarketScanner, row_dict
 
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "[::1]", "::1"]
 WS_AUTH_TIMEOUT_S = 5.0
@@ -257,6 +262,69 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             details={"market": body.market.value, "symbols": focus},
         )
         return FocusResponse(market=body.market, focus=focus)
+
+    sortable = {
+        "volume_z_60s",
+        "price_z_60s",
+        "change_1m_pct",
+        "change_5m_pct",
+        "change_15m_pct",
+        "change_24h_pct",
+        "quote_volume_60s",
+        "quote_volume_24h",
+        "imbalance_60s",
+        "imbalance_300s",
+        "volatility_1m_pct",
+        "spread_bps",
+    }
+
+    def scanner_or_404() -> MarketScanner:
+        if runtime.scanner is None:
+            raise HTTPException(status_code=404, detail="Tarayıcı etkin değil")
+        return runtime.scanner
+
+    @app.get("/v1/scanner/top", response_model=ScannerTopResponse)
+    async def scanner_top(
+        _: Auth,
+        market: Market = Market.SPOT,
+        sort: str = "volume_z_60s",
+        limit: Annotated[int, Query(ge=1, le=1000)] = 50,
+        min_quote_volume_24h: Annotated[float, Query(ge=0)] = 0.0,
+    ) -> ScannerTopResponse:
+        scanner = scanner_or_404()
+        if sort not in sortable:
+            raise HTTPException(status_code=422, detail=f"Sıralama alanı: {sorted(sortable)}")
+        rows = scanner.top(
+            market, sort=sort, limit=limit, min_quote_volume_24h=min_quote_volume_24h
+        )
+        return ScannerTopResponse(
+            market=market,
+            sort=sort,
+            count=len(rows),
+            rows=[ScanRowInfo.model_validate(row_dict(r)) for r in rows],
+            stats=ScannerStatsInfo.model_validate(scanner.stats()),
+        )
+
+    @app.get("/v1/scanner/signals", response_model=list[SignalInfo])
+    async def scanner_signals(
+        _: Auth, limit: Annotated[int, Query(ge=1, le=500)] = 100
+    ) -> list[SignalInfo]:
+        scanner = scanner_or_404()
+        items = list(scanner.signals)[-limit:][::-1]
+        return [
+            SignalInfo(
+                ts_ms=s.ts_ms,
+                market=s.market,
+                symbol=s.symbol,
+                kind=s.kind.value,
+                severity=s.severity.value,
+                value=s.value,
+                threshold=s.threshold,
+                message=s.message,
+                details=s.details,
+            )
+            for s in items
+        ]
 
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:

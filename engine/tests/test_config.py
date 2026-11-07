@@ -20,6 +20,8 @@ def test_safe_defaults(tmp_path: Path) -> None:
     assert s.api.host == "127.0.0.1"
     assert s.risk.max_leverage <= 3
     assert s.binance.futures_ws_market.endswith("/market")
+    assert "USDC" in s.market_data.excluded_base_assets
+    assert "PAXG" not in s.market_data.excluded_base_assets  # altın tokeni bir varlıktır
 
 
 def test_env_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

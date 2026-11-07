@@ -15,6 +15,7 @@ from ati_engine.market.service import MarketDataService
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.safety.trading_mode import TradingModeController
+from ati_engine.scanner.scanner import MarketScanner
 from ati_engine.security.vault import SecretVault
 from ati_engine.storage.audit import AuditLog
 from ati_engine.storage.database import Database
@@ -33,6 +34,7 @@ class EngineRuntime:
     loop_monitor: LoopLagMonitor
     api_token: str
     market_data: dict[Market, MarketDataService] = field(default_factory=dict)
+    scanner: MarketScanner | None = None
     version: str = __version__
     started_monotonic: float = field(default_factory=time.monotonic)
     shutdown_requested: asyncio.Event = field(default_factory=asyncio.Event)

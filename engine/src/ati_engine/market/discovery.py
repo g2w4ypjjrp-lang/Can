@@ -89,9 +89,10 @@ class UniverseFilter:
     futures_contract_types: frozenset[str] = frozenset({"PERPETUAL"})
     allowlist: frozenset[str] | None = None
     max_symbols: int | None = None
+    excluded_bases: frozenset[str] = frozenset()
 
     def accepts(self, info: SymbolInfo) -> bool:
-        if info.quote_asset != self.quote_asset:
+        if info.quote_asset != self.quote_asset or info.base_asset in self.excluded_bases:
             return False
         if (
             info.market is Market.USDM_FUTURES

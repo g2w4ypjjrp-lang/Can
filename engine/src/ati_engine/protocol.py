@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from ati_engine.api import schemas
 from ati_engine.core.events import PUBLIC_EVENT_TYPES
 from ati_engine.market.events import PUBLIC_MARKET_EVENT_TYPES
+from ati_engine.scanner.scanner import MarketSignal
 
 PROTOCOL_VERSION = 1
 
@@ -39,6 +40,8 @@ _API_MODELS: tuple[type[BaseModel], ...] = (
     schemas.TickersResponse,
     schemas.FocusRequest,
     schemas.FocusResponse,
+    schemas.ScannerTopResponse,
+    schemas.SignalInfo,
 )
 
 
@@ -51,7 +54,7 @@ def build_protocol_schema() -> dict[str, Any]:
         api_defs[model.__name__] = schema
 
     event_union: Any = functools.reduce(
-        operator.or_, (*PUBLIC_EVENT_TYPES, *PUBLIC_MARKET_EVENT_TYPES)
+        operator.or_, (*PUBLIC_EVENT_TYPES, *PUBLIC_MARKET_EVENT_TYPES, MarketSignal)
     )
     (event_union_schema,), event_components = msgspec.json.schema_components(
         [event_union], ref_template="#/$defs/{name}"
@@ -88,6 +91,11 @@ def build_protocol_schema() -> dict[str, Any]:
                 "response": "TickersResponse",
                 "auth": True,
             },
+            "GET /v1/scanner/top?market=&sort=&limit=&min_quote_volume_24h=": {
+                "response": "ScannerTopResponse",
+                "auth": True,
+            },
+            "GET /v1/scanner/signals?limit=": {"response": "SignalInfo[]", "auth": True},
             "POST /v1/market/focus": {
                 "request": "FocusRequest",
                 "response": "FocusResponse",
