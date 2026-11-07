@@ -58,6 +58,10 @@ class DataPaths:
         return self.root / "market"
 
     @property
+    def history_db(self) -> Path:
+        return self.market_dir / "history.duckdb"
+
+    @property
     def models_dir(self) -> Path:
         return self.root / "models"
 

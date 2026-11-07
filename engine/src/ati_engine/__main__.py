@@ -6,6 +6,8 @@ Kullanım::
     ati-engine show-config             # etkin ayarları göster (gizli bilgi içermez)
     ati-engine export-protocol-schema  # paylaşılan protokol şemasını yazdır
     ati-engine verify-audit            # yerel denetim kaydı zincirini doğrula
+    ati-engine history-sync --symbol BTCUSDT --market spot --interval 1m
+                                       # Binance arşivinden tarihsel mumları indir/güncelle
     ati-engine version
 """
 
@@ -91,6 +93,58 @@ def _cmd_verify_audit(args: argparse.Namespace) -> int:
     return asyncio.run(_verify())
 
 
+def _cmd_history_sync(args: argparse.Namespace) -> int:
+    from ati_engine.config import EngineSettings
+    from ati_engine.core.models import Market
+    from ati_engine.history.archive import ArchiveClient
+    from ati_engine.history.store import KlineStore
+    from ati_engine.history.sync import HistorySync
+    from ati_engine.storage.database import Database
+
+    overrides: dict[str, object] = {}
+    if args.data_dir:
+        overrides["data_dir"] = Path(args.data_dir)
+    settings = EngineSettings(**overrides)  # type: ignore[arg-type]
+    settings.paths.ensure()
+
+    async def _sync() -> int:
+        db = Database(settings.paths.database)
+        await db.open()
+        store = KlineStore(settings.paths.history_db)
+        archive = ArchiveClient()
+        try:
+            await db.migrate()
+            sync = HistorySync(archive, store, db)
+            for symbol in args.symbol:
+                report = await sync.sync_klines(Market(args.market), symbol, args.interval)
+                coverage = await store.coverage(args.market, report.symbol, args.interval)
+                print(
+                    json.dumps(
+                        {
+                            "symbol": report.symbol,
+                            "files_listed": report.files_listed,
+                            "files_downloaded": report.files_downloaded,
+                            "files_skipped": report.files_skipped,
+                            "rows_inserted": report.rows_inserted,
+                            "mb_downloaded": round(report.bytes_downloaded / 1e6, 2),
+                            "seconds": report.seconds,
+                            "rows_total": coverage.rows,
+                            "first_open_ms": coverage.first_open_ms,
+                            "last_open_ms": coverage.last_open_ms,
+                            "missing_candles": coverage.missing,
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+        finally:
+            await archive.close()
+            await store.close()
+            await db.close()
+        return 0
+
+    return asyncio.run(_sync())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ati-engine", description="AI Trading Intelligence motoru"
@@ -113,6 +167,13 @@ def build_parser() -> argparse.ArgumentParser:
     verify = sub.add_parser("verify-audit", help="Denetim kaydı zincirini doğrula")
     verify.add_argument("--data-dir")
     verify.set_defaults(func=_cmd_verify_audit)
+
+    history = sub.add_parser("history-sync", help="Binance arşivinden tarihsel mumları eşitle")
+    history.add_argument("--data-dir")
+    history.add_argument("--market", choices=["spot", "usdm_futures"], default="spot")
+    history.add_argument("--symbol", nargs="+", required=True)
+    history.add_argument("--interval", default="1m")
+    history.set_defaults(func=_cmd_history_sync)
 
     version = sub.add_parser("version", help="Sürümü yazdır")
     version.set_defaults(func=lambda _: print(__version__) or 0)

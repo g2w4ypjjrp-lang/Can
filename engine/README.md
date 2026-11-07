@@ -48,6 +48,17 @@ Gerçek veriyle dayanıklılık testi (veri kaybı, yeniden senkron, gecikme öl
 uv run python scripts/live_soak.py --seconds 600 --report soak.json --verbose
 ```
 
+## Tarihsel veri (Aşama 5 — çekirdek)
+
+Binance'in herkese açık arşivinden (`data.binance.vision`) sembolün listelendiği günden bugüne
+mumları indirir ve her dosyayı SHA-256 ile doğrular. Veriler `market/history.duckdb`
+dosyasında tutulur. Sonraki çalıştırmalarda yalnızca yeni dosyalar indirilir.
+
+```bash
+uv run ati-engine history-sync --market spot --symbol BTCUSDT ETHUSDT --interval 1h
+uv run ati-engine history-sync --market usdm_futures --symbol BTCUSDT --interval 1m
+```
+
 ## Coin tarama (Aşama 3)
 
 İzlenen tüm semboller için saniyede bir yenilenen tablo (1/5/15 dk ve 24 saat değişim, hacim

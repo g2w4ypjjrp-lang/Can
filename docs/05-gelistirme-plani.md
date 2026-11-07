@@ -28,7 +28,7 @@ kısıtı).
 | 2 | Binance veri motoru | ✅ **Tamamlandı** |
 | 3 | Coin tarama sistemi | ✅ **Tamamlandı** |
 | 4 | Balina takip sistemi | ✅ **Tamamlandı** |
-| 5 | Tarihsel veri ve grafik motoru | ⏭️ Sıradaki |
+| 5 | Tarihsel veri ve grafik motoru | 🔄 Devam ediyor |
 | 6 | Yapay zekâ analiz motoru | |
 | 7 | Fırsat tespit sistemi | |
 | 8 | Backtest | |
@@ -136,7 +136,25 @@ Zincir üstü veri için denenen ücretsiz bir servis, paylaşılan IP nedeniyle
 ücretsiz planlar genellikle ticari kullanıma da izin vermez. Bu yüzden anahtarlı bir sağlayıcı
 seçimi ve onayınız (G4) beklenmektedir.
 
-### Aşama 5 — Tarihsel veri ve grafik motoru
+### Aşama 5 — Tarihsel veri ve grafik motoru 🔄
+
+**Tamamlanan (çekirdek):** `history/`: `data.binance.vision` arşivinden doğrulamalı indirme,
+paralel indirme ve sıralı yazma, DuckDB deposu, artımlı eşitleme ve yeniden örnekleme.
+- Her dosya `.CHECKSUM` (SHA-256) ile doğrulanır; doğrulanmayan dosya yazılmaz.
+- Biçim farkları ele alınır: Spot zaman damgaları mikrosaniye, Futures dosyaları başlık
+  satırlı.
+- Komut: `ati-engine history-sync --symbol BTCUSDT ETHUSDT --interval 1h`.
+- Gerçek veriyle ölçülen sonuçlar:
+  - BTCUSDT, listelendiği 2017-08-17'den bugüne 80.725 saatlik mum, 117 dosya, 23 sn.
+  - İkinci çalıştırma 0 dosya indirdi (1,2 sn).
+  - Kalan 127 saatlik boşluk Binance'in kendi kesintileridir (en büyüğü 2018-02-08,
+    32 saat), arşiv bu saatleri içermez.
+- 11 yeni test, sorgu hızı dahil: 525.600 satırlık bir yılda aylık sorgu ve günlük yeniden
+  örnekleme.
+
+**Kalan:** destek/direnç, trend kırılımı, benzer piyasa koşulu arama, `aggTrades` arşivi ve
+balina radarının arşiv üzerinde yeniden oynatılması.
+
 `data.binance.vision` toplu arşiv indirme (CHECKSUM), Parquet/DuckDB deposu, artımlı
 güncelleme (`history_sync_state`), destek/direnç, trend kırılımı, benzer piyasa koşulu
 arama. **Kabul:** listelenme tarihinden bugüne tam geçmiş; ikinci çalıştırmada yalnızca yeni

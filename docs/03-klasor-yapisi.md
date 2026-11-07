@@ -31,7 +31,8 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── scanner/                   ✅ 3  coin tarama: artımlı istatistikler, sinyal kuralları, ısınma
 │   │   ├── whales/                    ✅ 4  balina radarı: büyük işlem, küme, duvar, tasfiye,
 │   │   │                                    konumlanma, fiyat etkisi, zincir üstü arayüzü
-│   │   ├── history/                   🔜 5  toplu arşiv indirme, Parquet/DuckDB, artımlı güncelleme
+│   │   ├── history/                   🔄 5  arşiv indirme + CHECKSUM ✅, DuckDB deposu ✅, artımlı
+│   │   │                                    eşitleme ✅; teknik analiz araçları sırada
 │   │   ├── analysis/                  🔜 6  göstergeler (artımlı), özellikler, modeller
 │   │   ├── strategies/                🔜 6,9 10+ strateji, yarışma ve ağırlıklandırma
 │   │   ├── scoring/                   🔜 7  fırsat puanı 0-100
@@ -41,7 +42,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
 │   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
 │   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
-│   └── tests/                         ✅ 241 test (birim, gerçek mesaj fikstürleri, sahte Binance
+│   └── tests/                         ✅ 252 test (birim, gerçek mesaj fikstürleri, sahte Binance
 │                                          sunucusuyla uçtan uca, alt süreç duman testi)
 │
 ├── cloud/                             ✅ Bulut servisi (FastAPI) — yönetilen bulutta çalışır
@@ -73,7 +74,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 config.toml          kullanıcı ayarları (gizli bilgi yok)
 engine.db            SQLite: emirler, pozisyonlar, karar günlüğü, şifreli gizli bilgiler, denetim kaydı
 engine.lock          tek örnek kilidi
-market/              Parquet tarihsel veri (Aşama 5)
+market/history.duckdb  tarihsel mumlar (DuckDB, Aşama 5)
 models/              yapay zekâ modelleri (Aşama 6)
 logs/engine.jsonl    dönen JSON loglar (maskelenmiş)
 runtime/             yerel API port bilgisi (motor çalışırken)
