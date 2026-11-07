@@ -32,8 +32,8 @@ kısıtı).
 | 6 | Yapay zekâ analiz motoru | ✅ **Tamamlandı** |
 | 7 | Fırsat tespit sistemi | ✅ **Tamamlandı** |
 | 8 | Backtest | ✅ **Tamamlandı** |
-| 9 | Paper Trading | ⏭️ Sıradaki |
-| 10 | Otomatik işlem motoru | |
+| 9 | Paper Trading | ✅ **Tamamlandı** |
+| 10 | Otomatik işlem motoru | ⏭️ Sıradaki |
 | 11 | Risk yönetimi | |
 | 12 | Windows EXE | |
 | 13 | iOS uygulaması | |
@@ -382,10 +382,53 @@ Yorum:
 - Uzun süreli vadeli long (al ve tut), funding ve sert düşüşte tasfiye riskiyle **yok
   olabiliyor**. Model bu riski artık gösteriyor.
 
-### Aşama 9 — Paper Trading ve strateji yarışması
-10+ stratejinin aynı canlı veriyi bağımsız değerlendirmesi; sanal yürütücü (emir defteri
-tabanlı dolum simülasyonu); performans kayıtları; terfi hattı. **Kabul:** her strateji
-için canlı metrik; yeni stratejinin `live` aşamasına otomatik geçmemesi.
+### Aşama 9 — Paper Trading ve strateji yarışması ✅
+
+**Çıktılar (uygulandı):**
+
+- **`execution/fills.py`: emir defteri tabanlı sanal dolum.**
+  - Odak sembollerinde yerel emir defteri seviye seviye tüketilir; dolum fiyatı hacim ağırlıklı
+    ortalamadır ve derinlik yetmezse ceza ile işaretlenir.
+  - Diğer sembollerde likiditeye göre tahmini spread + kayma kullanılır.
+  - Gerçek borsaya hiçbir istek gitmez.
+- **`paper/competition.py`: yarışma.** 13 strateji + fırsat puanı, her piyasa için ayrı sanal
+  hesapla (toplam 28 hesap), canlı fırsat motorunun aynı strateji defterinden beslenir.
+  - Giriş: en güçlü sinyaller boş yuvalara açılır. Likidite filtresi ve maliyet filtresi
+    uygulanır (zarar durdur uzaklığı maliyetten büyük, hedef maliyetin en az 2 katı).
+  - Çıkış: zarar durdur/hedef tick düzeyinde; ayrıca süre ve ters sinyal.
+  - Vadelide canlı funding uygulanır.
+  - Kalıcılık: hesap, pozisyon, işlem ve saatlik sermaye ayrı tablolarda (`0005_paper_competition`).
+    Gerçek emir tablolarıyla karışmaz.
+- **Eksik mum onarımı** (`scoring/live.py`): motor mumun ortasında başlarsa veya bağlantı
+  koparsa, eksik toplanan mum stratejilere verilmez; kapanmış aslı REST'ten alınır.
+- **Terfi hattı:**
+  - `walk_forward` aşamasındaki strateji yarışmaya girince `paper` olur.
+  - 30 gün, 30 işlem, PF ≥ 1,1, Sharpe ≥ 0,5 ve düşüş ≤ %20 sağlanırsa `live_candidate` olur.
+  - `live` aşamasına otomatik geçiş kodda ve veritabanı kısıtında engellidir.
+- **Yerel API:** `/v1/paper/leaderboard|positions|trades|stats`; arayüze `PaperTradeEvent`.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Her strateji için canlı metrik | ✅ Hesap başına sermaye, işlem, başarı oranı, PF, Sharpe, düşüş, ücret, funding (saatlik sermaye eğrisinden). Strateji başına birleşik metrik `strategy_metrics` (`paper`) tablosunda |
+| Yeni stratejinin `live` aşamasına otomatik geçmemesi | ✅ Test: ölçütleri karşılayan strateji yalnızca `live_candidate` oluyor. Kod `live` istemini reddediyor; veritabanı onaysız `live` kaydını CHECK kısıtıyla reddediyor |
+| Dolum simülasyonu | ✅ Defter yürütme elle hesaplanan ağırlıklı fiyatla eşleşiyor; derinlik tükenmesi cezalandırılıyor; defter yokken likiditeye göre maliyet artıyor |
+| Canlı çalışma (gerçek Binance verisi, 15 dk mumla iki deneme) | ✅ 1.026 sembol, 28 sanal hesap. Mum kapanışında tüm semboller işlendi, 20-31 pozisyon açıldı, binlerce işlem tick düzeyinde denetlendi. Döngü gecikmesi p99 ~23 ms; uyarı/hata logu 0 |
+
+**Canlı denemede bulunan ve düzeltilen iki gerçek sorun:**
+
+1. **Eksik ilk mum.** Motor 19:16'da başladığında 19:15-19:30 mumunun ilk dakikaları
+   kaçırılmıştı. 1.026 sembolün tamamında açılış ve hacim yanlıştı ve stratejiler bu yanlış
+   mumla işlem açtı. Düzeltme: eksik mum kullanılmıyor, kapanınca REST'ten aslı alınıyor. İkinci
+   denemede 20:00 mumunda 1.026 eksik mumun 1.026'sı onarıldı, 0 hata.
+2. **Oynaklığı çok düşük coin (UUSDT).** Zarar durdur uzaklığı fiyatın ~%0,01'iydi; %0,2'lik
+   gidiş-dönüş komisyonu bunun 20 katı olduğu için işlem -40R ile kapandı. Düzeltme: maliyet
+   farkındalıklı giriş filtresi (genel kural, isim listesi değil). İkinci denemede 7 işlem bu
+   filtreyle engellendi.
+
+**Not:** Yarışmanın asıl çıktısı zamanla birikecek canlı performanstır. Terfi ölçütü en az 30
+gün ister. Bu süre motor kullanıcının bilgisayarında çalıştıkça dolar.
 
 ### Aşama 10 — Otomatik işlem motoru
 Emir yöneticisi (idempotent `clientOrderId`, yeniden deneme, kısmi dolum), kullanıcı veri

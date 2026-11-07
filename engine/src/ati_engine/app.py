@@ -35,14 +35,19 @@ from ati_engine.core.supervisor import RestartPolicy, TaskSupervisor
 from ati_engine.exchange.endpoints import endpoints_for
 from ati_engine.exchange.rate_limit import WeightBudget
 from ati_engine.exchange.rest import BinanceRestClient
+from ati_engine.execution.fills import FillSimulator
+from ati_engine.history.archive import INTERVAL_MS
 from ati_engine.history.service import HistoryService
 from ati_engine.history.store import KlineStore
 from ati_engine.history.sync import RestSource
 from ati_engine.market.discovery import SymbolRegistry, UniverseFilter
+from ati_engine.market.events import AggTrade
+from ati_engine.market.orderbook import OrderBook, SyncState
 from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT, MarketDataService
 from ati_engine.ml.registry import ModelRegistry
 from ati_engine.observability.logging import configure_logging
 from ati_engine.observability.loop_monitor import LoopLagMonitor
+from ati_engine.paper.competition import PaperCompetition
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.safety.kill_switch import KillSwitch
@@ -167,6 +172,8 @@ class Engine:
                 runtime.backtests = BacktestService(runtime.history, db, paths.backtests_dir)
             if settings.scoring.enabled:
                 self._start_scoring(runtime)
+            if settings.paper.enabled and runtime.opportunities is not None:
+                await self._start_paper(runtime)
 
             supervisor.spawn("loop-lag-monitor", loop_monitor.run)
             supervisor.spawn(
@@ -215,6 +222,44 @@ class Engine:
             return 0
         finally:
             await self._shutdown(server, server_task, supervisor, bus, db)
+
+    async def _start_paper(self, runtime: EngineRuntime) -> None:
+        """Sanal işlem yarışması: hesaplar her durumda yüklenir (API için); canlı işlem ve
+        mum dinleyicisi yalnızca piyasa verisi açıkken bağlanır."""
+        settings = runtime.settings
+        services = runtime.market_data
+
+        def book_of(market_value: str, symbol: str) -> OrderBook | None:
+            service = services.get(Market(market_value))
+            sync = service.books.get(symbol) if service is not None else None
+            if sync is None or sync.state is not SyncState.SYNCED:
+                return None
+            return sync.book
+
+        def funding_of(market: Market, symbol: str) -> tuple[float, float] | None:
+            service = services.get(market)
+            mark = service.state.marks.get(symbol) if service is not None else None
+            return (mark.mark_price, mark.funding_rate) if mark is not None else None
+
+        competition = PaperCompetition(
+            settings=settings.paper,
+            db=runtime.db,
+            bus=runtime.bus,
+            fills=FillSimulator(
+                books=book_of,
+                spot_fee=settings.scoring.spot_taker_fee,
+                futures_fee=settings.scoring.futures_taker_fee,
+            ),
+            interval_ms=INTERVAL_MS[settings.scoring.interval],
+            funding_of=funding_of,
+        )
+        await competition.load(settings.markets)
+        runtime.paper = competition
+        if services and runtime.opportunities is not None:
+            runtime.bus.subscribe(
+                AggTrade, competition.on_trade, name="paper-trades", maxsize=200_000
+            )
+            runtime.opportunities.add_listener(competition.on_bars)
 
     def _start_scoring(self, runtime: EngineRuntime) -> None:
         """Fırsat motoru: piyasa verisi açıksa canlı çalışır; değilse yalnızca tarihsel veriden

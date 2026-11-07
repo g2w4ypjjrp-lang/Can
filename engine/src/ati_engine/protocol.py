@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from ati_engine.api import schemas
 from ati_engine.core.events import PUBLIC_EVENT_TYPES
 from ati_engine.market.events import PUBLIC_MARKET_EVENT_TYPES
+from ati_engine.paper.competition import PaperTradeEvent
 from ati_engine.scanner.scanner import MarketSignal
 from ati_engine.scoring.live import OpportunityScored
 from ati_engine.whales.events import WhaleAlert
@@ -68,6 +69,9 @@ _API_MODELS: tuple[type[BaseModel], ...] = (
     schemas.BacktestRequest,
     schemas.BacktestJobInfo,
     schemas.StrategyRegistryInfo,
+    schemas.PaperAccountInfo,
+    schemas.PaperPositionInfo,
+    schemas.PaperTradeInfo,
 )
 
 
@@ -87,6 +91,7 @@ def build_protocol_schema() -> dict[str, Any]:
             MarketSignal,
             WhaleAlert,
             OpportunityScored,
+            PaperTradeEvent,
         ),
     )
     (event_union_schema,), event_components = msgspec.json.schema_components(
@@ -200,6 +205,16 @@ def build_protocol_schema() -> dict[str, Any]:
             "GET /v1/backtest/reports": {"response": "string[]", "auth": True},
             "GET /v1/backtest/reports/{name}": {"response": "object", "auth": True},
             "GET /v1/strategies": {"response": "StrategyRegistryInfo[]", "auth": True},
+            "GET /v1/paper/leaderboard?market=": {"response": "PaperAccountInfo[]", "auth": True},
+            "GET /v1/paper/positions?market=&strategy=": {
+                "response": "PaperPositionInfo[]",
+                "auth": True,
+            },
+            "GET /v1/paper/trades?market=&strategy=&limit=": {
+                "response": "PaperTradeInfo[]",
+                "auth": True,
+            },
+            "GET /v1/paper/stats": {"response": "object", "auth": True},
             "POST /v1/market/focus": {
                 "request": "FocusRequest",
                 "response": "FocusResponse",

@@ -640,6 +640,8 @@ class OpportunityStatsResponse(BaseModel):
     warmup_symbols: dict[str, int]
     batch_ms_max: float
     incomplete_bars: int
+    repaired_bars: int
+    repair_failed: int
     calibration_loaded: dict[str, bool]
     models_loaded: dict[str, list[str]]
 
@@ -683,3 +685,60 @@ class StrategyRegistryInfo(BaseModel):
     stage_changed_at: int
     live_approved: bool
     metrics: dict[str, dict[str, Any]]
+
+
+# --- Sanal işlem yarışması (Aşama 9) ----------------------------------------------------------
+
+
+class PaperAccountInfo(BaseModel):
+    strategy: str
+    market: str
+    stage: str | None
+    equity: float
+    total_return_pct: float | None
+    trades: int
+    win_rate: float | None
+    profit_factor: float | None
+    net_pnl: float | None
+    sharpe: float | None
+    max_drawdown_pct: float | None
+    fees: float | None
+    funding: float | None
+    open_positions: int
+    days: float
+
+
+class PaperPositionInfo(BaseModel):
+    strategy: str
+    market: str
+    symbol: str
+    direction: str
+    qty: float
+    entry_price: float
+    entry_time_ms: int
+    stop: float
+    target: float
+    last_price: float
+    unrealized_pnl: float
+    fees: float
+    funding: float
+    bars_held: int
+    reason: str
+
+
+class PaperTradeInfo(BaseModel):
+    strategy: str
+    market: str
+    symbol: str
+    direction: str
+    qty: float
+    entry_price: float
+    entry_time_ms: int
+    exit_price: float | None
+    exit_time_ms: int | None
+    exit_reason: str | None
+    fees: float
+    funding: float
+    net_pnl: float
+    r_multiple: float
+    reason: str

@@ -220,6 +220,23 @@ class ScoringSettings(BaseModel):
     models: dict[str, dict[str, str]] = Field(default_factory=dict)
 
 
+class PaperSettings(BaseModel):
+    """Sanal işlem yarışması (Aşama 9). Gerçek emir göndermez."""
+
+    enabled: bool = True
+    initial_equity: float = Field(default=10_000.0, gt=0)
+    risk_per_trade: float = Field(default=0.01, gt=0, le=0.05)
+    max_positions: int = Field(default=5, ge=1, le=50)
+    max_hold_bars: int = Field(default=24, ge=1, le=10_000)
+    futures_leverage: float = Field(default=1.0, ge=1.0, le=5.0)
+    score_threshold: float = Field(default=65.0, ge=0, le=100)
+    min_quote_volume_24h: float = Field(default=20_000_000.0, ge=0)
+    min_notional: float = Field(default=10.0, gt=0)
+    # Hedef uzaklığı, tahmini gidiş-dönüş maliyetin en az bu katı olmalı.
+    min_target_cost_ratio: float = Field(default=2.0, ge=0)
+    competitors: list[str] = Field(default_factory=list)  # boş: tüm stratejiler + puan
+
+
 class HistorySettings(BaseModel):
     """Tarihsel veri (Aşama 5): Binance arşivi + DuckDB deposu."""
 
@@ -297,6 +314,7 @@ class EngineSettings(BaseSettings):
     whales: WhaleSettings = Field(default_factory=WhaleSettings)
     history: HistorySettings = Field(default_factory=HistorySettings)
     scoring: ScoringSettings = Field(default_factory=ScoringSettings)
+    paper: PaperSettings = Field(default_factory=PaperSettings)
 
     @property
     def paths(self) -> DataPaths:

@@ -370,7 +370,8 @@ def test_bar_aggregator_emits_on_last_minute() -> None:
     for m in range(60):
         out += agg.add(kline(m * 60_000, 100.0 + m))
     assert len(out) == 1
-    _, _, bar = out[0]
+    _, _, bar, complete = out[0]
+    assert complete
     assert bar.open_time_ms == 0 and bar.open == 100.0 and bar.close == 159.0
     assert bar.high == 160.0 and bar.low == 99.0
     assert bar.volume == pytest.approx(120.0)
@@ -379,6 +380,7 @@ def test_bar_aggregator_emits_on_last_minute() -> None:
     agg.add(kline(HOUR, 200.0))
     out = agg.add(kline(2 * HOUR, 201.0))
     assert len(out) == 1 and out[0][2].open_time_ms == HOUR
+    assert out[0][3] is False  # eksik mum işaretlenir
     assert agg.incomplete == 1
 
 
@@ -591,6 +593,58 @@ async def test_live_candidates_get_similarity_component(tmp_path: Path) -> None:
     component = next(c for c in latest.components if c.key == "similarity")
     assert component.available
     assert FakeHistory.store.calls == 1
+    await engine.close()
+    await bus.close()
+    await db.close()
+
+
+async def test_incomplete_bar_is_repaired_from_rest_not_used(tmp_path: Path) -> None:
+    """Motor saatin ortasında başlarsa ilk mum eksik toplanır: stratejilere verilmez, kapanmış
+    aslı REST'ten alınır (yanlış açılış/hacimle işlem yapılmaz)."""
+    db = Database(tmp_path / "e.db")
+    await db.open()
+    await db.migrate()
+    bus = EventBus()
+    engine = OpportunityEngine(
+        settings=ScoringSettings(), bus=bus, db=db, calibration_dir=tmp_path / "scoring"
+    )
+    requests: list[dict[str, Any]] = []
+
+    class FakeRest:
+        async def get(self, path: str, *, params: dict[str, Any], **kw: Any) -> list[list[Any]]:
+            requests.append(params)
+            t = params["startTime"]
+            return [
+                [t, "90", "120", "80", "110", "1000", t + HOUR - 1, "100000", 5, "1", "60000", "0"]
+            ]
+
+    class FakeService:
+        market = Market.SPOT
+        rest = FakeRest()
+        from ati_engine.config import BinanceEndpoints as _be
+        from ati_engine.exchange.endpoints import endpoints_for as _ef
+
+        endpoints = _ef(Market.SPOT, _be())
+
+    engine._services = {Market.SPOT: FakeService()}  # type: ignore[dict-item]
+    # 10. dakikadan itibaren (eksik) gelen dakikalar.
+    for m in range(10, 60):
+        await engine.on_kline(kline(m * 60_000, 100.0))
+    assert engine._pending == []
+    assert engine.stats.repairs_requested == 1
+    market, symbol, open_ms = engine._repairs.get_nowait()
+    assert (market, symbol, open_ms) == (Market.SPOT, "BTCUSDT", 0)
+    assert await engine.repair_one(market, symbol, open_ms)
+    ((_, _, bar),) = engine._pending
+    assert (bar.open, bar.high, bar.low, bar.close, bar.volume) == (
+        90.0,
+        120.0,
+        80.0,
+        110.0,
+        1000.0,
+    )
+    assert requests[0]["interval"] == "1h" and requests[0]["limit"] == 1
+    assert engine.stats.repaired == 1
     await engine.close()
     await bus.close()
     await db.close()

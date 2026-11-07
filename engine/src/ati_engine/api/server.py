@@ -59,6 +59,9 @@ from ati_engine.api.schemas import (
     OpportunityDetail,
     OpportunityStatsResponse,
     OpportunitySummary,
+    PaperAccountInfo,
+    PaperPositionInfo,
+    PaperTradeInfo,
     PositioningInfo,
     PredictionResponse,
     ReadinessInfo,
@@ -98,6 +101,7 @@ from ati_engine.core.models import Market
 from ati_engine.history.service import HistoryService, SyncJob
 from ati_engine.market.service import MarketDataService
 from ati_engine.ml.registry import ModelError
+from ati_engine.paper.competition import LIVE_CANDIDATE, PaperCompetition
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
 from ati_engine.scanner.scanner import MarketScanner, row_dict
@@ -824,6 +828,8 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             warmup_symbols=engine.stats.warmup_symbols,
             batch_ms_max=round(engine.stats.batch_ms_max, 3),
             incomplete_bars=engine.aggregator.incomplete,
+            repaired_bars=engine.stats.repaired,
+            repair_failed=engine.stats.repair_failed,
             calibration_loaded={m: bool(c) for m, c in engine.calibration.items()},
             models_loaded={m.value: sorted(p) for m, p in engine.predictors.items()},
         )
@@ -890,6 +896,108 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
     async def strategy_registry(_: Auth) -> list[StrategyRegistryInfo]:
         service = backtests_or_404()
         return [StrategyRegistryInfo.model_validate(s) for s in await service.strategies()]
+
+    # --- Sanal işlem yarışması (Aşama 9) ---------------------------------------------------
+
+    def paper_or_404() -> PaperCompetition:
+        if runtime.paper is None:
+            raise HTTPException(status_code=404, detail="Sanal işlem yarışması etkin değil")
+        return runtime.paper
+
+    @app.get("/v1/paper/leaderboard", response_model=list[PaperAccountInfo])
+    async def paper_leaderboard(_: Auth, market: Market | None = None) -> list[PaperAccountInfo]:
+        paper = paper_or_404()
+        stages = {
+            str(r[0]): str(r[1])
+            for r in await runtime.db.fetchall("SELECT name, stage FROM strategies")
+        }
+        rows = await asyncio.to_thread(paper.leaderboard, market)
+        return [
+            PaperAccountInfo.model_validate({**r, "stage": stages.get(r["strategy"])}) for r in rows
+        ]
+
+    @app.get("/v1/paper/positions", response_model=list[PaperPositionInfo])
+    async def paper_positions(
+        _: Auth, market: Market | None = None, strategy: str | None = None
+    ) -> list[PaperPositionInfo]:
+        paper = paper_or_404()
+        result = []
+        for (name, account_market), account in paper.accounts.items():
+            if (market is not None and account_market is not market) or (
+                strategy is not None and name != strategy
+            ):
+                continue
+            for symbol, t in account.positions.items():
+                last = paper.last_price.get((account_market, symbol), t.entry_price)
+                result.append(
+                    PaperPositionInfo(
+                        strategy=name,
+                        market=account_market.value,
+                        symbol=symbol,
+                        direction="long" if t.direction > 0 else "short",
+                        qty=t.qty,
+                        entry_price=t.entry_price,
+                        entry_time_ms=t.entry_time_ms,
+                        stop=t.stop,
+                        target=t.target,
+                        last_price=last,
+                        unrealized_pnl=round(t.unrealized(last), 6),
+                        fees=t.fees,
+                        funding=t.funding,
+                        bars_held=t.bars_held,
+                        reason=t.reason,
+                    )
+                )
+        return result
+
+    @app.get("/v1/paper/trades", response_model=list[PaperTradeInfo])
+    async def paper_trades(
+        _: Auth,
+        market: Market | None = None,
+        strategy: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=5000)] = 200,
+    ) -> list[PaperTradeInfo]:
+        paper = paper_or_404()
+        rows = []
+        for (name, account_market), account in paper.accounts.items():
+            if (market is not None and account_market is not market) or (
+                strategy is not None and name != strategy
+            ):
+                continue
+            for t in account.trades:
+                rows.append(
+                    PaperTradeInfo(
+                        strategy=name,
+                        market=account_market.value,
+                        symbol=t.symbol,
+                        direction="long" if t.direction > 0 else "short",
+                        qty=t.qty,
+                        entry_price=t.entry_price,
+                        entry_time_ms=t.entry_time_ms,
+                        exit_price=t.exit_price,
+                        exit_time_ms=t.exit_time_ms,
+                        exit_reason=t.exit_reason,
+                        fees=t.fees,
+                        funding=t.funding,
+                        net_pnl=round(t.net_pnl, 6),
+                        r_multiple=round(t.r_multiple, 4),
+                        reason=t.reason,
+                    )
+                )
+        rows.sort(key=lambda r: -(r.exit_time_ms or 0))
+        return rows[:limit]
+
+    @app.get("/v1/paper/stats")
+    async def paper_stats(_: Auth) -> dict[str, Any]:
+        paper = paper_or_404()
+        return {
+            **paper.stats,
+            "accounts": len(paper.accounts),
+            "open_positions": sum(len(a.positions) for a in paper.accounts.values()),
+            "settings": paper.cfg.model_dump(),
+            "live_candidate_rule": LIVE_CANDIDATE,
+            "disclaimer": "Sanal işlemdir; gerçek emir gönderilmez. Sonuçlar garanti değildir.",
+        }
 
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:

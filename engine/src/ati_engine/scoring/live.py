@@ -21,7 +21,7 @@ import contextlib
 import json
 import logging
 from collections import deque
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -88,6 +88,17 @@ class OpportunityScored(SystemEvent, frozen=True, kw_only=True):
     historical_net_return_pct: float | None = None
 
 
+@dataclass(frozen=True)
+class LiveBarScore:
+    """Canlı akışta kapanan bir mumun puanlama girdileri ve sonucu (dinleyicilere iletilir;
+    ör. sanal işlem yarışması). Isınma mumları iletilmez: eski sinyalle işlem açılmaz."""
+
+    market: Market
+    symbol: str
+    inputs: ScoreInputs
+    opportunity: Opportunity
+
+
 @dataclass
 class _Partial:
     bucket: int
@@ -110,16 +121,18 @@ class BarAggregator:
         self._open: dict[tuple[Market, str], _Partial] = {}
         self.incomplete = 0
 
-    def add(self, kline: Kline) -> list[tuple[Market, str, Bar]]:
+    def add(self, kline: Kline) -> list[tuple[Market, str, Bar, bool]]:
+        """Tamamlanan mumları (piyasa, sembol, mum, eksiksiz mi) olarak döndürür. Eksik mum
+        (motor aralığın ortasında başladı veya bağlantı koptu) stratejilere verilmemelidir."""
         if kline.interval != "1m" or not kline.closed:
             return []
         key = (kline.market, kline.symbol)
         bucket = kline.open_time_ms - kline.open_time_ms % self.interval_ms
-        out: list[tuple[Market, str, Bar]] = []
+        out: list[tuple[Market, str, Bar, bool]] = []
         partial = self._open.get(key)
         if partial is not None and partial.bucket != bucket:
             if bucket > partial.bucket:
-                out.append((kline.market, kline.symbol, self._finish(partial)))
+                out.append((kline.market, kline.symbol, *self._finish(partial)))
                 partial = None
             else:
                 return []  # eski dakika
@@ -134,14 +147,15 @@ class BarAggregator:
         partial.taker_buy_quote += kline.taker_buy_quote_volume
         partial.minutes += 1
         if kline.open_time_ms + MINUTE_MS >= bucket + self.interval_ms:
-            out.append((kline.market, kline.symbol, self._finish(partial)))
+            out.append((kline.market, kline.symbol, *self._finish(partial)))
             del self._open[key]
         return out
 
-    def _finish(self, p: _Partial) -> Bar:
-        if p.minutes < self.interval_ms // MINUTE_MS:
+    def _finish(self, p: _Partial) -> tuple[Bar, bool]:
+        complete = p.minutes >= self.interval_ms // MINUTE_MS
+        if not complete:
             self.incomplete += 1
-        return Bar(
+        bar = Bar(
             open_time_ms=p.bucket,
             open=p.open,
             high=p.high,
@@ -151,6 +165,7 @@ class BarAggregator:
             quote_volume=p.quote_volume,
             taker_buy_quote=p.taker_buy_quote,
         )
+        return bar, complete
 
 
 @dataclass
@@ -163,6 +178,9 @@ class _Context:
 
 @dataclass
 class EngineStats:
+    repairs_requested: int = 0
+    repaired: int = 0
+    repair_failed: int = 0
     bars: int = 0
     scored: int = 0
     published: int = 0
@@ -229,7 +247,9 @@ class OpportunityEngine:
         # İşçi iş parçacığı ekler, olay döngüsü tüketir (deque ekleme/çıkarma iş parçacığı
         # güvenlidir).
         self._warm_scored: deque[Opportunity] = deque()
+        self._repairs: asyncio.Queue[tuple[Market, str, int]] = asyncio.Queue()
         self._inputs: dict[tuple[Market, str], ScoreInputs] = {}
+        self._listeners: list[Callable[[list[LiveBarScore]], Awaitable[None]]] = []
         self._history: HistoryService | None = None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="scoring")
         self._services: dict[Market, MarketDataService] = {}
@@ -275,6 +295,9 @@ class OpportunityEngine:
         self._radar = radar
         self.bus.subscribe(Kline, self.on_kline, name="opportunity-klines", maxsize=200_000)
 
+    def add_listener(self, listener: Callable[[list[LiveBarScore]], Awaitable[None]]) -> None:
+        self._listeners.append(listener)
+
     def book(self, market: Market, symbol: str) -> StrategyBook:
         key = (market, symbol)
         book = self.books.get(key)
@@ -286,9 +309,14 @@ class OpportunityEngine:
     # --- Canlı akış ----------------------------------------------------------------------
 
     async def on_kline(self, kline: Kline) -> None:
-        for item in self.aggregator.add(kline):
-            self._pending.append(item)
+        for market, symbol, bar, complete in self.aggregator.add(kline):
             self.stats.bars += 1
+            if complete:
+                self._pending.append((market, symbol, bar))
+            else:
+                # Eksik mum yanlış açılış/hacim verir: kapanmış mumun aslı REST'ten alınır.
+                self.stats.repairs_requested += 1
+                self._repairs.put_nowait((market, symbol, bar.open_time_ms))
 
     def _context(self, market: Market, symbol: str, whale_rows: Mapping[str, Any]) -> _Context:
         ctx = _Context()
@@ -464,6 +492,18 @@ class OpportunityEngine:
         self.stats.last_batch_size = len(batch)
         opportunities = await self._with_similarity(opportunities)
         await self._publish(opportunities)
+        if self._listeners:
+            scored = [
+                LiveBarScore(Market(o.market), o.symbol, inputs, o)
+                for o in opportunities
+                if (inputs := self._inputs.get((Market(o.market), o.symbol))) is not None
+                and inputs.snapshot.open_time_ms == o.time_ms
+            ]
+            for listener in self._listeners:
+                try:
+                    await listener(scored)
+                except Exception as exc:  # dinleyici hatası puanlamayı durdurmaz
+                    logger.error("Fırsat dinleyicisi hatası", extra={"error": repr(exc)})
         return opportunities
 
     async def _publish(self, opportunities: list[Opportunity]) -> None:
@@ -612,8 +652,71 @@ class OpportunityEngine:
         )
         return done
 
+    async def repair_one(self, market: Market, symbol: str, open_ms: int) -> bool:
+        """Eksik toplanan mumun kapanmış aslını REST'ten alıp işleme kuyruğuna ekler."""
+        service = self._services.get(market)
+        if service is None:
+            self.stats.repair_failed += 1
+            return False
+        endpoints = service.endpoints
+        try:
+            rows = await service.rest.get(
+                endpoints.klines_path,
+                params={
+                    "symbol": symbol,
+                    "interval": self.cfg.interval,
+                    "startTime": open_ms,
+                    "limit": 1,
+                },
+                weight=endpoints.klines_weight(1),
+                priority=Priority.LOW,
+            )
+        except Exception as exc:
+            logger.warning("Eksik mum onarılamadı", extra={"symbol": symbol, "error": repr(exc)})
+            self.stats.repair_failed += 1
+            return False
+        row = rows[0] if rows else None
+        if row is None or int(row[0]) != open_ms or int(row[6]) >= self.clock.now_ms():
+            self.stats.repair_failed += 1
+            return False
+        self._pending.append(
+            (
+                market,
+                symbol,
+                Bar(
+                    open_time_ms=open_ms,
+                    open=float(row[1]),
+                    high=float(row[2]),
+                    low=float(row[3]),
+                    close=float(row[4]),
+                    volume=float(row[5]),
+                    quote_volume=float(row[7]),
+                    taker_buy_quote=float(row[10]),
+                ),
+            )
+        )
+        self.stats.repaired += 1
+        return True
+
+    async def _repair_loop(self, concurrency: int = 3) -> None:
+        sem = asyncio.Semaphore(concurrency)
+
+        async def one(item: tuple[Market, str, int]) -> None:
+            async with sem:
+                await self.repair_one(*item)
+
+        tasks: set[asyncio.Task[None]] = set()
+        while True:
+            item = await self._repairs.get()
+            task = asyncio.create_task(one(item))
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+
     async def run(self) -> None:
-        warmups = [asyncio.create_task(self.warmup(s)) for s in self._services.values()]
+        warmups: list[asyncio.Task[Any]] = [
+            asyncio.create_task(self.warmup(s)) for s in self._services.values()
+        ]
+        warmups.append(asyncio.create_task(self._repair_loop()))
         try:
             while True:
                 await asyncio.sleep(1.0)

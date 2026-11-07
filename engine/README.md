@@ -79,6 +79,32 @@ Yerel API:
 
 Benzerlik ve etki istatistikleri geçmişi anlatır; gelecekteki fiyatı **garanti etmez**.
 
+## Sanal işlem yarışması (Aşama 9)
+
+Her strateji ve fırsat puanı, her piyasa için **ayrı bir sanal hesapla** (varsayılan 10.000
+USDT, işlem başına %1 risk) aynı canlı veriyi bağımsız olarak değerlendirir. Gerçek borsaya
+**hiçbir emir gönderilmez**.
+
+- **Giriş:** saatlik mum kapandığında en güçlü sinyaller boş yuvalara açılır.
+  - Dolum: odak sembollerinde gerçek emir defteri seviye seviye tüketilerek, diğerlerinde
+    likiditeye göre tahmini spread + kayma ile simüle edilir.
+  - Likiditesi düşük (24 saatlik hacim < 20 milyon USDT) semboller elenir.
+  - Zarar durdur uzaklığı maliyetin altında kalan veya hedefi maliyeti 2 kat karşılamayan
+    işlemler açılmaz.
+- **Çıkış:** zarar durdur/hedef her canlı işlemde (tick düzeyinde) denetlenir; ayrıca süre ve
+  ters sinyal. Vadelide funding 00/08/16 UTC'de uygulanır.
+- **Eksik mum:** motor mumun ortasında başlarsa veya bağlantı koparsa eksik toplanan mum
+  stratejilere verilmez; kapanmış aslı REST'ten alınır.
+- **Kalıcılık:** hesaplar, pozisyonlar ve işlemler veritabanındadır; yeniden başlatınca
+  yarışma kaldığı yerden sürer.
+- **Terfi hattı:** `walk_forward` → `paper` → (30 gün, 30 işlem, PF ≥ 1,1, Sharpe ≥ 0,5,
+  düşüş ≤ %20) → `live_candidate`. **`live` aşamasına otomatik geçiş yoktur.**
+
+Yerel API:
+- `GET /v1/paper/leaderboard?market=usdm_futures`
+- `GET /v1/paper/positions`, `GET /v1/paper/trades`, `GET /v1/paper/stats`
+- Olay: `PaperTradeEvent` (açıldı/kapandı)
+
 ## Backtest (Aşama 8)
 
 Stratejiler, puan eşikleri ve al-ve-tut aynı geçmiş üzerinde canlıdakiyle aynı kodla sınanır.

@@ -531,6 +531,9 @@
         },
         {
           "$ref": "#/$defs/OpportunityScored"
+        },
+        {
+          "$ref": "#/$defs/PaperTradeEvent"
         }
       ],
       "discriminator": {
@@ -543,6 +546,7 @@
           "MarketSignal": "#/$defs/MarketSignal",
           "OpportunityScored": "#/$defs/OpportunityScored",
           "OrderBookResynced": "#/$defs/OrderBookResynced",
+          "PaperTradeEvent": "#/$defs/PaperTradeEvent",
           "ReadinessChanged": "#/$defs/ReadinessChanged",
           "ServiceHealthChanged": "#/$defs/ServiceHealthChanged",
           "StreamConnectionChanged": "#/$defs/StreamConnectionChanged",
@@ -1845,6 +1849,14 @@
           "title": "Published",
           "type": "integer"
         },
+        "repair_failed": {
+          "title": "Repair Failed",
+          "type": "integer"
+        },
+        "repaired_bars": {
+          "title": "Repaired Bars",
+          "type": "integer"
+        },
         "scored": {
           "title": "Scored",
           "type": "integer"
@@ -1872,6 +1884,8 @@
         "warmup_symbols",
         "batch_ms_max",
         "incomplete_bars",
+        "repaired_bars",
+        "repair_failed",
         "calibration_loaded",
         "models_loaded"
       ],
@@ -2089,6 +2103,411 @@
         "reason"
       ],
       "title": "OrderBookResynced",
+      "type": "object"
+    },
+    "PaperAccountInfo": {
+      "properties": {
+        "days": {
+          "title": "Days",
+          "type": "number"
+        },
+        "equity": {
+          "title": "Equity",
+          "type": "number"
+        },
+        "fees": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fees"
+        },
+        "funding": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Funding"
+        },
+        "market": {
+          "title": "Market",
+          "type": "string"
+        },
+        "max_drawdown_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Drawdown Pct"
+        },
+        "net_pnl": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Net Pnl"
+        },
+        "open_positions": {
+          "title": "Open Positions",
+          "type": "integer"
+        },
+        "profit_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Profit Factor"
+        },
+        "sharpe": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sharpe"
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stage"
+        },
+        "strategy": {
+          "title": "Strategy",
+          "type": "string"
+        },
+        "total_return_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total Return Pct"
+        },
+        "trades": {
+          "title": "Trades",
+          "type": "integer"
+        },
+        "win_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Win Rate"
+        }
+      },
+      "required": [
+        "strategy",
+        "market",
+        "stage",
+        "equity",
+        "total_return_pct",
+        "trades",
+        "win_rate",
+        "profit_factor",
+        "net_pnl",
+        "sharpe",
+        "max_drawdown_pct",
+        "fees",
+        "funding",
+        "open_positions",
+        "days"
+      ],
+      "title": "PaperAccountInfo",
+      "type": "object"
+    },
+    "PaperPositionInfo": {
+      "properties": {
+        "bars_held": {
+          "title": "Bars Held",
+          "type": "integer"
+        },
+        "direction": {
+          "title": "Direction",
+          "type": "string"
+        },
+        "entry_price": {
+          "title": "Entry Price",
+          "type": "number"
+        },
+        "entry_time_ms": {
+          "title": "Entry Time Ms",
+          "type": "integer"
+        },
+        "fees": {
+          "title": "Fees",
+          "type": "number"
+        },
+        "funding": {
+          "title": "Funding",
+          "type": "number"
+        },
+        "last_price": {
+          "title": "Last Price",
+          "type": "number"
+        },
+        "market": {
+          "title": "Market",
+          "type": "string"
+        },
+        "qty": {
+          "title": "Qty",
+          "type": "number"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "stop": {
+          "title": "Stop",
+          "type": "number"
+        },
+        "strategy": {
+          "title": "Strategy",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "number"
+        },
+        "unrealized_pnl": {
+          "title": "Unrealized Pnl",
+          "type": "number"
+        }
+      },
+      "required": [
+        "strategy",
+        "market",
+        "symbol",
+        "direction",
+        "qty",
+        "entry_price",
+        "entry_time_ms",
+        "stop",
+        "target",
+        "last_price",
+        "unrealized_pnl",
+        "fees",
+        "funding",
+        "bars_held",
+        "reason"
+      ],
+      "title": "PaperPositionInfo",
+      "type": "object"
+    },
+    "PaperTradeEvent": {
+      "description": "Yarışmada sanal pozisyon açıldı/kapandı (gerçek emir değildir).",
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "exit_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "net_pnl": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "price": {
+          "type": "number"
+        },
+        "qty": {
+          "type": "number"
+        },
+        "reason": {
+          "default": "",
+          "type": "string"
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "PaperTradeEvent"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "strategy",
+        "market",
+        "symbol",
+        "action",
+        "direction",
+        "price",
+        "qty"
+      ],
+      "title": "PaperTradeEvent",
+      "type": "object"
+    },
+    "PaperTradeInfo": {
+      "properties": {
+        "direction": {
+          "title": "Direction",
+          "type": "string"
+        },
+        "entry_price": {
+          "title": "Entry Price",
+          "type": "number"
+        },
+        "entry_time_ms": {
+          "title": "Entry Time Ms",
+          "type": "integer"
+        },
+        "exit_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Price"
+        },
+        "exit_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Reason"
+        },
+        "exit_time_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Time Ms"
+        },
+        "fees": {
+          "title": "Fees",
+          "type": "number"
+        },
+        "funding": {
+          "title": "Funding",
+          "type": "number"
+        },
+        "market": {
+          "title": "Market",
+          "type": "string"
+        },
+        "net_pnl": {
+          "title": "Net Pnl",
+          "type": "number"
+        },
+        "qty": {
+          "title": "Qty",
+          "type": "number"
+        },
+        "r_multiple": {
+          "title": "R Multiple",
+          "type": "number"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "strategy": {
+          "title": "Strategy",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "market",
+        "symbol",
+        "direction",
+        "qty",
+        "entry_price",
+        "entry_time_ms",
+        "exit_price",
+        "exit_time_ms",
+        "exit_reason",
+        "fees",
+        "funding",
+        "net_pnl",
+        "r_multiple",
+        "reason"
+      ],
+      "title": "PaperTradeInfo",
       "type": "object"
     },
     "PositioningInfo": {
@@ -4155,6 +4574,22 @@
     "GET /v1/opportunities?market=&min_score=&direction=&limit=": {
       "auth": true,
       "response": "OpportunitySummary[]"
+    },
+    "GET /v1/paper/leaderboard?market=": {
+      "auth": true,
+      "response": "PaperAccountInfo[]"
+    },
+    "GET /v1/paper/positions?market=&strategy=": {
+      "auth": true,
+      "response": "PaperPositionInfo[]"
+    },
+    "GET /v1/paper/stats": {
+      "auth": true,
+      "response": "object"
+    },
+    "GET /v1/paper/trades?market=&strategy=&limit=": {
+      "auth": true,
+      "response": "PaperTradeInfo[]"
     },
     "GET /v1/scanner/signals?limit=": {
       "auth": true,
