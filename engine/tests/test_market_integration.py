@@ -85,10 +85,19 @@ async def test_engine_waits_for_market_data_then_runs(stack: Stack) -> None:
     assert runtime is not None
     conditions = {c.name: c.ready for c in runtime.safety.conditions()}
     assert conditions == {"market_data.spot": True, "market_data.usdm_futures": True}
+    expected = {
+        "!miniTicker@arr",
+        "!ticker@arr",
+        "!markPrice@arr@1s",
+        "!forceOrder@arr",
+        "btcusdt@kline_1m",
+        "btcusdt@aggTrade",
+        "btcusdt@depth@100ms",
+    }
+    # Hazır olma bağlantı sağlığına bağlıdır; abonelik mesajı sahte sunucuya biraz sonra
+    # ulaşabilir (yavaş Windows CI'da görüldü). Abonelikler koşul olarak beklenir.
+    await wait_until(lambda: expected <= stack.fake.subscriptions())
     subs = stack.fake.subscriptions()
-    assert "!miniTicker@arr" in subs
-    assert {"!ticker@arr", "!markPrice@arr@1s", "!forceOrder@arr"} <= subs
-    assert {"btcusdt@kline_1m", "btcusdt@aggTrade", "btcusdt@depth@100ms"} <= subs
     assert "solusdt@depth@100ms" not in subs  # odakta değil
     assert not any(s.startswith("xauusdt") for s in subs)  # altın kontratı evrende yok
 
