@@ -377,7 +377,9 @@ async def test_whale_radar_end_to_end(stack: Stack) -> None:
         trades = (
             await client.get("/v1/whales/trades", params={"market": "spot", "symbol": "btcusdt"})
         ).json()
-        assert trades[0]["notional"] == pytest.approx(2_000_000)
+        # Sahte sunucunun arka plan işlemi (alış, 50 $) aynı milisaniyeye düşerse radar onu
+        # doğru şekilde aynı süpürmeye katar (Windows'ta saat çözünürlüğü ~15 ms).
+        assert 2_000_000 <= trades[0]["notional"] < 2_000_000 + 1_000
         assert trades[0]["side"] == "buy"
         alerts = (await client.get("/v1/whales/alerts")).json()
         kinds = {a["kind"] for a in alerts}
