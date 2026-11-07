@@ -90,6 +90,95 @@
       "title": "CheckInfo",
       "type": "object"
     },
+    "ConnectionInfo": {
+      "properties": {
+        "connected": {
+          "title": "Connected",
+          "type": "boolean"
+        },
+        "connected_for_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Connected For S"
+        },
+        "healthy": {
+          "title": "Healthy",
+          "type": "boolean"
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Error"
+        },
+        "last_message_age_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Message Age S"
+        },
+        "messages": {
+          "title": "Messages",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "reconnects": {
+          "title": "Reconnects",
+          "type": "integer"
+        },
+        "route": {
+          "title": "Route",
+          "type": "string"
+        },
+        "streams": {
+          "title": "Streams",
+          "type": "integer"
+        },
+        "subscribed": {
+          "title": "Subscribed",
+          "type": "integer"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "route",
+        "url",
+        "connected",
+        "healthy",
+        "streams",
+        "subscribed",
+        "messages",
+        "reconnects",
+        "last_message_age_s",
+        "connected_for_s",
+        "last_error"
+      ],
+      "title": "ConnectionInfo",
+      "type": "object"
+    },
     "EngineEvent": {
       "anyOf": [
         {
@@ -115,6 +204,18 @@
         },
         {
           "$ref": "#/$defs/Alert"
+        },
+        {
+          "$ref": "#/$defs/SymbolListed"
+        },
+        {
+          "$ref": "#/$defs/SymbolDelisted"
+        },
+        {
+          "$ref": "#/$defs/StreamConnectionChanged"
+        },
+        {
+          "$ref": "#/$defs/OrderBookResynced"
         }
       ],
       "discriminator": {
@@ -124,8 +225,12 @@
           "Heartbeat": "#/$defs/Heartbeat",
           "KillSwitchEngaged": "#/$defs/KillSwitchEngaged",
           "KillSwitchReleased": "#/$defs/KillSwitchReleased",
+          "OrderBookResynced": "#/$defs/OrderBookResynced",
           "ReadinessChanged": "#/$defs/ReadinessChanged",
           "ServiceHealthChanged": "#/$defs/ServiceHealthChanged",
+          "StreamConnectionChanged": "#/$defs/StreamConnectionChanged",
+          "SymbolDelisted": "#/$defs/SymbolDelisted",
+          "SymbolListed": "#/$defs/SymbolListed",
           "TradingModeChanged": "#/$defs/TradingModeChanged"
         },
         "propertyName": "type"
@@ -182,6 +287,47 @@
         "detail"
       ],
       "title": "ErrorResponse",
+      "type": "object"
+    },
+    "FocusRequest": {
+      "properties": {
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "symbols": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Symbols",
+          "type": "array"
+        }
+      },
+      "required": [
+        "market",
+        "symbols"
+      ],
+      "title": "FocusRequest",
+      "type": "object"
+    },
+    "FocusResponse": {
+      "properties": {
+        "focus": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Focus",
+          "type": "array"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        }
+      },
+      "required": [
+        "market",
+        "focus"
+      ],
+      "title": "FocusResponse",
       "type": "object"
     },
     "HealthResponse": {
@@ -404,6 +550,207 @@
       "title": "LoopLagInfo",
       "type": "object"
     },
+    "Market": {
+      "enum": [
+        "spot",
+        "usdm_futures"
+      ],
+      "title": "Market"
+    },
+    "MarketServiceInfo": {
+      "properties": {
+        "connections": {
+          "items": {
+            "$ref": "#/$defs/ConnectionInfo"
+          },
+          "title": "Connections",
+          "type": "array"
+        },
+        "focus": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Focus",
+          "type": "array"
+        },
+        "last_discovery_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Discovery Error"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "message_rates_per_s": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Message Rates Per S",
+          "type": "object"
+        },
+        "order_books": {
+          "items": {
+            "$ref": "#/$defs/OrderBookInfo"
+          },
+          "title": "Order Books",
+          "type": "array"
+        },
+        "ready": {
+          "title": "Ready",
+          "type": "boolean"
+        },
+        "rest_budget": {
+          "$ref": "#/$defs/RestBudgetInfo"
+        },
+        "streams": {
+          "title": "Streams",
+          "type": "integer"
+        },
+        "tracked_symbols": {
+          "title": "Tracked Symbols",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "market",
+        "ready",
+        "tracked_symbols",
+        "streams",
+        "connections",
+        "message_rates_per_s",
+        "order_books",
+        "focus",
+        "rest_budget",
+        "last_discovery_error"
+      ],
+      "title": "MarketServiceInfo",
+      "type": "object"
+    },
+    "MarketStatusResponse": {
+      "properties": {
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "markets": {
+          "items": {
+            "$ref": "#/$defs/MarketServiceInfo"
+          },
+          "title": "Markets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "enabled",
+        "markets"
+      ],
+      "title": "MarketStatusResponse",
+      "type": "object"
+    },
+    "OrderBookInfo": {
+      "properties": {
+        "applied": {
+          "title": "Applied",
+          "type": "integer"
+        },
+        "best_ask": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Best Ask"
+        },
+        "best_bid": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Best Bid"
+        },
+        "imbalance_10": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Imbalance 10"
+        },
+        "resyncs": {
+          "title": "Resyncs",
+          "type": "integer"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "update_id": {
+          "title": "Update Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "symbol",
+        "state",
+        "update_id",
+        "best_bid",
+        "best_ask",
+        "imbalance_10",
+        "resyncs",
+        "applied"
+      ],
+      "title": "OrderBookInfo",
+      "type": "object"
+    },
+    "OrderBookResynced": {
+      "properties": {
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "OrderBookResynced"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "market",
+        "symbol",
+        "reason"
+      ],
+      "title": "OrderBookResynced",
+      "type": "object"
+    },
     "ReadinessChanged": {
       "properties": {
         "condition": {
@@ -454,6 +801,44 @@
         "detail"
       ],
       "title": "ReadinessInfo",
+      "type": "object"
+    },
+    "RestBudgetInfo": {
+      "properties": {
+        "banned": {
+          "title": "Banned",
+          "type": "boolean"
+        },
+        "blocked_for_s": {
+          "title": "Blocked For S",
+          "type": "number"
+        },
+        "limit_per_minute": {
+          "title": "Limit Per Minute",
+          "type": "integer"
+        },
+        "total_used": {
+          "title": "Total Used",
+          "type": "integer"
+        },
+        "used": {
+          "title": "Used",
+          "type": "integer"
+        },
+        "waits": {
+          "title": "Waits",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "limit_per_minute",
+        "used",
+        "blocked_for_s",
+        "banned",
+        "waits",
+        "total_used"
+      ],
+      "title": "RestBudgetInfo",
       "type": "object"
     },
     "ServiceHealthChanged": {
@@ -569,6 +954,109 @@
       "title": "StatusResponse",
       "type": "object"
     },
+    "StreamConnectionChanged": {
+      "properties": {
+        "connected": {
+          "type": "boolean"
+        },
+        "connection": {
+          "type": "string"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "reason": {
+          "default": "",
+          "type": "string"
+        },
+        "streams": {
+          "type": "integer"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "StreamConnectionChanged"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "market",
+        "connection",
+        "connected",
+        "streams"
+      ],
+      "title": "StreamConnectionChanged",
+      "type": "object"
+    },
+    "SymbolDelisted": {
+      "properties": {
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "status": {
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "SymbolDelisted"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "market",
+        "symbol",
+        "status"
+      ],
+      "title": "SymbolDelisted",
+      "type": "object"
+    },
+    "SymbolListed": {
+      "description": "Daha önce görülmemiş bir sembol işlem görmeye başladı (yeni listeleme).",
+      "properties": {
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "onboard_date_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "ts_ms": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "SymbolListed"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "market",
+        "symbol"
+      ],
+      "title": "SymbolListed",
+      "type": "object"
+    },
     "TaskInfo": {
       "properties": {
         "last_error": {
@@ -602,6 +1090,98 @@
         "restarts"
       ],
       "title": "TaskInfo",
+      "type": "object"
+    },
+    "TickerInfo": {
+      "properties": {
+        "change_pct": {
+          "title": "Change Pct",
+          "type": "number"
+        },
+        "event_time_ms": {
+          "title": "Event Time Ms",
+          "type": "integer"
+        },
+        "funding_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Funding Rate"
+        },
+        "high": {
+          "title": "High",
+          "type": "number"
+        },
+        "last": {
+          "title": "Last",
+          "type": "number"
+        },
+        "low": {
+          "title": "Low",
+          "type": "number"
+        },
+        "mark_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mark Price"
+        },
+        "quote_volume": {
+          "title": "Quote Volume",
+          "type": "number"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "last",
+        "change_pct",
+        "high",
+        "low",
+        "quote_volume",
+        "event_time_ms"
+      ],
+      "title": "TickerInfo",
+      "type": "object"
+    },
+    "TickersResponse": {
+      "properties": {
+        "count": {
+          "title": "Count",
+          "type": "integer"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "tickers": {
+          "items": {
+            "$ref": "#/$defs/TickerInfo"
+          },
+          "title": "Tickers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "market",
+        "count",
+        "tickers"
+      ],
+      "title": "TickersResponse",
       "type": "object"
     },
     "TradingMode": {
@@ -744,6 +1324,14 @@
       "auth": false,
       "response": "HealthResponse"
     },
+    "GET /v1/market/status": {
+      "auth": true,
+      "response": "MarketStatusResponse"
+    },
+    "GET /v1/market/tickers?market=&limit=&focus_only=": {
+      "auth": true,
+      "response": "TickersResponse"
+    },
     "GET /v1/status": {
       "auth": true,
       "response": "StatusResponse"
@@ -765,6 +1353,11 @@
       "auth": true,
       "request": "KillSwitchReleaseRequest",
       "response": "KillSwitchResponse"
+    },
+    "POST /v1/market/focus": {
+      "auth": true,
+      "request": "FocusRequest",
+      "response": "FocusResponse"
     },
     "POST /v1/trading-mode": {
       "auth": true,

@@ -26,8 +26,9 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── observability/             ✅ logging (JSON + maskeleme), loop_monitor
 │   │   ├── system/                    ✅ paths, single_instance
 │   │   ├── api/                       ✅ server (REST + WS), schemas
-│   │   ├── exchange/                  🔜 2  Binance REST/WS istemcileri, imzalama, limit yöneticisi
-│   │   ├── market/                    🔜 2-3 sembol keşfi, akış yöneticisi, emir defteri, tarayıcı
+│   │   ├── exchange/                  ✅ 2  REST istemcisi, HMAC/Ed25519 imzalama, ağırlık bütçesi, uç noktalar
+│   │   ├── market/                    ✅ 2  sembol keşfi, WebSocket akış yöneticisi, emir defteri, olaylar, servis
+│   │   ├── scanner/                   🔜 3  coin tarama (hacim/fiyat anomalisi, likidite, yeni listeleme)
 │   │   ├── whales/                    🔜 4  balina radarı (Binance + zincir üstü)
 │   │   ├── history/                   🔜 5  toplu arşiv indirme, Parquet/DuckDB, artımlı güncelleme
 │   │   ├── analysis/                  🔜 6  göstergeler (artımlı), özellikler, modeller
@@ -38,7 +39,9 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── risk/                      🔜 11 risk kapısı ve bağımsız risk bekçisi
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
 │   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
-│   └── tests/                         ✅ 102 test (birim + gerçek HTTP/WS + alt süreç duman testi)
+│   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
+│   └── tests/                         ✅ 187 test (birim, gerçek mesaj fikstürleri, sahte Binance
+│                                          sunucusuyla uçtan uca, alt süreç duman testi)
 │
 ├── cloud/                             ✅ Bulut servisi (FastAPI) — yönetilen bulutta çalışır
 │   ├── pyproject.toml, uv.lock

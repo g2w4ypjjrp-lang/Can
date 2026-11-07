@@ -19,6 +19,7 @@ pytestmark = pytest.mark.slow
 def _start(data_dir: Path) -> subprocess.Popen[bytes]:
     env = {k: v for k, v in os.environ.items() if not k.startswith("ATI_")}
     env["ATI_LOG_TO_CONSOLE"] = "false"
+    env["ATI_MARKET_DATA__ENABLED"] = "false"
     kwargs: dict[str, object] = {}
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
@@ -108,6 +109,7 @@ def test_cli_output_survives_legacy_console_encoding(tmp_path: Path) -> None:
     """Windows'ta yönlendirilmiş çıktı cp1252 olur; Türkçe mesajlar çökmemeli (CI'da yakalandı)."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("ATI_")}
     env["PYTHONIOENCODING"] = "cp1252"
+    env["ATI_MARKET_DATA__ENABLED"] = "false"
     result = subprocess.run(
         [sys.executable, "-m", "ati_engine", "verify-audit", "--data-dir", str(tmp_path / "d")],
         capture_output=True,

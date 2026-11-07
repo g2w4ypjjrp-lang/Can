@@ -113,6 +113,12 @@ class SymbolInfo(msgspec.Struct, frozen=True, kw_only=True):
     step_size: Decimal
     min_qty: Decimal
     min_notional: Decimal
+    contract_type: str | None = None  # Futures: PERPETUAL, CURRENT_QUARTER ...
+    onboard_date_ms: int | None = None  # Futures: listelenme zamanı
+
+    @property
+    def is_trading(self) -> bool:
+        return self.status == "TRADING"
 
     def quantize_price(self, price: Decimal, *, side: Side) -> Decimal:
         """Fiyatı tick'e yuvarlar.

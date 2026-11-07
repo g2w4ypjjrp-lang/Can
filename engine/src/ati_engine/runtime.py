@@ -9,7 +9,9 @@ from dataclasses import dataclass, field
 from ati_engine import __version__
 from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus
+from ati_engine.core.models import Market
 from ati_engine.core.supervisor import TaskSupervisor
+from ati_engine.market.service import MarketDataService
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.safety.trading_mode import TradingModeController
@@ -30,6 +32,7 @@ class EngineRuntime:
     supervisor: TaskSupervisor
     loop_monitor: LoopLagMonitor
     api_token: str
+    market_data: dict[Market, MarketDataService] = field(default_factory=dict)
     version: str = __version__
     started_monotonic: float = field(default_factory=time.monotonic)
     shutdown_requested: asyncio.Event = field(default_factory=asyncio.Event)

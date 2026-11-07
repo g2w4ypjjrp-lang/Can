@@ -23,55 +23,64 @@ class Event(msgspec.Struct, frozen=True, kw_only=True, tag_field="type", tag=Tru
     ts_ms: int = msgspec.field(default_factory=now_ms)
 
 
-class EngineStateChanged(Event, frozen=True, kw_only=True):
+class SystemEvent(Event, frozen=True, kw_only=True):
+    """Arayüze ve iOS'a iletilen, düşük hacimli sistem olayları.
+
+    Yüksek hacimli piyasa verisi olayları (işlemler, mumlar, derinlik) bu sınıftan türemez;
+    yalnızca motor içinde dolaşır ve masaüstüne ayrı, hız sınırlı uç noktalarla sunulur.
+    """
+
+
+class EngineStateChanged(SystemEvent, frozen=True, kw_only=True):
     previous: EngineState
     current: EngineState
     reason: str
 
 
-class TradingModeChanged(Event, frozen=True, kw_only=True):
+class TradingModeChanged(SystemEvent, frozen=True, kw_only=True):
     previous: TradingMode
     current: TradingMode
     actor: str
 
 
-class KillSwitchEngaged(Event, frozen=True, kw_only=True):
+class KillSwitchEngaged(SystemEvent, frozen=True, kw_only=True):
     reason: str
     actor: str
 
 
-class KillSwitchReleased(Event, frozen=True, kw_only=True):
+class KillSwitchReleased(SystemEvent, frozen=True, kw_only=True):
     actor: str
 
 
-class ReadinessChanged(Event, frozen=True, kw_only=True):
+class ReadinessChanged(SystemEvent, frozen=True, kw_only=True):
     condition: str
     ready: bool
     detail: str = ""
 
 
-class ServiceHealthChanged(Event, frozen=True, kw_only=True):
+class ServiceHealthChanged(SystemEvent, frozen=True, kw_only=True):
     service: str
     healthy: bool
     detail: str = ""
 
 
-class Heartbeat(Event, frozen=True, kw_only=True):
+class Heartbeat(SystemEvent, frozen=True, kw_only=True):
     uptime_s: float
     loop_lag_ms: float
     state: EngineState
     trading_mode: TradingMode
 
 
-class Alert(Event, frozen=True, kw_only=True):
+class Alert(SystemEvent, frozen=True, kw_only=True):
     severity: Severity
     title: str
     message: str
     context: dict[str, Any] = msgspec.field(default_factory=dict)
 
 
-# Yerel API ve protokol şeması için bilinen olay türleri.
-PUBLIC_EVENT_TYPES: tuple[type[Event], ...] = (
+# Yerel API ve protokol şeması için bilinen çekirdek sistem olayları
+# (piyasa sistem olayları ``market.events.PUBLIC_MARKET_EVENT_TYPES`` içindedir).
+PUBLIC_EVENT_TYPES: tuple[type[SystemEvent], ...] = (
     EngineStateChanged,
     TradingModeChanged,
     KillSwitchEngaged,

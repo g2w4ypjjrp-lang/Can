@@ -1,0 +1,211 @@
+"""Uçtan uca: motor + piyasa verisi servisi + sahte Binance (REST ve WebSocket).
+
+"Beklenmeyen bağlantı kesintilerinde güvenli moda geçme" gereksinimi burada doğrulanır.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
+from pathlib import Path
+
+import httpx
+import pytest
+import websockets
+
+from ati_engine.app import Engine
+from ati_engine.config import BinanceEndpoints, EngineSettings, LocalApiSettings, MarketDataSettings
+from ati_engine.core.models import EngineState, Market
+from fake_binance import FakeBinance
+
+
+async def wait_until(predicate: Callable[[], bool], within: float = 10.0) -> None:
+    deadline = asyncio.get_running_loop().time() + within
+    while not predicate():
+        if asyncio.get_running_loop().time() > deadline:
+            raise AssertionError("koşul zamanında sağlanmadı")
+        await asyncio.sleep(0.05)
+
+
+@dataclass
+class Stack:
+    engine: Engine
+    fake: FakeBinance
+    base_url: str
+    token: str
+
+    @property
+    def state(self) -> EngineState:
+        assert self.engine.runtime is not None
+        return self.engine.runtime.safety.state.state
+
+    def client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            base_url=self.base_url, headers={"Authorization": f"Bearer {self.token}"}
+        )
+
+
+@pytest.fixture
+async def stack(tmp_path: Path) -> AsyncIterator[Stack]:
+    fake = await FakeBinance(interval_s=0.05).start()
+    settings = EngineSettings(
+        data_dir=tmp_path / "data",
+        log_to_console=False,
+        api=LocalApiSettings(port=0),
+        binance=BinanceEndpoints(**fake.binance_endpoints()),
+        market_data=MarketDataSettings(
+            enabled=True,
+            symbol_allowlist=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+            focus_symbols=["BTCUSDT", "ETHUSDT"],
+            stale_after_s=3,
+            depth_snapshot_limit=100,
+        ),
+    )
+    engine = Engine(settings)
+    task = asyncio.create_task(engine.run())
+    await asyncio.wait_for(engine.ready.wait(), timeout=10)
+    assert engine.runtime is not None
+    yield Stack(
+        engine=engine,
+        fake=fake,
+        base_url=f"http://127.0.0.1:{engine.bound_port}",
+        token=engine.runtime.api_token,
+    )
+    engine.runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=15)
+    await fake.stop()
+
+
+async def test_engine_waits_for_market_data_then_runs(stack: Stack) -> None:
+    await wait_until(lambda: stack.state is EngineState.RUNNING)
+    runtime = stack.engine.runtime
+    assert runtime is not None
+    conditions = {c.name: c.ready for c in runtime.safety.conditions()}
+    assert conditions == {"market_data.spot": True, "market_data.usdm_futures": True}
+    subs = stack.fake.subscriptions()
+    assert "!miniTicker@arr" in subs
+    assert {"!ticker@arr", "!markPrice@arr@1s", "!forceOrder@arr"} <= subs
+    assert {"btcusdt@kline_1m", "btcusdt@aggTrade", "btcusdt@depth@100ms"} <= subs
+    assert "solusdt@depth@100ms" not in subs  # odakta değil
+    assert not any(s.startswith("xauusdt") for s in subs)  # altın kontratı evrende yok
+
+
+async def test_order_books_sync_and_market_api(stack: Stack) -> None:
+    await wait_until(lambda: stack.state is EngineState.RUNNING)
+    async with stack.client() as client:
+
+        async def books_synced() -> bool:
+            body = (await client.get("/v1/market/status")).json()
+            return all(
+                b["state"] == "synced" for m in body["markets"] for b in m["order_books"]
+            ) and all(m["order_books"] for m in body["markets"])
+
+        for _ in range(100):
+            if await books_synced():
+                break
+            await asyncio.sleep(0.1)
+        status = (await client.get("/v1/market/status")).json()
+        assert status["enabled"] is True
+        markets = {m["market"]: m for m in status["markets"]}
+        assert set(markets) == {"spot", "usdm_futures"}
+        spot = markets["spot"]
+        assert spot["ready"] is True
+        assert spot["tracked_symbols"] == 3
+        assert {b["symbol"] for b in spot["order_books"]} == {"BTCUSDT", "ETHUSDT"}
+        assert all(b["best_bid"] == 100.0 and b["best_ask"] == 101.0 for b in spot["order_books"])
+        assert all(b["resyncs"] == 0 for m in markets.values() for b in m["order_books"])
+        assert {c["route"] for c in markets["usdm_futures"]["connections"]} == {"market", "public"}
+        assert spot["rest_budget"]["total_used"] > 0
+
+        tickers = (
+            await client.get("/v1/market/tickers", params={"market": "spot", "limit": 5})
+        ).json()
+        assert [t["symbol"] for t in tickers["tickers"]] == ["SOLUSDT", "ETHUSDT", "BTCUSDT"]
+        futures = (await client.get("/v1/market/tickers", params={"market": "usdm_futures"})).json()
+        btc = next(t for t in futures["tickers"] if t["symbol"] == "BTCUSDT")
+        assert btc["funding_rate"] == pytest.approx(0.0001)
+
+        focus = await client.post(
+            "/v1/market/focus", json={"market": "spot", "symbols": ["solusdt", "YOKUSDT"]}
+        )
+        assert focus.json() == {"market": "spot", "focus": ["SOLUSDT"]}
+        await wait_until(lambda: "solusdt@depth@100ms" in stack.fake.subscriptions())
+        await wait_until(lambda: "btcusdt@depth@100ms" not in _spot_subs(stack.fake))
+
+
+def _spot_subs(fake: FakeBinance) -> set[str]:
+    return {s for c in fake.clients if c.path == "/stream" for s in c.streams}
+
+
+async def test_disconnect_forces_safe_mode_and_recovers(stack: Stack) -> None:
+    await wait_until(lambda: stack.state is EngineState.RUNNING)
+    runtime = stack.engine.runtime
+    assert runtime is not None
+    seen: list[EngineState] = []
+    from ati_engine.core.events import EngineStateChanged
+
+    runtime.bus.subscribe(EngineStateChanged, lambda e: seen.append(e.current), name="t")
+    await stack.fake.drop_all()
+    await wait_until(lambda: EngineState.SAFE_MODE in seen)
+    await wait_until(lambda: stack.state is EngineState.RUNNING)
+    assert seen[:2] == [EngineState.SAFE_MODE, EngineState.RUNNING]
+
+
+async def test_silent_feed_forces_safe_mode(stack: Stack) -> None:
+    await wait_until(lambda: stack.state is EngineState.RUNNING)
+    stack.fake.paused = True
+    await wait_until(lambda: stack.state is EngineState.SAFE_MODE, within=10)
+    runtime = stack.engine.runtime
+    assert runtime is not None
+    assert not runtime.safety.state.can_open_positions()
+    assert runtime.safety.state.can_manage_positions()
+    stack.fake.paused = False
+    await wait_until(lambda: stack.state is EngineState.RUNNING, within=15)
+
+
+async def test_ui_stream_gets_system_events_only(stack: Stack) -> None:
+    await wait_until(lambda: stack.state is EngineState.RUNNING)
+    url = stack.base_url.replace("http://", "ws://") + "/v1/events"
+    async with websockets.connect(url) as ws:
+        await ws.send(json.dumps({"type": "auth", "token": stack.token}))
+        assert json.loads(await ws.recv())["type"] == "auth_ok"
+        await stack.fake.drop_all()
+        types: set[str] = set()
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 5
+        while loop.time() < deadline and "StreamConnectionChanged" not in types:
+            types.add(json.loads(await asyncio.wait_for(ws.recv(), timeout=5))["type"])
+    assert "StreamConnectionChanged" in types
+    assert not types & {"AggTrade", "Kline", "TickerBatch", "DepthDiff", "OrderBookTop"}
+
+
+async def test_unreachable_exchange_keeps_engine_safe(tmp_path: Path) -> None:
+    """Binance'e hiç ulaşılamıyorsa motor güvenli modda kalır ve nedenini raporlar."""
+    settings = EngineSettings(
+        data_dir=tmp_path / "data",
+        log_to_console=False,
+        api=LocalApiSettings(port=0),
+        markets=[Market.SPOT],
+        binance=BinanceEndpoints(
+            spot_market_data_rest="http://127.0.0.1:9", spot_market_data_ws="ws://127.0.0.1:9"
+        ),
+        market_data=MarketDataSettings(enabled=True),
+    )
+    engine = Engine(settings)
+    task = asyncio.create_task(engine.run())
+    await asyncio.wait_for(engine.ready.wait(), timeout=10)
+    runtime = engine.runtime
+    assert runtime is not None
+    try:
+        await wait_until(
+            lambda: any(
+                c.name == "market_data.spot" and "keşif başarısız" in c.detail
+                for c in runtime.safety.conditions()
+            )
+        )
+        assert runtime.safety.state.state is EngineState.SAFE_MODE
+    finally:
+        runtime.request_shutdown()
+        await asyncio.wait_for(task, timeout=15)

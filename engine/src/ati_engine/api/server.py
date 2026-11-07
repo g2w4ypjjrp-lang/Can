@@ -31,23 +31,31 @@ from ati_engine.api.schemas import (
     AuditEntry,
     CheckInfo,
     ErrorResponse,
+    FocusRequest,
+    FocusResponse,
     HealthResponse,
     KillSwitchEngageRequest,
     KillSwitchInfo,
     KillSwitchReleaseRequest,
     KillSwitchResponse,
     LoopLagInfo,
+    MarketServiceInfo,
+    MarketStatusResponse,
     ReadinessInfo,
     ShutdownResponse,
     StatusResponse,
     TaskInfo,
+    TickerInfo,
+    TickersResponse,
     TradingModeRequest,
     TradingModeResponse,
     WsAuthMessage,
     WsAuthOk,
 )
 from ati_engine.core.bus import OverflowPolicy
-from ati_engine.core.events import Event, encode_event
+from ati_engine.core.events import Event, SystemEvent, encode_event
+from ati_engine.core.models import Market
+from ati_engine.market.service import MarketDataService
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
 
@@ -197,6 +205,59 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         runtime.request_shutdown()
         return ShutdownResponse()
 
+    def market_service(market: Market) -> MarketDataService:
+        service = runtime.market_data.get(market)
+        if service is None:
+            raise HTTPException(status_code=404, detail=f"{market.value} piyasa verisi etkin değil")
+        return service
+
+    @app.get("/v1/market/status", response_model=MarketStatusResponse)
+    async def market_status(_: Auth) -> MarketStatusResponse:
+        return MarketStatusResponse(
+            enabled=bool(runtime.market_data),
+            markets=[
+                MarketServiceInfo.model_validate(service.status())
+                for service in runtime.market_data.values()
+            ],
+        )
+
+    @app.get("/v1/market/tickers", response_model=TickersResponse)
+    async def market_tickers(
+        _: Auth,
+        market: Market = Market.SPOT,
+        limit: Annotated[int, Query(ge=1, le=1000)] = 50,
+        focus_only: bool = False,
+    ) -> TickersResponse:
+        service = market_service(market)
+        tickers = []
+        for t in service.tickers(limit, focus_only=focus_only):
+            mark = service.state.marks.get(t.symbol)
+            tickers.append(
+                TickerInfo(
+                    symbol=t.symbol,
+                    last=t.last,
+                    change_pct=round(t.change_pct, 4),
+                    high=t.high,
+                    low=t.low,
+                    quote_volume=t.quote_volume,
+                    event_time_ms=t.event_time_ms,
+                    mark_price=mark.mark_price if mark else None,
+                    funding_rate=mark.funding_rate if mark else None,
+                )
+            )
+        return TickersResponse(market=market, count=len(tickers), tickers=tickers)
+
+    @app.post("/v1/market/focus", response_model=FocusResponse)
+    async def market_focus(body: FocusRequest, _: Auth) -> FocusResponse:
+        service = market_service(body.market)
+        focus = service.set_focus(body.symbols)
+        await runtime.audit.record(
+            actor=LOCAL_ACTOR,
+            action="market.focus",
+            details={"market": body.market.value, "symbols": focus},
+        )
+        return FocusResponse(market=body.market, focus=focus)
+
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:
         origin = websocket.headers.get("origin")
@@ -221,7 +282,7 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             await websocket.send_text(encode_event(event).decode("utf-8"))
 
         subscription = runtime.bus.subscribe(
-            Event,
+            SystemEvent,
             forward,
             name=f"ws-client-{next(_ws_ids)}",
             maxsize=2_000,

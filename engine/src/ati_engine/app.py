@@ -30,6 +30,8 @@ from ati_engine.core.bus import EventBus, OverflowPolicy
 from ati_engine.core.events import Alert, Heartbeat
 from ati_engine.core.models import EngineState, Severity
 from ati_engine.core.supervisor import RestartPolicy, TaskSupervisor
+from ati_engine.market.discovery import SymbolRegistry, UniverseFilter
+from ati_engine.market.service import MarketDataService
 from ati_engine.observability.logging import configure_logging
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.runtime import EngineRuntime
@@ -144,6 +146,9 @@ class Engine:
             # Önemli olayları loglara da yaz (asla kaybolmamalı -> BLOCK).
             bus.subscribe(Alert, self._log_alert, name="alert-logger", policy=OverflowPolicy.BLOCK)
 
+            if settings.market_data.enabled:
+                self._start_market_data(runtime)
+
             supervisor.spawn("loop-lag-monitor", loop_monitor.run)
             supervisor.spawn(
                 "heartbeat",
@@ -214,6 +219,10 @@ class Engine:
             if supervisor is not None:
                 await supervisor.stop_all()
             if runtime is not None:
+                for service in runtime.market_data.values():
+                    with contextlib.suppress(Exception):
+                        await service.close()
+            if runtime is not None:
                 with contextlib.suppress(Exception):
                     await runtime.safety.state.transition(EngineState.STOPPED, "durduruldu")
             if bus is not None:
@@ -225,6 +234,41 @@ class Engine:
         finally:
             self._lock.release()
             logger.info("Motor durdu")
+
+    @staticmethod
+    def _start_market_data(runtime: EngineRuntime) -> None:
+        settings = runtime.settings
+        cfg = settings.market_data
+        registry = SymbolRegistry(
+            runtime.db,
+            runtime.bus,
+            universe=UniverseFilter(
+                quote_asset=settings.quote_asset,
+                futures_contract_types=frozenset(cfg.futures_contract_types),
+                allowlist=frozenset(cfg.symbol_allowlist) if cfg.symbol_allowlist else None,
+                max_symbols=cfg.max_symbols,
+            ),
+        )
+        for market in settings.markets:
+            condition = f"market_data.{market.value}"
+
+            async def on_ready(ready: bool, detail: str, _condition: str = condition) -> None:
+                await runtime.safety.set_ready(_condition, ready, detail)
+
+            service = MarketDataService(
+                market=market,
+                settings=settings,
+                registry=registry,
+                bus=runtime.bus,
+                on_ready=on_ready,
+            )
+            runtime.safety.register_condition(condition, ready=False, detail="başlatılıyor")
+            runtime.market_data[market] = service
+            runtime.supervisor.spawn(
+                f"market-data-{market.value}",
+                service.run,
+                RestartPolicy(max_restarts=20, window_s=600, backoff_initial_s=1, backoff_max_s=60),
+            )
 
     @staticmethod
     async def _log_alert(alert: Alert) -> None:

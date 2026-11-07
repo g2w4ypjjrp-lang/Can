@@ -120,6 +120,45 @@ class BinanceEndpoints(BaseModel):
     futures_testnet_rest: str = "https://testnet.binancefuture.com"
 
 
+class MarketDataSettings(BaseModel):
+    """Piyasa verisi motoru (Aşama 2).
+
+    Katmanlar:
+    * Katman 0 - pazar geneli: Spot ``!miniTicker@arr``; Futures ``!ticker@arr``,
+      ``!markPrice@arr@1s``, ``!forceOrder@arr``.
+    * Katman 1 - izlenen her sembol: ``@kline_<aralık>`` ve (açıksa) ``@aggTrade``.
+    * Katman 2 - odak sembolleri: ``@depth@100ms`` + REST anlık görüntüsü ile yerel emir defteri.
+    """
+
+    enabled: bool = True
+    kline_intervals: list[str] = Field(default_factory=lambda: ["1m"])
+    include_agg_trades: bool = True
+    streams_per_connection: int = Field(default=200, ge=1, le=1024)
+    focus_symbols: list[str] = Field(
+        default_factory=lambda: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
+    )
+    depth_snapshot_limit: int = Field(default=1000, ge=5, le=5000)
+    discovery_interval_s: float = Field(default=300.0, ge=10)
+    stale_after_s: float = Field(default=30.0, ge=2)
+    futures_contract_types: list[str] = Field(default_factory=lambda: ["PERPETUAL"])
+    symbol_allowlist: list[str] | None = None
+    max_symbols: int | None = Field(default=None, ge=1)
+
+    @field_validator("kline_intervals")
+    @classmethod
+    def _valid_intervals(cls, value: list[str]) -> list[str]:
+        allowed = {"1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d"}
+        bad = [v for v in value if v not in allowed]
+        if bad:
+            raise ValueError(f"Geçersiz mum aralığı: {bad}")
+        return value
+
+    @field_validator("focus_symbols", "symbol_allowlist")
+    @classmethod
+    def _upper(cls, value: list[str] | None) -> list[str] | None:
+        return None if value is None else [v.strip().upper() for v in value if v.strip()]
+
+
 class EngineSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="ATI_",
@@ -144,6 +183,7 @@ class EngineSettings(BaseSettings):
     risk: RiskLimits = Field(default_factory=RiskLimits)
     api: LocalApiSettings = Field(default_factory=LocalApiSettings)
     binance: BinanceEndpoints = Field(default_factory=BinanceEndpoints)
+    market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
 
     @property
     def paths(self) -> DataPaths:

@@ -24,6 +24,8 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     for key in list(os.environ):
         if key.startswith("ATI_"):
             monkeypatch.delenv(key, raising=False)
+    # Testler gerçek Binance'e bağlanmaz; piyasa verisi testleri sahte sunucu kullanır.
+    monkeypatch.setenv("ATI_MARKET_DATA__ENABLED", "false")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
 

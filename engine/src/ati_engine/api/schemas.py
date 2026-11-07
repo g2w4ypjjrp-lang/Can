@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from ati_engine.core.models import EngineState, TradingMode
+from ati_engine.core.models import EngineState, Market, TradingMode
 
 
 class HealthResponse(BaseModel):
@@ -113,3 +113,87 @@ class WsAuthMessage(BaseModel):
 class WsAuthOk(BaseModel):
     type: Literal["auth_ok"] = "auth_ok"
     version: str
+
+
+# --- Piyasa verisi (Aşama 2) ---------------------------------------------------------------
+
+
+class ConnectionInfo(BaseModel):
+    name: str
+    route: str
+    url: str
+    connected: bool
+    healthy: bool
+    streams: int
+    subscribed: int
+    messages: int
+    reconnects: int
+    last_message_age_s: float | None
+    connected_for_s: float | None
+    last_error: str | None
+
+
+class OrderBookInfo(BaseModel):
+    symbol: str
+    state: str
+    update_id: int
+    best_bid: float | None
+    best_ask: float | None
+    imbalance_10: float | None
+    resyncs: int
+    applied: int
+
+
+class RestBudgetInfo(BaseModel):
+    limit_per_minute: int
+    used: int
+    blocked_for_s: float
+    banned: bool
+    waits: int
+    total_used: int
+
+
+class MarketServiceInfo(BaseModel):
+    market: Market
+    ready: bool
+    tracked_symbols: int
+    streams: int
+    connections: list[ConnectionInfo]
+    message_rates_per_s: dict[str, float]
+    order_books: list[OrderBookInfo]
+    focus: list[str]
+    rest_budget: RestBudgetInfo
+    last_discovery_error: str | None
+
+
+class MarketStatusResponse(BaseModel):
+    enabled: bool
+    markets: list[MarketServiceInfo]
+
+
+class TickerInfo(BaseModel):
+    symbol: str
+    last: float
+    change_pct: float
+    high: float
+    low: float
+    quote_volume: float
+    event_time_ms: int
+    mark_price: float | None = None
+    funding_rate: float | None = None
+
+
+class TickersResponse(BaseModel):
+    market: Market
+    count: int
+    tickers: list[TickerInfo]
+
+
+class FocusRequest(BaseModel):
+    market: Market
+    symbols: list[str] = Field(max_length=100)
+
+
+class FocusResponse(BaseModel):
+    market: Market
+    focus: list[str]
