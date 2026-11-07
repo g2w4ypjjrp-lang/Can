@@ -297,7 +297,15 @@ async def test_liquidity_drop_is_detected(harness: Harness) -> None:
     for k in range(6, 70):
         await harness.scanner.tick(harness.clock.now_ms() + k * 1000)
     harness.scanner.on_book(book(300_000))
-    await harness.scanner.tick(harness.clock.now_ms() + 70_000)
+    for k in range(70, 75):  # 5 sn'lik çekilme: anlık titreşim sayılır
+        await harness.scanner.tick(harness.clock.now_ms() + k * 1000)
+    harness.scanner.on_book(book(1_000_000))
+    await harness.scanner.tick(harness.clock.now_ms() + 75_000)
+    await harness.settle()
+    assert harness.signals == []
+    harness.scanner.on_book(book(300_000))
+    for k in range(76, 90):  # 14 sn süren çekilme: sinyal
+        await harness.scanner.tick(harness.clock.now_ms() + k * 1000)
     await harness.settle()
     assert harness.kinds() == [SignalKind.LIQUIDITY_DROP]
     row = harness.scanner.rows[(Market.SPOT, "BTCUSDT")]

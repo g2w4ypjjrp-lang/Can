@@ -99,6 +99,7 @@ class _Book:
     imbalance: float
     baseline: float | None = None
     samples: int = 0  # temel çizgiye katılan saniyelik tur sayısı
+    low_streak: int = 0  # derinliğin eşik altında kaldığı ardışık tur sayısı
 
 
 @dataclass
@@ -215,6 +216,7 @@ class MarketScanner:
             imbalance=event.imbalance_10,
             baseline=previous.baseline if previous else None,
             samples=previous.samples if previous else 0,
+            low_streak=previous.low_streak if previous else 0,
         )
 
     async def on_listed(self, event: SymbolListed) -> None:
@@ -358,7 +360,9 @@ class MarketScanner:
                 book.baseline = book.notional
             elif book.samples >= 60:  # temel çizgi en az ~1 dk otursun
                 limit = book.baseline * (1 - cfg.liquidity_drop_pct / 100)
-                if book.notional < limit:
+                book.low_streak = book.low_streak + 1 if book.notional < limit else 0
+                # Anlık titreşim değil, en az 10 sn süren çekilme sinyal sayılır.
+                if book.low_streak >= 10:
                     drop = (1 - book.notional / book.baseline) * 100
                     await self._emit(
                         state,
@@ -369,8 +373,8 @@ class MarketScanner:
                         message=f"{row.symbol}: ilk 10 kademe derinlik %{drop:.0f} azaldı",
                         details={"notional_10": book.notional, "baseline": book.baseline},
                     )
-            # Yaklaşık 1 dakikalık üstel hareketli ortalama (saniyelik turda güncellenir).
-            book.baseline += (book.notional - book.baseline) / 60
+            # Yaklaşık 5 dakikalık üstel hareketli ortalama (saniyelik turda güncellenir).
+            book.baseline += (book.notional - book.baseline) / 300
             book.samples += 1
 
     async def _emit(
