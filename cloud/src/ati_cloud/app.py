@@ -1,20 +1,24 @@
 """Bulut servisi uygulama iskeleti.
 
-Aşama 1'de yalnızca sağlık uç noktaları vardır. Kimlik doğrulama, lisans, ödeme ve
-yönetici API'leri sırasıyla Aşama 15-17'de eklenecektir. Yönetici API'si ayrı bir
+Sağlık uç noktaları (Aşama 1) ve müşteri hesapları (Aşama 14). Lisans, ödeme ve yönetici
+API'leri sırasıyla Aşama 15-17'de eklenecektir. Yönetici API'si ayrı bir
 yönlendirici (``/admin``), ayrı oturum tablosu ve zorunlu 2FA ile çalışacaktır.
 """
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 import psycopg
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from ati_cloud import __version__
+from ati_cloud.accounts import Database, create_accounts_router
 from ati_cloud.config import CloudSettings
 from ati_cloud.db.migrate import load_migrations, pending
 
@@ -35,14 +39,33 @@ Settings = Annotated[CloudSettings, Depends(get_settings)]
 
 
 def create_app(settings: CloudSettings | None = None) -> FastAPI:
+    cfg = settings or CloudSettings()
+    db = Database(cfg.database_url.get_secret_value())
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        await db.close()
+
     app = FastAPI(
         title="AI Trading Intelligence Cloud",
         version=__version__,
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        lifespan=lifespan,
     )
-    app.state.settings = settings or CloudSettings()
+    app.state.settings = cfg
+    app.state.db = db
+    # Web sitesi müşteri paneli: yalnızca kendi kökenimizden, çerezle (SameSite=Strict).
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cfg.web_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
+    app.include_router(create_accounts_router(cfg, db))
 
     @app.get("/health")
     async def health() -> dict[str, str]:

@@ -19,9 +19,16 @@ class CloudSettings(BaseSettings):
 
     environment: Literal["development", "test", "staging", "production"] = "development"
     database_url: SecretStr
+    # Web sitesi (Aşama 14): oturum çerezini kullanan istekler yalnızca bu kökenlerden kabul edilir.
+    web_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    public_web_url: str = "http://localhost:3000"
+    session_cookie_secure: bool = True
+    session_days: int = 30
 
     @model_validator(mode="after")
     def _production_requires_tls(self) -> Self:
+        if self.environment in ("staging", "production") and not self.session_cookie_secure:
+            raise ValueError("staging/production ortamında oturum çerezi Secure olmalı")
         if self.environment in ("staging", "production"):
             url = urlparse(self.database_url.get_secret_value())
             sslmode = parse_qs(url.query).get("sslmode", [""])[0]
