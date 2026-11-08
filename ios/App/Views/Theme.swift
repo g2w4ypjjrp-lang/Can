@@ -46,16 +46,25 @@ enum Fmt {
 struct ConnectionBadge: View {
     @Environment(RemoteController.self) private var controller
 
+    private var text: String {
+        switch controller.status {
+        case .connected: return controller.session?.engineOnline == true ? "Bağlı" : "Bilgisayar çevrim dışı"
+        case .connecting: return "Bağlanıyor…"
+        case .failed: return "Bağlantı yok"
+        case .idle: return "Bağlı değil"
+        }
+    }
+
+    private var color: Color {
+        switch controller.status {
+        case .connected: return controller.session?.engineOnline == true ? Theme.up : Color.orange
+        case .connecting: return Color.orange
+        case .failed: return Theme.down
+        case .idle: return Color.gray
+        }
+    }
+
     var body: some View {
-        let (text, color): (String, Color) = {
-            switch controller.status {
-            case .connected:
-                return controller.session?.engineOnline == true ? ("Bağlı", Theme.up) : ("Bilgisayar çevrim dışı", .orange)
-            case .connecting: return ("Bağlanıyor…", .orange)
-            case .failed: return ("Bağlantı yok", Theme.down)
-            case .idle: return ("Bağlı değil", .gray)
-            }
-        }()
         Label(text, systemImage: "circle.fill")
             .font(.caption)
             .foregroundStyle(color)
