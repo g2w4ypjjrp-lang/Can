@@ -5,9 +5,9 @@
 import Foundation
 
 #if canImport(CryptoKit)
-    import CryptoKit
+    @preconcurrency import CryptoKit
 #else
-    import Crypto
+    @preconcurrency import Crypto
 #endif
 
 public actor MockEngine: FrameTransport {

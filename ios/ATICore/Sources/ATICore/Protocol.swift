@@ -7,9 +7,9 @@
 import Foundation
 
 #if canImport(CryptoKit)
-    import CryptoKit
+    @preconcurrency import CryptoKit
 #else
-    import Crypto
+    @preconcurrency import Crypto
 #endif
 
 public enum ProtocolError: Error, Equatable, Sendable {
@@ -80,19 +80,25 @@ public protocol DeviceSigner: Sendable {
     func signature(for data: Data) throws -> Data
 }
 
+/// Yazılım anahtarı (simülatör ve testler). Anahtar ham baytlarıyla tutulur (Sendable).
 public struct SoftwareSigner: DeviceSigner {
-    private let key: P256.Signing.PrivateKey
+    public let rawRepresentation: Data
+    public let publicKeyX963: Data
 
-    public init() { key = P256.Signing.PrivateKey() }
-    public init(rawRepresentation: Data) throws {
-        key = try P256.Signing.PrivateKey(rawRepresentation: rawRepresentation)
+    public init() {
+        let key = P256.Signing.PrivateKey()
+        rawRepresentation = key.rawRepresentation
+        publicKeyX963 = key.publicKey.x963Representation
     }
 
-    public var rawRepresentation: Data { key.rawRepresentation }
-    public var publicKeyX963: Data { key.publicKey.x963Representation }
+    public init(rawRepresentation: Data) throws {
+        let key = try P256.Signing.PrivateKey(rawRepresentation: rawRepresentation)
+        self.rawRepresentation = key.rawRepresentation
+        publicKeyX963 = key.publicKey.x963Representation
+    }
 
     public func signature(for data: Data) throws -> Data {
-        try key.signature(for: data).rawRepresentation
+        try P256.Signing.PrivateKey(rawRepresentation: rawRepresentation).signature(for: data).rawRepresentation
     }
 }
 

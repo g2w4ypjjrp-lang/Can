@@ -4,9 +4,9 @@ import XCTest
 @testable import ATICore
 
 #if canImport(CryptoKit)
-    import CryptoKit
+    @preconcurrency import CryptoKit
 #else
-    import Crypto
+    @preconcurrency import Crypto
 #endif
 
 /// Motorun (Python) ürettiği ortak test vektörleri: shared/protocol/test-vectors/remote-v1.json
