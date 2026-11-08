@@ -165,7 +165,7 @@ public final class RemoteController {
         }
     }
 
-    private func waitUntil(_ what: String, seconds: Double, _ condition: @MainActor () -> Bool) async throws {
+    private func waitUntil(_ what: String, seconds: Double, _ condition: @escaping @MainActor () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(seconds)
         while !condition() {
             if Date() > deadline { throw ControllerError.timeout(what) }

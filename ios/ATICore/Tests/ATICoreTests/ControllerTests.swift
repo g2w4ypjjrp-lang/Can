@@ -49,7 +49,7 @@ final class ControllerTests: XCTestCase {
         return controller
     }
 
-    func eventually(_ what: String, _ condition: @MainActor () -> Bool) async throws {
+    func eventually(_ what: String, _ condition: @escaping @MainActor () -> Bool) async throws {
         for _ in 0..<200 {
             if condition() { return }
             try await Task.sleep(for: .milliseconds(10))
