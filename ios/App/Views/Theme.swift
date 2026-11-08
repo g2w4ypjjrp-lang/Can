@@ -95,3 +95,22 @@ struct Disclaimer: View {
             .foregroundStyle(.secondary)
     }
 }
+
+/// Başlık + değer satırı. Değer ayrı bir erişilebilirlik öğesidir (arayüz testleri ve
+/// VoiceOver için değer tek başına okunabilir).
+struct ValueRow: View {
+    let title: String
+    let value: String
+    var id: String
+    var color: Color = .primary
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundStyle(color)
+                .accessibilityIdentifier(id)
+        }
+    }
+}

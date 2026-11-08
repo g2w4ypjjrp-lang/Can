@@ -63,11 +63,9 @@ struct DashboardView: View {
     @ViewBuilder
     private func engineSection(_ data: SnapshotData) -> some View {
         Section("Motor") {
-            LabeledContent("Durum") {
-                Text(Fmt.stateText(data.engine.state))
-                    .foregroundStyle(data.engine.state == "running" ? Theme.up : Theme.down)
-                    .accessibilityIdentifier("engine-state")
-            }
+            ValueRow(
+                title: "Durum", value: Fmt.stateText(data.engine.state), id: "engine-state",
+                color: data.engine.state == "running" ? Theme.up : Theme.down)
             LabeledContent("İşlem modu", value: Fmt.modeText(data.engine.trading_mode))
             if let risk = data.risk {
                 LabeledContent("Günlük zarar", value: "%" + Fmt.number(risk.daily_loss_pct))
@@ -104,9 +102,7 @@ struct DashboardView: View {
     private func botSection(_ auto: AutotradeSummary?) -> some View {
         if let auto {
             Section("Otomatik işlem (test ağı)") {
-                LabeledContent("Durum") {
-                    Text(auto.enabled ? "Açık" : "Kapalı").accessibilityIdentifier("bot-state")
-                }
+                ValueRow(title: "Durum", value: auto.enabled ? "Açık" : "Kapalı", id: "bot-state")
                 LabeledContent("Açılan / risk reddi", value: "\(auto.opened) / \(auto.rejected)")
                 if auto.enabled {
                     Button("Botu durdur") { Task { await controller.send(.pauseAutotrade) } }

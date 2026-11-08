@@ -20,9 +20,7 @@ struct SettingsView: View {
                 }
                 Section("Güvenlik") {
                     LabeledContent("Cihaz kimliği", value: String((controller.deviceID ?? "").prefix(12)) + "…")
-                    LabeledContent("Doğrulanamayan mesaj") {
-                        Text("\(controller.rejectedFrames)").accessibilityIdentifier("rejected-count")
-                    }
+                    ValueRow(title: "Doğrulanamayan mesaj", value: "\(controller.rejectedFrames)", id: "rejected-count")
                     Text("Bilgisayardan gelen her mesaj imzasından doğrulanır; doğrulanamayan mesajlar yok sayılır ve burada sayılır.")
                         .font(.footnote).foregroundStyle(.secondary)
                     if let mockEngine {
