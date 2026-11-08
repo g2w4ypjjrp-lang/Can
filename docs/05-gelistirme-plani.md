@@ -603,7 +603,7 @@ piyasa sonuçlarını göstermez (likidite ve fiyatlar farklıdır).
 | Kriter | Sonuç |
 |---|---|
 | E2E arayüz testleri | ✅ 8 Playwright senaryosu, gerçek motor + sahte Binance (piyasa verisi ve test ağı borsası). Kapsam: tüm ekranlar açılıyor; canlı fiyat listesi ve arama; acil durdurma ve onay ifadesiyle kaldırma; gerçek hesap düğmesi kilitli; yanlış anahtar saklanmıyor, doğru anahtar doğrulanıp bağlanıyor, gizli anahtar ekranda kalmıyor; stopsuz işlem risk kapısınca reddediliyor; korumalı işlem açılıp 3 koruma emriyle görünüyor ve kapatılıyor; karar günlüğü; bot aç/kapa. Ayrıca 13 birim testi (biçimlendirme, bağlantı güvenliği, API istemcisi) ve 3 Rust testi |
-| Temiz Windows makinesinde kurulum testi | CI Windows işi şunları yapar: motoru paketler ve duman testinden geçirir, kurulum paketini derler, sessiz kurulum yapar, uygulamayı açıp motorun yanıt verdiğini doğrular, kabuk zorla kapatılınca motorun da kapandığını doğrular, sessiz kaldırır. Kurulum paketi CI çıktısı olarak indirilebilir |
+| Temiz Windows makinesinde kurulum testi | ✅ İlk CI çalışmasında geçti (GitHub windows-latest). Paketlenmiş motor duman testinden geçti. Sessiz kurulum `%LOCALAPPDATA%\AI Trading Intelligence` dizinine yapıldı. Uygulama açılınca motor ~6 sn'de yanıt verdi. Kabuk zorla kapatılınca motor da kapandı (iş nesnesi). Sessiz kaldırma tamamlandı. İmzasız kurulum paketi ~79 MB, CI çıktısı olarak indirilebilir |
 | Kod imzalama | ⏸️ G6 onayı bekleniyor (sertifika). Paket imzasız |
 | Otomatik güncelleme | ⏸️ Güncelleme sunucusu (G5) ile birlikte |
 
