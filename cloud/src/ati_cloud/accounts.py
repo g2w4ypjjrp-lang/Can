@@ -22,7 +22,7 @@ import secrets
 import time
 import uuid
 from collections import defaultdict, deque
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -155,6 +155,31 @@ async def session_customer_id(db: Database, request: Request) -> Any | None:
     return row["customer_id"] if row else None
 
 
+def customer_dependency(db: Database) -> Callable[[Request], Awaitable[dict[str, Any]]]:
+    """Oturum çerezinden müşteriyi çözen FastAPI bağımlılığı (diğer yönlendiriciler de kullanır)."""
+
+    async def current_customer(request: Request) -> dict[str, Any]:
+        token = request.cookies.get(SESSION_COOKIE)
+        if not token or len(token) > 200:
+            raise HTTPException(status_code=401, detail="Oturum açmanız gerekiyor")
+        async with db.connection() as conn:
+            cur = await conn.execute(
+                "UPDATE customer_sessions s SET last_used_at = now() FROM customers c "
+                "WHERE s.refresh_token_hash = %s AND s.revoked_at IS NULL AND s.expires_at > now() "
+                "AND c.id = s.customer_id AND c.status = 'active' "
+                "RETURNING c.id, c.email, c.email_verified_at, c.full_name, c.locale, "
+                "c.created_at, c.password_hash, "
+                "s.id AS session_id",
+                (token_digest(token),),
+            )
+            row = await cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=401, detail="Oturum geçersiz veya süresi dolmuş")
+        return row
+
+    return current_customer
+
+
 # --- Şemalar ------------------------------------------------------------------------------------
 
 
@@ -197,6 +222,14 @@ class PlanInfo(BaseModel):
     features: dict[str, Any]
 
 
+class DeviceInfo(BaseModel):
+    id: str
+    name: str
+    platform: str
+    activated_at: datetime
+    last_seen_at: datetime
+
+
 class LicenseInfo(BaseModel):
     id: str
     key_hint: str
@@ -208,6 +241,8 @@ class LicenseInfo(BaseModel):
     activated_at: datetime | None
     expires_at: datetime | None
     active_devices: int
+    devices: list[DeviceInfo] = []
+    device_resets_left: int = 0
 
 
 class MeResponse(BaseModel):
@@ -303,27 +338,8 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
         row = await cur.fetchone()
         return row["customer_id"] if row else None
 
-    async def current_customer(request: Request) -> dict[str, Any]:
-        token = request.cookies.get(SESSION_COOKIE)
-        if not token or len(token) > 200:
-            raise HTTPException(status_code=401, detail="Oturum açmanız gerekiyor")
-        async with db.connection() as conn:
-            cur = await conn.execute(
-                "UPDATE customer_sessions s SET last_used_at = now() FROM customers c "
-                "WHERE s.refresh_token_hash = %s AND s.revoked_at IS NULL AND s.expires_at > now() "
-                "AND c.id = s.customer_id AND c.status = 'active' "
-                "RETURNING c.id, c.email, c.email_verified_at, c.full_name, c.locale, "
-                "c.created_at, "
-                "s.id AS session_id",
-                (token_digest(token),),
-            )
-            row = await cur.fetchone()
-        if row is None:
-            raise HTTPException(status_code=401, detail="Oturum geçersiz veya süresi dolmuş")
-        return row
+    current_customer = customer_dependency(db)
 
-    # Not: "from __future__ import annotations" altında yerel bir Annotated takma adı FastAPI
-    # tarafından çözülemez; bağımlılık bu yüzden varsayılan değer olarak verilir.
     customer_dep = Depends(current_customer)
 
     # --- Herkese açık -------------------------------------------------------------------------
@@ -603,7 +619,16 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
                 "SELECT l.id::text, l.key_hint, l.plan_code, p.name AS plan_name, l.status::text, "
                 "l.device_limit, l.sold_at, l.activated_at, l.expires_at, "
                 "(SELECT count(*) FROM license_activations a WHERE a.license_id = l.id "
-                " AND a.deactivated_at IS NULL)::int AS active_devices "
+                " AND a.deactivated_at IS NULL)::int AS active_devices, "
+                "(SELECT coalesce(json_agg(json_build_object('id', d.id::text, "
+                " 'name', d.display_name, 'platform', d.platform::text, "
+                " 'activated_at', a.activated_at, 'last_seen_at', d.last_seen_at) "
+                " ORDER BY a.activated_at), '[]'::json) FROM license_activations a "
+                " JOIN devices d ON d.id = a.device_id "
+                " WHERE a.license_id = l.id AND a.deactivated_at IS NULL) AS devices, "
+                "(SELECT count(*) FROM license_activations a WHERE a.license_id = l.id "
+                " AND a.deactivated_by = 'customer' "
+                " AND a.deactivated_at > now() - interval '30 days')::int AS resets_used "
                 "FROM licenses l JOIN license_plans p ON p.code = l.plan_code "
                 "WHERE l.customer_id = %s ORDER BY l.sold_at DESC NULLS LAST",
                 (customer["id"],),
@@ -616,7 +641,17 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
             full_name=customer["full_name"],
             locale=customer["locale"],
             created_at=customer["created_at"],
-            licenses=[LicenseInfo.model_validate(r) for r in licenses],
+            licenses=[
+                LicenseInfo.model_validate(
+                    {
+                        **r,
+                        "device_resets_left": max(
+                            0, settings.device_resets_per_30d - r["resets_used"]
+                        ),
+                    }
+                )
+                for r in licenses
+            ],
         )
 
     return router

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
 import httpx
@@ -44,7 +45,16 @@ async def test_ready_reports_pending_migrations(empty_dsn: str) -> None:
     assert response.json()["status"] == "migrations_pending"
 
 
-SITE = {"public_web_url": "https://canarslan.net.tr", "web_origins": ["https://canarslan.net.tr"]}
+LICENSE_SECRETS = {
+    "license_pepper": SecretStr(base64.b64encode(b"p" * 32).decode()),
+    "license_kek": SecretStr(base64.b64encode(b"k" * 32).decode()),
+    "lease_signing_key": SecretStr(base64.b64encode(b"s" * 32).decode()),
+}
+SITE = {
+    "public_web_url": "https://canarslan.net.tr",
+    "web_origins": ["https://canarslan.net.tr"],
+    **LICENSE_SECRETS,
+}
 
 
 def test_production_requires_verified_tls() -> None:
@@ -65,6 +75,13 @@ def test_production_requires_verified_tls() -> None:
     )
 
 
+def test_production_requires_license_secrets() -> None:
+    dsn = SecretStr("postgresql://u@db/x?sslmode=verify-full")
+    site = {k: v for k, v in SITE.items() if k != "lease_signing_key"}
+    with pytest.raises(ValidationError, match="ATI_LEASE_SIGNING_KEY"):
+        CloudSettings(environment="production", database_url=dsn, **site)
+
+
 def test_production_requires_https_site_and_origins() -> None:
     dsn = SecretStr("postgresql://u@db/x?sslmode=verify-full")
     with pytest.raises(ValidationError, match="HTTPS"):
@@ -75,6 +92,7 @@ def test_production_requires_https_site_and_origins() -> None:
             database_url=dsn,
             public_web_url="https://canarslan.net.tr",
             web_origins=["https://canarslan.net.tr", "http://canarslan.net.tr"],
+            **LICENSE_SECRETS,
         )
 
 
@@ -86,6 +104,8 @@ def test_production_example_settings_are_valid(monkeypatch: pytest.MonkeyPatch) 
             key, _, value = line.partition("=")
             monkeypatch.setenv(key, value)
     monkeypatch.setenv("ATI_DATABASE_URL", "postgresql://u@db/x?sslmode=verify-full")
+    for name, value in LICENSE_SECRETS.items():  # gizli bilgi deposundan gelir
+        monkeypatch.setenv(f"ATI_{name.upper()}", value.get_secret_value())
     cfg = CloudSettings()
     assert cfg.environment == "production"
     assert cfg.web_origins == ["https://canarslan.net.tr"]

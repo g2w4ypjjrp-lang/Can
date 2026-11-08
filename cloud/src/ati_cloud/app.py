@@ -22,6 +22,8 @@ from ati_cloud.accounts import Database, create_accounts_router
 from ati_cloud.config import CloudSettings
 from ati_cloud.contact import create_contact_router
 from ati_cloud.db.migrate import load_migrations, pending
+from ati_cloud.licensing.api import create_license_router
+from ati_cloud.licensing.service import Licensing
 
 
 def _check_database(dsn: str) -> list[int]:
@@ -68,6 +70,8 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
     )
     app.include_router(create_accounts_router(cfg, db))
     app.include_router(create_contact_router(cfg, db))
+    app.state.licensing = Licensing.from_settings(cfg)
+    app.include_router(create_license_router(cfg, db, app.state.licensing))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
