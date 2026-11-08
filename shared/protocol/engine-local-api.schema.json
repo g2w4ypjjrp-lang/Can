@@ -611,6 +611,311 @@
       "title": "ErrorResponse",
       "type": "object"
     },
+    "ExecutionCloseRequest": {
+      "properties": {
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "reason": {
+          "default": "kullanıcı",
+          "maxLength": 200,
+          "title": "Reason",
+          "type": "string"
+        },
+        "symbol": {
+          "maxLength": 20,
+          "minLength": 5,
+          "pattern": "^[A-Z0-9]+$",
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "market",
+        "symbol"
+      ],
+      "title": "ExecutionCloseRequest",
+      "type": "object"
+    },
+    "ExecutionOrderInfo": {
+      "properties": {
+        "avg_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avg Price"
+        },
+        "client_id": {
+          "title": "Client Id",
+          "type": "string"
+        },
+        "executed_qty": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Executed Qty"
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Error"
+        },
+        "market": {
+          "title": "Market",
+          "type": "string"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Price"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quantity"
+        },
+        "side": {
+          "title": "Side",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "trigger_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger Price"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "market",
+        "client_id",
+        "symbol",
+        "side",
+        "type",
+        "purpose",
+        "status",
+        "executed_qty"
+      ],
+      "title": "ExecutionOrderInfo",
+      "type": "object"
+    },
+    "ExecutionPositionInfo": {
+      "properties": {
+        "decision_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision Id"
+        },
+        "entry_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Entry Price"
+        },
+        "fees": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Fees"
+        },
+        "funding": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Funding"
+        },
+        "market": {
+          "title": "Market",
+          "type": "string"
+        },
+        "protected": {
+          "title": "Protected",
+          "type": "boolean"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Quantity"
+        },
+        "realized_pnl": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Realized Pnl"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "take_profits_filled": {
+          "title": "Take Profits Filled",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "market",
+        "symbol",
+        "quantity",
+        "entry_price",
+        "realized_pnl",
+        "fees",
+        "funding",
+        "state",
+        "take_profits_filled",
+        "protected"
+      ],
+      "title": "ExecutionPositionInfo",
+      "type": "object"
+    },
+    "ExecutionTradeResponse": {
+      "properties": {
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "filled_qty": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Filled Qty"
+        },
+        "protection_orders": {
+          "title": "Protection Orders",
+          "type": "integer"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_id",
+        "state",
+        "filled_qty",
+        "protection_orders"
+      ],
+      "title": "ExecutionTradeResponse",
+      "type": "object"
+    },
     "FocusRequest": {
       "properties": {
         "market": {
@@ -3575,6 +3880,41 @@
       "title": "SymbolListed",
       "type": "object"
     },
+    "TakeProfitInput": {
+      "properties": {
+        "fraction": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 1.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Fraction"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Price"
+        }
+      },
+      "required": [
+        "price",
+        "fraction"
+      ],
+      "title": "TakeProfitInput",
+      "type": "object"
+    },
     "TaskInfo": {
       "properties": {
         "last_error": {
@@ -3608,6 +3948,238 @@
         "restarts"
       ],
       "title": "TaskInfo",
+      "type": "object"
+    },
+    "TestnetKeyRequest": {
+      "description": "Binance TEST AĞI anahtarı. Gerçek hesap anahtarı bu sürümde kabul edilmez (G1 onayı).",
+      "properties": {
+        "api_key": {
+          "format": "password",
+          "maxLength": 128,
+          "minLength": 16,
+          "title": "Api Key",
+          "type": "string",
+          "writeOnly": true
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "secret": {
+          "format": "password",
+          "maxLength": 128,
+          "minLength": 16,
+          "title": "Secret",
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "market",
+        "api_key",
+        "secret"
+      ],
+      "title": "TestnetKeyRequest",
+      "type": "object"
+    },
+    "TestnetKeyResponse": {
+      "properties": {
+        "can_trade": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Can Trade"
+        },
+        "key_hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key Hint"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "stored": {
+          "title": "Stored",
+          "type": "boolean"
+        },
+        "verified": {
+          "title": "Verified",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "verified",
+        "stored",
+        "message"
+      ],
+      "title": "TestnetKeyResponse",
+      "type": "object"
+    },
+    "TestnetTradeRequest": {
+      "description": "Test ağında elle işlem açma. Zarar durdur (veya iz süren stop) zorunludur.",
+      "properties": {
+        "breakeven_after_first_tp": {
+          "default": true,
+          "title": "Breakeven After First Tp",
+          "type": "boolean"
+        },
+        "direction": {
+          "enum": [
+            "long",
+            "short"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "leverage": {
+          "anyOf": [
+            {
+              "maximum": 125,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Leverage"
+        },
+        "limit_price": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limit Price"
+        },
+        "market": {
+          "$ref": "#/$defs/Market"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Quantity"
+        },
+        "reason": {
+          "default": "elle test ağı işlemi",
+          "maxLength": 300,
+          "title": "Reason",
+          "type": "string"
+        },
+        "reference_price": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Reference Price"
+        },
+        "stop_loss": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stop Loss"
+        },
+        "symbol": {
+          "maxLength": 20,
+          "minLength": 5,
+          "pattern": "^[A-Z0-9]+$",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "take_profits": {
+          "items": {
+            "$ref": "#/$defs/TakeProfitInput"
+          },
+          "maxItems": 5,
+          "title": "Take Profits",
+          "type": "array"
+        },
+        "trailing_activation": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trailing Activation"
+        },
+        "trailing_callback_pct": {
+          "anyOf": [
+            {
+              "maximum": 20.0,
+              "minimum": 0.1,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trailing Callback Pct"
+        }
+      },
+      "required": [
+        "market",
+        "symbol",
+        "direction",
+        "quantity",
+        "reference_price"
+      ],
+      "title": "TestnetTradeRequest",
       "type": "object"
     },
     "TickerInfo": {
@@ -4523,6 +5095,18 @@
       "auth": true,
       "response": "object"
     },
+    "GET /v1/execution/orders?open_only=": {
+      "auth": true,
+      "response": "ExecutionOrderInfo[]"
+    },
+    "GET /v1/execution/positions": {
+      "auth": true,
+      "response": "ExecutionPositionInfo[]"
+    },
+    "GET /v1/execution/status": {
+      "auth": true,
+      "response": "object"
+    },
     "GET /v1/health": {
       "auth": false,
       "response": "HealthResponse"
@@ -4644,6 +5228,37 @@
     "POST /v1/engine/shutdown": {
       "auth": true,
       "response": "ShutdownResponse"
+    },
+    "POST /v1/execution/close": {
+      "auth": true,
+      "request": "ExecutionCloseRequest",
+      "response": "object"
+    },
+    "POST /v1/execution/close-all?reason=": {
+      "auth": true,
+      "response": "object"
+    },
+    "POST /v1/execution/connect?market=": {
+      "auth": true,
+      "response": "object"
+    },
+    "POST /v1/execution/reconcile?market=": {
+      "auth": true,
+      "response": "object"
+    },
+    "POST /v1/execution/testnet-key": {
+      "auth": true,
+      "request": "TestnetKeyRequest",
+      "response": "TestnetKeyResponse"
+    },
+    "POST /v1/execution/testnet-key/delete?market=": {
+      "auth": true,
+      "response": "object"
+    },
+    "POST /v1/execution/trades": {
+      "auth": true,
+      "request": "TestnetTradeRequest",
+      "response": "ExecutionTradeResponse"
     },
     "POST /v1/history/sync": {
       "auth": true,

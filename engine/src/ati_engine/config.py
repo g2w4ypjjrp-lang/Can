@@ -115,9 +115,28 @@ class BinanceEndpoints(BaseModel):
     futures_ws_market: str = "wss://fstream.binance.com/market"
     futures_ws_private: str = "wss://fstream.binance.com/private"
     historical_data: str = "https://data.binance.vision"
-    # Test ağı adresleri Aşama 10'da Binance belgelerine göre yeniden doğrulanacak.
+    # Spot kullanıcı akışı: REST listenKey 2026-02-20'de kaldırıldı; WebSocket API aboneliği.
+    spot_ws_api: str = "wss://ws-api.binance.com:443/ws-api/v3"
+    # Test ağı (2026-11-07 denetimi): futures test ağı REST'i ve /public akışı çalışıyor,
+    # /private akışı bağlantı kabul ediyor. Spot test ağı bu test ortamından coğrafi
+    # kısıtlama (HTTP 451) nedeniyle denenemedi; kullanıcının bilgisayarından doğrulanacak.
     spot_testnet_rest: str = "https://testnet.binance.vision"
+    spot_testnet_ws_api: str = "wss://ws-api.testnet.binance.vision/ws-api/v3"
     futures_testnet_rest: str = "https://testnet.binancefuture.com"
+    futures_testnet_ws_private: str = "wss://fstream.binancefuture.com/private"
+
+
+class ExecutionSettings(BaseModel):
+    """Emir yürütme (Aşama 10). Gerçek hesap (LIVE) bu sürümde kilitlidir; yürütücü yalnızca
+    Binance test ağında, kullanıcı test ağı anahtarını girdiğinde çalışır."""
+
+    testnet_enabled: bool = True  # test ağı anahtarı kayıtlıysa yürütücü kurulur
+    markets: list[Market] = Field(default_factory=lambda: [Market.USDM_FUTURES, Market.SPOT])
+    fill_timeout_s: float = Field(default=30.0, gt=0, le=300)
+    reconcile_interval_s: float = Field(default=60.0, ge=5, le=3600)
+    unknown_order_grace_s: float = Field(default=60.0, ge=0, le=3600)
+    recv_window_ms: int = Field(default=5000, ge=1000, le=60_000)
+    max_leverage: int = Field(default=5, ge=1, le=20)
 
 
 class MarketDataSettings(BaseModel):
@@ -315,6 +334,7 @@ class EngineSettings(BaseSettings):
     history: HistorySettings = Field(default_factory=HistorySettings)
     scoring: ScoringSettings = Field(default_factory=ScoringSettings)
     paper: PaperSettings = Field(default_factory=PaperSettings)
+    execution: ExecutionSettings = Field(default_factory=ExecutionSettings)
 
     @property
     def paths(self) -> DataPaths:

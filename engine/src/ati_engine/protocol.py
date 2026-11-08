@@ -72,6 +72,13 @@ _API_MODELS: tuple[type[BaseModel], ...] = (
     schemas.PaperAccountInfo,
     schemas.PaperPositionInfo,
     schemas.PaperTradeInfo,
+    schemas.TestnetKeyRequest,
+    schemas.TestnetKeyResponse,
+    schemas.TestnetTradeRequest,
+    schemas.ExecutionTradeResponse,
+    schemas.ExecutionPositionInfo,
+    schemas.ExecutionOrderInfo,
+    schemas.ExecutionCloseRequest,
 )
 
 
@@ -215,6 +222,31 @@ def build_protocol_schema() -> dict[str, Any]:
                 "auth": True,
             },
             "GET /v1/paper/stats": {"response": "object", "auth": True},
+            "GET /v1/execution/status": {"response": "object", "auth": True},
+            "POST /v1/execution/testnet-key": {
+                "request": "TestnetKeyRequest",
+                "response": "TestnetKeyResponse",
+                "auth": True,
+            },
+            "POST /v1/execution/testnet-key/delete?market=": {"response": "object", "auth": True},
+            "POST /v1/execution/connect?market=": {"response": "object", "auth": True},
+            "POST /v1/execution/trades": {
+                "request": "TestnetTradeRequest",
+                "response": "ExecutionTradeResponse",
+                "auth": True,
+            },
+            "GET /v1/execution/positions": {"response": "ExecutionPositionInfo[]", "auth": True},
+            "GET /v1/execution/orders?open_only=": {
+                "response": "ExecutionOrderInfo[]",
+                "auth": True,
+            },
+            "POST /v1/execution/close": {
+                "request": "ExecutionCloseRequest",
+                "response": "object",
+                "auth": True,
+            },
+            "POST /v1/execution/close-all?reason=": {"response": "object", "auth": True},
+            "POST /v1/execution/reconcile?market=": {"response": "object", "auth": True},
             "POST /v1/market/focus": {
                 "request": "FocusRequest",
                 "response": "FocusResponse",

@@ -79,6 +79,35 @@ Yerel API:
 
 Benzerlik ve etki istatistikleri geçmişi anlatır; gelecekteki fiyatı **garanti etmez**.
 
+## Emir yürütme — Binance test ağı (Aşama 10)
+
+**Gerçek hesapla işlem bu sürümde kilitlidir.** Açılması için kullanıcının açık onayları
+gerekir: G1 (işlem yetkili, para çekme yetkisi KAPALI canlı anahtar) ve G2 (ilk gerçek para
+işlemi). Bu sürümde yalnızca sanal işlem (PAPER) ve Binance **test ağı** (TESTNET) çalışır.
+
+Test ağında denemek için:
+
+1. testnet.binancefuture.com (futures) veya testnet.binance.vision (spot) üzerinden test ağı
+   API anahtarı oluşturun. Test ağı parası gerçek değildir.
+2. `POST /v1/execution/testnet-key` ile anahtarı girin
+   (`{"market": "usdm_futures", "api_key": "...", "secret": "..."}`). Anahtar önce salt-okunur
+   bir istekle doğrulanır, sonra şifreli kasaya yazılır; yanıtta yalnızca son 4 karakter görünür.
+3. `POST /v1/trading-mode {"mode": "testnet"}` ile işlem modunu değiştirin.
+4. `POST /v1/execution/trades` ile işlem açın. Zarar durdur zorunludur.
+   - Futures: zarar durdur (`closePosition`), kademeli hedefler, isteğe bağlı iz süren stop;
+     hepsi borsa tarafında Algo emirleri olarak.
+   - Spot: hedef başına OCO.
+   - İlk hedef dolunca stop giriş fiyatına çekilir.
+
+Diğer uç noktalar:
+- `GET /v1/execution/status|positions|orders`
+- `POST /v1/execution/close`, `POST /v1/execution/close-all`
+- `POST /v1/execution/reconcile?market=`
+
+Mutabakat akış kopunca, açılışta ve dakikada bir çalışır. Borsa tek doğru kaynaktır:
+kaçırılan dolumlar alınır, kaybolan stop yeniden kurulur, pozisyon farkı kritik olay olarak
+yazılır. Kullanıcının elle verdiği emirlere dokunulmaz.
+
 ## Sanal işlem yarışması (Aşama 9)
 
 Her strateji ve fırsat puanı, her piyasa için **ayrı bir sanal hesapla** (varsayılan 10.000

@@ -21,7 +21,8 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── protocol.py                ✅ Paylaşılan protokol şeması üretimi
 │   │   ├── core/                      ✅ models, events, bus, supervisor, clock
 │   │   ├── safety/                    ✅ state, coordinator, kill_switch, trading_mode
-│   │   ├── security/                  ✅ vault (DPAPI/AES-GCM), binance_key_policy, redaction
+│   │   ├── security/                  ✅ vault (DPAPI/AES-GCM), binance_key_policy, redaction,
+│   │   │                                    exchange_keys (10: yalnızca test ağı anahtarı)
 │   │   ├── storage/                   ✅ database (SQLite+geçiş), audit, settings_store, migrations/*.sql
 │   │   ├── observability/             ✅ logging (JSON + maskeleme), loop_monitor
 │   │   ├── system/                    ✅ paths, single_instance
@@ -36,18 +37,21 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   │                                    balina yeniden oynatma
 │   │   ├── analysis/                  ✅ 6  artımlı göstergeler (TA-Lib ile doğrulanmış), özellikler
 │   │   ├── ml/                        ✅ 6  veri kümesi, yürüyen pencere LightGBM, ONNX kayıt defteri
-│   │   ├── strategies/                ✅ 7  14 strateji + sembol defteri (yarışma: 🔜 9)
+│   │   ├── strategies/                ✅ 7  14 strateji + sembol defteri
 │   │   ├── scoring/                   ✅ 7  maliyet modeli, açıklanabilir 0-100 puan, kalibrasyon,
 │   │   │                                    canlı fırsat motoru
 │   │   ├── backtest/                  ✅ 8  olay güdümlü motor, metrikler, yürüyen pencere, arındırılmış CV,
 │   │   │                                    strateji kayıt defteri ve terfi
-│   │   ├── execution/                 ✅ 9  emir defteri tabanlı sanal dolum (testnet/live yürütücü: 🔜 10)
+│   │   ├── execution/                 ✅ 9  emir defteri tabanlı sanal dolum
+│   │   │                              ✅ 10 emir yöneticisi (idempotent), pozisyon defteri, işlem
+│   │   │                                    motoru (stop/hedef/başa baş/OCO), Binance yürütücüleri,
+│   │   │                                    mutabakat, test ağı servisi (gerçek hesap: G1/G2)
 │   │   ├── paper/                     ✅ 9  sanal işlem yarışması: bağımsız hesaplar, terfi hattı
 │   │   ├── risk/                      🔜 11 risk kapısı ve bağımsız risk bekçisi
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
 │   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
 │   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
-│   └── tests/                         ✅ 364 test (birim, gerçek mesaj fikstürleri, sahte Binance
+│   └── tests/                         ✅ 413 test (birim, gerçek mesaj fikstürleri, sahte Binance
 │                                          sunucusuyla uçtan uca, alt süreç duman testi)
 │
 ├── cloud/                             ✅ Bulut servisi (FastAPI) — yönetilen bulutta çalışır

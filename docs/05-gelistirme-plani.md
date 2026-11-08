@@ -33,8 +33,8 @@ kısıtı).
 | 7 | Fırsat tespit sistemi | ✅ **Tamamlandı** |
 | 8 | Backtest | ✅ **Tamamlandı** |
 | 9 | Paper Trading | ✅ **Tamamlandı** |
-| 10 | Otomatik işlem motoru | ⏭️ Sıradaki |
-| 11 | Risk yönetimi | |
+| 10 | Otomatik işlem motoru | ✅ **Tamamlandı** (test ağı; gerçek hesap G1/G2 ile) |
+| 11 | Risk yönetimi | ⏭️ Sıradaki |
 | 12 | Windows EXE | |
 | 13 | iOS uygulaması | |
 | 14 | Web sitesi | |
@@ -430,12 +430,80 @@ Yorum:
 **Not:** Yarışmanın asıl çıktısı zamanla birikecek canlı performanstır. Terfi ölçütü en az 30
 gün ister. Bu süre motor kullanıcının bilgisayarında çalıştıkça dolar.
 
-### Aşama 10 — Otomatik işlem motoru
-Emir yöneticisi (idempotent `clientOrderId`, yeniden deneme, kısmi dolum), kullanıcı veri
-akışı (listenKey / Futures `/private`), borsa mutabakatı, spot (kademeli alım/satım, OCO)
-ve futures (long/short, borsa tarafı stop-loss/take-profit, trailing stop, kademeli kâr
-alma). Önce **Testnet**. API anahtar politikası kontrolü bağlanır. **Kabul:** testnet'te uçtan
-uca senaryolar; emir gerçekleşme doğrulaması. **G1/G2 onayı olmadan LIVE açılmaz.**
+### Aşama 10 — Otomatik işlem motoru ✅ (test ağı; gerçek hesap kilitli)
+
+**Çıktılar (uygulandı):**
+
+- **`execution/orders.py`: emir yöneticisi.**
+  - İstemci emir kimliği karardan türetilir (`make_client_id`; Binance deseni, ≤36 karakter).
+    Aynı karar ikinci kez gönderilmez.
+  - Gönderim sonucu belirsizse (zaman aşımı, 5xx, -1007) emir **yeniden gönderilmez**: önce
+    aynı kimlikle borsada sorgulanır; bulunamazsa aynı kimlikle yeniden denenir. Denemeler
+    biterse emir "durum bilinmiyor" olarak mutabakata bırakılır.
+  - Kısmi dolumlar, dolum tekilleştirme (`trade_id`), REST ile kaçırılan dolum alma ve tetiklenen
+    koşullu emirden doğan gerçek emrin dolumlarının bağlanması.
+- **`execution/positions.py`:** ortalama maliyetli pozisyon defteri (kısmi kapanış, yön değişimi,
+  temel varlıkla ödenen komisyon, funding), kalıcı.
+- **`execution/engine.py`: işlem motoru.**
+  - Futures: giriş + borsa tarafında zarar durdur (`closePosition`), kademeli hedefler
+    (`reduceOnly`), iz süren stop. Spot: hedef başına OCO (hedef + stop), kalan miktar için stop.
+  - İlk hedef dolunca stop giriş fiyatına çekilir. Pozisyon kapanınca kalan koruma emirleri
+    iptal edilir.
+  - Yuvarlama: stop hiçbir zaman istenenden uzağa, hedef hiçbir zaman istenenden uzağa
+    yuvarlanmaz.
+  - Her işlem bir karar kaydına bağlıdır ("neden açıldı"). Motor yeniden başladığında açık
+    pozisyonların yönetimi bu kayıttan geri kurulur.
+- **`execution/binance_venue.py`: Binance yürütücüleri** (2026-11 kuralları):
+  - Futures koşullu emirler Algo servisinde (`/fapi/v1/algoOrder`); eski uç nokta bunları
+    -4120 ile reddeder.
+  - Futures kullanıcı akışı `listenKey` + `/private/ws/<listenKey>`.
+  - Spot kullanıcı akışı WebSocket API `userDataStream.subscribe.signature` ile (REST listenKey
+    2026-02-20'de kaldırıldı). İmzadan önce yüzde-kodlama.
+- **`execution/reconcile.py`: mutabakat.** Akış kopunca, açılışta ve dakikada bir çalışır.
+  Borsa tek doğru kaynaktır:
+  - açık emir durumları ve kaçırılan dolumlar düzeltilir;
+  - pozisyon/bakiye farkı **kritik** olay olarak yazılır;
+  - stopu kaybolmuş pozisyonun koruması yeniden kurulur;
+  - kapanmış pozisyonun artık koruma emirleri iptal edilir;
+  - kullanıcının elle verdiği emir ve pozisyonlara **dokunulmaz** (yalnızca raporlanır).
+- **`security/exchange_keys.py`: anahtar saklama.**
+  - Yalnızca **test ağı** anahtarı kabul edilir. Anahtar önce salt-okunur imzalı istekle
+    doğrulanır, sonra şifreli kasaya yazılır.
+  - Yanıtlarda ve denetim kaydında yalnızca son 4 karakter görünür.
+  - Canlı anahtar için (G1 sonrası) `apiRestrictions` denetimi hazır ve test edildi: para
+    çekme veya transfer yetkisi açıksa ret.
+- **`execution/service.py` + yerel API `/v1/execution/*`:** test ağı anahtarı, bağlantı, işlem
+  açma/kapama, pozisyonlar, emirler, acil kapatma, elle mutabakat.
+  - İşlem açmak için işlem modu TESTNET olmalı.
+  - Zarar durdur zorunludur ve doğru tarafta olmalıdır. Kaldıraç ayardaki üst sınırı aşamaz.
+- **Gerçek hesap kilidi (G1/G2):** üç bağımsız katman.
+  1. LIVE mod kontrolü her zaman başarısız.
+  2. Binance yürütücüsü LIVE modda kurulamaz.
+  3. Canlı anahtar kasaya yazılamaz.
+
+  Ayrıca test ağı modunda gerçek Binance adreslerine bağlanma reddedilir.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Uçtan uca senaryolar (giriş, stop, kademeli hedef, başa baş, iz süren stop, OCO, elle kapatma) | ✅ Sanal yürütücüyle 16 test. Ayrıca 2026 kurallarını taklit eden sahte Binance sunucusuna karşı **gerçek HTTP/WebSocket** ile 14 test: imza doğrulaması, Algo servisi, -4120, iki kullanıcı akışı, futures ve spot motor uçtan uca |
+| İdempotentlik (çift emir yok) | ✅ "Emir borsaya ulaştı ama yanıt 503/-1007" senaryosunda emir tek kez gönderildi, durum istemci kimliğiyle sorgulandı. "Ulaşmadı" senaryosunda aynı kimlikle yeniden denendi |
+| Emir gerçekleşme doğrulaması / mutabakat | ✅ 8 test. Motor kapalıyken tetiklenen stop: açılışta dolum alındı, pozisyon kapandı, kalan hedefler iptal edildi. Akış koparken tetiklenen stop: yeniden bağlanınca mutabakat çalıştı. Kaybolan stop yeniden kuruldu; ilk hedeften sonra başa baş stopla ve yeni kimliklerle kuruldu. Pozisyon/bakiye farkı kritik olay olarak yazıldı |
+| API anahtar politikası | ✅ Para çekme yetkisi açık veya bilinmiyorsa ret. Canlı anahtar saklama reddi. Yanlış gizli anahtar saklanmıyor. Anahtar yanıtlarda, denetim kaydında ve veritabanı dosyasında düz metin olarak bulunmuyor (testle) |
+| Gerçek Binance test ağı | ⚠️ Kısmen. Futures test ağı: kullanılan tüm uç noktalar mevcut (anahtar istiyor; bilinmeyen yol 404), 699 USDT sembolünün kuralları ayrıştırıldı, saat farkı 112 ms, `/private` akışı bağlantı kabul ediyor. **Anahtarla emir denemesi yapılamadı:** test ağı anahtarı verilmedi. Spot test ağı bu test ortamından coğrafi kısıtlama (HTTP 451) nedeniyle denenemedi |
+| G1/G2 olmadan LIVE açılmaz | ✅ Üç bağımsız katman testle doğrulandı |
+
+**Test ağı anahtarıyla ilk denemede doğrulanacaklar (belgelerden kesinleştirilemedi):**
+
+1. `ALGO_UPDATE` olayının alan adları. Bu olay yalnızca tetikleyici olarak kullanılıyor; gerçek
+   durum belgelenmiş REST sorgusundan alınıyor.
+2. Spot OCO parametre adları (`aboveType`, `belowStopPrice` vb.).
+3. Futures test ağı `/private` akışının olay iletimi.
+4. Test ağındaki gerçek dolum akışı.
+
+Tüm adresler ayarlardan değiştirilebilir. Not: test ağında BTCUSDT en düşük emir değeri
+50 USDT'dir.
 
 ### Aşama 11 — Risk yönetimi
 Bağımsız risk kapısı (işlem başına risk, günlük zarar, maksimum açık pozisyon, kaldıraç,

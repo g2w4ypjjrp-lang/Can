@@ -36,6 +36,7 @@ from ati_engine.exchange.endpoints import endpoints_for
 from ati_engine.exchange.rate_limit import WeightBudget
 from ati_engine.exchange.rest import BinanceRestClient
 from ati_engine.execution.fills import FillSimulator
+from ati_engine.execution.service import ExecutionService
 from ati_engine.history.archive import INTERVAL_MS
 from ati_engine.history.service import HistoryService
 from ati_engine.history.store import KlineStore
@@ -55,6 +56,7 @@ from ati_engine.safety.state import EngineStateMachine
 from ati_engine.safety.trading_mode import TradingModeController
 from ati_engine.scanner.scanner import MarketScanner
 from ati_engine.scoring.live import OpportunityEngine
+from ati_engine.security.exchange_keys import ExchangeKeyStore
 from ati_engine.security.vault import SecretVault, default_cipher
 from ati_engine.storage.audit import AuditLog
 from ati_engine.storage.database import Database
@@ -174,6 +176,8 @@ class Engine:
                 self._start_scoring(runtime)
             if settings.paper.enabled and runtime.opportunities is not None:
                 await self._start_paper(runtime)
+            if settings.execution.testnet_enabled:
+                self._start_execution(runtime)
 
             supervisor.spawn("loop-lag-monitor", loop_monitor.run)
             supervisor.spawn(
@@ -222,6 +226,28 @@ class Engine:
             return 0
         finally:
             await self._shutdown(server, server_task, supervisor, bus, db)
+
+    @staticmethod
+    def _start_execution(runtime: EngineRuntime) -> None:
+        """Test ağı yürütme servisi. Gerçek hesap bu sürümde kilitlidir (G1/G2). Kayıtlı test ağı
+        anahtarı varsa bağlantı arka planda kurulur; başarısızlık motoru durdurmaz."""
+        service = ExecutionService(
+            settings=runtime.settings,
+            db=runtime.db,
+            audit=runtime.audit,
+            keys=ExchangeKeyStore(runtime.vault),
+            trading_mode=lambda: runtime.trading_mode.mode,
+            engine_state=lambda: runtime.safety.state.state,
+        )
+        runtime.execution = service
+
+        async def connect() -> None:
+            try:
+                await service.connect_configured()
+            except Exception as exc:
+                logger.error("Test ağı yürütücüsü başlatılamadı", extra={"error": repr(exc)})
+
+        runtime.supervisor.spawn("execution-connect", connect, RestartPolicy(restart=False))
 
     async def _start_paper(self, runtime: EngineRuntime) -> None:
         """Sanal işlem yarışması: hesaplar her durumda yüklenir (API için); canlı işlem ve
@@ -333,6 +359,9 @@ class Engine:
             if supervisor is not None:
                 await supervisor.stop_all()
             if runtime is not None:
+                if runtime.execution is not None:
+                    with contextlib.suppress(Exception):
+                        await runtime.execution.close()
                 for service in runtime.market_data.values():
                     with contextlib.suppress(Exception):
                         await service.close()

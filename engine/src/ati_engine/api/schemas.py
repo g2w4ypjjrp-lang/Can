@@ -6,9 +6,10 @@ masaüstü (TypeScript) ve iOS (Swift) istemcileri tiplerini bu şemadan üretir
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from ati_engine.core.models import EngineState, Market, TradingMode
 
@@ -742,3 +743,89 @@ class PaperTradeInfo(BaseModel):
     net_pnl: float
     r_multiple: float
     reason: str
+
+
+# --- Emir yürütme: Binance test ağı (Aşama 10) ----------------------------------------------
+
+
+class TestnetKeyRequest(BaseModel):
+    """Binance TEST AĞI anahtarı. Gerçek hesap anahtarı bu sürümde kabul edilmez (G1 onayı)."""
+
+    market: Market
+    api_key: SecretStr = Field(min_length=16, max_length=128)
+    secret: SecretStr = Field(min_length=16, max_length=128)
+
+
+class TestnetKeyResponse(BaseModel):
+    verified: bool
+    stored: bool
+    message: str
+    key_hint: str | None = None
+    can_trade: bool | None = None
+
+
+class TakeProfitInput(BaseModel):
+    price: Decimal = Field(gt=0)
+    fraction: Decimal = Field(gt=0, le=1)
+
+
+class TestnetTradeRequest(BaseModel):
+    """Test ağında elle işlem açma. Zarar durdur (veya iz süren stop) zorunludur."""
+
+    market: Market
+    symbol: str = Field(min_length=5, max_length=20, pattern=r"^[A-Z0-9]+$")
+    direction: Literal["long", "short"]
+    quantity: Decimal = Field(gt=0)
+    reference_price: Decimal = Field(gt=0)
+    stop_loss: Decimal | None = Field(default=None, gt=0)
+    take_profits: list[TakeProfitInput] = Field(default_factory=list, max_length=5)
+    trailing_callback_pct: Decimal | None = Field(default=None, ge=Decimal("0.1"), le=20)
+    trailing_activation: Decimal | None = Field(default=None, gt=0)
+    leverage: int | None = Field(default=None, ge=1, le=125)
+    limit_price: Decimal | None = Field(default=None, gt=0)
+    breakeven_after_first_tp: bool = True
+    reason: str = Field(default="elle test ağı işlemi", max_length=300)
+
+
+class ExecutionTradeResponse(BaseModel):
+    decision_id: str
+    state: str
+    filled_qty: Decimal
+    protection_orders: int
+    error: str | None = None
+
+
+class ExecutionPositionInfo(BaseModel):
+    market: str
+    symbol: str
+    quantity: Decimal
+    entry_price: Decimal
+    realized_pnl: Decimal
+    fees: Decimal
+    funding: Decimal
+    decision_id: str | None = None
+    state: str
+    take_profits_filled: int
+    protected: bool
+
+
+class ExecutionOrderInfo(BaseModel):
+    market: str
+    client_id: str
+    symbol: str
+    side: str
+    type: str
+    purpose: str
+    status: str
+    quantity: Decimal | None = None
+    executed_qty: Decimal
+    price: Decimal | None = None
+    trigger_price: Decimal | None = None
+    avg_price: Decimal | None = None
+    last_error: str | None = None
+
+
+class ExecutionCloseRequest(BaseModel):
+    market: Market
+    symbol: str = Field(min_length=5, max_length=20, pattern=r"^[A-Z0-9]+$")
+    reason: str = Field(default="kullanıcı", max_length=200)

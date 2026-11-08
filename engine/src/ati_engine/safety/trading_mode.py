@@ -8,8 +8,9 @@ TAMAMI gerekir:
 3. Acil durdurmanın kapalı olması.
 4. Kayıtlı ek kontrollerin geçmesi. Aşama 1'de "gerçek emir yürütücüsü henüz yok"
    kontrolü kayıtlıdır ve her zaman başarısız olur; yani bu aşamada gerçek işlem
-   teknik olarak İMKÂNSIZDIR. Aşama 10'da bu kontrol, API anahtar politikası
-   (para çekme yetkisi kapalı), lisans ve borsa mutabakatı kontrolleriyle değiştirilir.
+   teknik olarak İMKÂNSIZDIR. Aşama 10'da yürütme kodu eklendi ancak kontrol kullanıcı
+   onayları (G1: canlı anahtar, G2: ilk gerçek işlem) verilene kadar kayıtlı kalır; ayrıca
+   Binance yürütücüsü LIVE modda kurulamaz ve canlı anahtar kasaya yazılamaz.
 
 Her deneme (başarılı/başarısız) denetim kaydına yazılır.
 """
@@ -44,18 +45,25 @@ class LiveTradingCheck(Protocol):
     async def evaluate(self) -> CheckResult: ...
 
 
+LIVE_LOCKED_MESSAGE = (
+    "Gerçek hesapla işlem bu sürümde kilitlidir. Yürütme kodu hazırdır ve Binance test ağında "
+    "denenebilir; gerçek hesap için kullanıcının açık onayları gerekir: G1 (işlem yetkili, para "
+    "çekme yetkisi KAPALI canlı API anahtarı) ve G2 (ilk gerçek para işlemi). Bu sürümde "
+    "yalnızca sanal işlem (PAPER) ve test ağı (TESTNET) kullanılabilir."
+)
+
+
+class LiveTradingLocked(PermissionError):
+    """Gerçek hesapla işlem kullanıcı onayları (G1/G2) olmadan teknik olarak imkânsızdır."""
+
+
 class LiveExecutionUnavailableCheck:
-    """Gerçek emir yürütücüsü (Aşama 10) eklenene kadar LIVE modunu kesin olarak engeller."""
+    """Kullanıcı onayları (G1/G2) verilene kadar LIVE modunu kesin olarak engeller."""
 
     name = "live_execution_available"
 
     async def evaluate(self) -> CheckResult:
-        return CheckResult(
-            self.name,
-            False,
-            "Gerçek emir yürütme modülü henüz etkin değil (Aşama 10). "
-            "Bu sürümde yalnızca sanal işlem (PAPER) kullanılabilir.",
-        )
+        return CheckResult(self.name, False, LIVE_LOCKED_MESSAGE)
 
 
 @dataclass(frozen=True)

@@ -13,6 +13,7 @@ from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus
 from ati_engine.core.models import Market
 from ati_engine.core.supervisor import TaskSupervisor
+from ati_engine.execution.service import ExecutionService
 from ati_engine.history.service import HistoryService
 from ati_engine.market.service import MarketDataService
 from ati_engine.observability.loop_monitor import LoopLagMonitor
@@ -47,6 +48,7 @@ class EngineRuntime:
     opportunities: OpportunityEngine | None = None
     backtests: BacktestService | None = None
     paper: PaperCompetition | None = None
+    execution: ExecutionService | None = None
     version: str = __version__
     started_monotonic: float = field(default_factory=time.monotonic)
     shutdown_requested: asyncio.Event = field(default_factory=asyncio.Event)

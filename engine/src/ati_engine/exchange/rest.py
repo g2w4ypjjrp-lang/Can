@@ -70,6 +70,10 @@ class BinanceRestClient:
         self.errors = 0
 
     @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    @property
     def budget(self) -> WeightBudget:
         return self._budget
 
@@ -90,9 +94,16 @@ class BinanceRestClient:
         weight: int,
         priority: Priority = Priority.NORMAL,
         signed: bool = False,
+        api_key_only: bool = False,
     ) -> Any:
+        """``api_key_only``: imzasız ama API anahtarı başlığı gereken uç noktalar
+        (ör. vadeli kullanıcı akışı ``listenKey``)."""
         query_params: dict[str, Any] = dict(params or {})
         headers: dict[str, str] = {}
+        if api_key_only and not signed:
+            if not self._api_key:
+                raise RuntimeError("Bu istek için API anahtarı gerekli")
+            headers["X-MBX-APIKEY"] = self._api_key
         if signed:
             if self._signer is None or not self._api_key:
                 raise RuntimeError("İmzalı istek için API anahtarı ve imzalayıcı gerekli")
@@ -102,7 +113,6 @@ class BinanceRestClient:
             headers["X-MBX-APIKEY"] = self._api_key
         else:
             query = build_query(query_params)
-
         await self._budget.acquire(weight, priority)
         url = f"{self._base_url}{path}" + (f"?{query}" if query else "")
         self.requests += 1

@@ -72,7 +72,11 @@ async def test_status_requires_valid_token(running: RunningEngine) -> None:
     assert body["engine_state"] == EngineState.RUNNING.value
     assert body["trading_mode"] == "paper"
     assert body["kill_switch"]["engaged"] is False
-    assert {t["name"] for t in body["tasks"]} == {"loop-lag-monitor", "heartbeat"}
+    assert {t["name"] for t in body["tasks"]} == {
+        "loop-lag-monitor",
+        "heartbeat",
+        "execution-connect",  # test ağı anahtarı yoksa hemen tamamlanır
+    }
 
 
 async def test_foreign_host_header_rejected(running: RunningEngine) -> None:

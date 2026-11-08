@@ -17,6 +17,7 @@ import hmac
 import itertools
 import json
 import socket
+import uuid
 from typing import Annotated, Any, Literal
 
 import uvicorn
@@ -36,6 +37,10 @@ from ati_engine.api.schemas import (
     CandlesResponse,
     CheckInfo,
     ErrorResponse,
+    ExecutionCloseRequest,
+    ExecutionOrderInfo,
+    ExecutionPositionInfo,
+    ExecutionTradeResponse,
     FocusRequest,
     FocusResponse,
     ForwardStatInfo,
@@ -76,6 +81,9 @@ from ati_engine.api.schemas import (
     StrategyInfo,
     StrategyRegistryInfo,
     TaskInfo,
+    TestnetKeyRequest,
+    TestnetKeyResponse,
+    TestnetTradeRequest,
     TickerInfo,
     TickersResponse,
     TradingModeRequest,
@@ -98,6 +106,8 @@ from ati_engine.backtest.service import BacktestJob, BacktestService
 from ati_engine.core.bus import OverflowPolicy
 from ati_engine.core.events import Event, SystemEvent, encode_event
 from ati_engine.core.models import Market
+from ati_engine.execution.engine import ExecutionBlocked, TakeProfit, TradeIntent
+from ati_engine.execution.service import ExecutionService, ExecutionUnavailable
 from ati_engine.history.service import HistoryService, SyncJob
 from ati_engine.market.service import MarketDataService
 from ati_engine.ml.registry import ModelError
@@ -107,6 +117,7 @@ from ati_engine.safety.kill_switch import KillSwitchConfirmationError
 from ati_engine.scanner.scanner import MarketScanner, row_dict
 from ati_engine.scoring.live import OpportunityEngine, top_reasons
 from ati_engine.scoring.score import Opportunity
+from ati_engine.security.exchange_keys import LiveKeysLocked
 from ati_engine.strategies.library import ALL_STRATEGIES
 from ati_engine.whales.radar import WhaleRadar
 
@@ -998,6 +1009,126 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             "live_candidate_rule": LIVE_CANDIDATE,
             "disclaimer": "Sanal işlemdir; gerçek emir gönderilmez. Sonuçlar garanti değildir.",
         }
+
+    # --- Emir yürütme: Binance test ağı (Aşama 10) --------------------------------------------
+
+    def execution_or_404() -> ExecutionService:
+        if runtime.execution is None:
+            raise HTTPException(status_code=404, detail="Emir yürütme servisi etkin değil")
+        return runtime.execution
+
+    @app.get("/v1/execution/status")
+    async def execution_status(_: Auth) -> dict[str, Any]:
+        return await execution_or_404().status()
+
+    @app.post("/v1/execution/testnet-key", response_model=TestnetKeyResponse)
+    async def execution_testnet_key(body: TestnetKeyRequest, _: Auth) -> TestnetKeyResponse:
+        service = execution_or_404()
+        try:
+            check, stored = await service.store_key(
+                body.market,
+                body.api_key.get_secret_value(),
+                body.secret.get_secret_value(),
+                actor=LOCAL_ACTOR,
+            )
+        except LiveKeysLocked as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        message = check.message
+        if stored is not None:
+            try:
+                await service.connect(body.market)
+            except ExecutionUnavailable as exc:
+                message = f"{message}; bağlantı kurulamadı: {exc}"
+        return TestnetKeyResponse(
+            verified=check.ok,
+            stored=stored is not None,
+            message=message,
+            key_hint=stored.api_key_hint if stored else None,
+            can_trade=check.can_trade,
+        )
+
+    @app.post("/v1/execution/testnet-key/delete")
+    async def execution_delete_key(market: Market, _: Auth) -> dict[str, Any]:
+        removed = await execution_or_404().delete_key(market, actor=LOCAL_ACTOR)
+        return {"removed": removed}
+
+    @app.post("/v1/execution/connect")
+    async def execution_connect(market: Market, _: Auth) -> dict[str, Any]:
+        service = execution_or_404()
+        try:
+            await service.connect(market)
+        except ExecutionUnavailable as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return await service.status()
+
+    @app.post("/v1/execution/trades", response_model=ExecutionTradeResponse)
+    async def execution_open(body: TestnetTradeRequest, _: Auth) -> ExecutionTradeResponse:
+        service = execution_or_404()
+        intent = TradeIntent(
+            decision_id=f"elle-{uuid.uuid4().hex[:24]}",
+            market=body.market,
+            symbol=body.symbol,
+            direction=1 if body.direction == "long" else -1,
+            quantity=body.quantity,
+            reference_price=body.reference_price,
+            stop_loss=body.stop_loss,
+            take_profits=tuple(TakeProfit(t.price, t.fraction) for t in body.take_profits),
+            trailing_callback_pct=body.trailing_callback_pct,
+            trailing_activation=body.trailing_activation,
+            leverage=body.leverage,
+            limit_price=body.limit_price,
+            breakeven_after_first_tp=body.breakeven_after_first_tp,
+            reason=body.reason,
+        )
+        try:
+            managed = await service.open(intent, actor=LOCAL_ACTOR)
+        except (ExecutionBlocked, ExecutionUnavailable) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return ExecutionTradeResponse(
+            decision_id=intent.decision_id,
+            state=managed.state,
+            filled_qty=managed.filled_qty,
+            protection_orders=len(managed.protection),
+            error=managed.error,
+        )
+
+    @app.get("/v1/execution/positions", response_model=list[ExecutionPositionInfo])
+    async def execution_positions(_: Auth) -> list[ExecutionPositionInfo]:
+        return [ExecutionPositionInfo.model_validate(p) for p in execution_or_404().positions()]
+
+    @app.get("/v1/execution/orders", response_model=list[ExecutionOrderInfo])
+    async def execution_orders(_: Auth, open_only: bool = True) -> list[ExecutionOrderInfo]:
+        rows = execution_or_404().orders(open_only=open_only)
+        return [ExecutionOrderInfo.model_validate(r) for r in rows]
+
+    @app.post("/v1/execution/close")
+    async def execution_close(body: ExecutionCloseRequest, _: Auth) -> dict[str, Any]:
+        try:
+            record = await execution_or_404().close_position(
+                body.market, body.symbol, actor=LOCAL_ACTOR, reason=body.reason
+            )
+        except ExecutionUnavailable as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {
+            "closed": record is not None,
+            "status": record.status.value if record else None,
+            "executed_qty": str(record.executed_qty) if record else None,
+        }
+
+    @app.post("/v1/execution/close-all")
+    async def execution_close_all(_: Auth, reason: str = "acil kapatma") -> dict[str, Any]:
+        closed = await execution_or_404().close_all(reason=reason[:200], actor=LOCAL_ACTOR)
+        return {"closed": closed}
+
+    @app.post("/v1/execution/reconcile")
+    async def execution_reconcile(market: Market, _: Auth) -> dict[str, Any]:
+        try:
+            report = await execution_or_404().reconcile(market)
+        except ExecutionUnavailable as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return report.as_dict()
 
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:
