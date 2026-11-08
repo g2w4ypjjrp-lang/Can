@@ -315,3 +315,56 @@ async def test_me_lists_licenses_with_active_devices(
     assert lic["plan_code"] == "d30_1dev" and lic["key_hint"] == "ATI-****-****-****-ZR61"
     assert lic["active_devices"] == 1 and lic["status"] in ("sold", "active")
     assert "key" not in lic and "key_ciphertext" not in lic  # tam anahtar panelde gösterilmez
+
+
+# --- İletişim formu ------------------------------------------------------------------------
+
+CONTACT = {
+    "name": "Ayşe",
+    "email": "Ayse@Example.com",
+    "topic": "support",
+    "message": "Kurulumda bir sorun yaşıyorum, yardımcı olur musunuz?",
+}
+
+
+async def test_contact_message_is_stored_without_emailing_sender(
+    client: httpx.AsyncClient, conn: psycopg.Connection
+) -> None:
+    response = await client.post("/v1/contact", json=CONTACT)
+    assert response.status_code == 202
+    row = conn.execute(
+        "SELECT name, email, topic, status, customer_id FROM contact_messages"
+    ).fetchone()
+    assert row == ("Ayşe", "ayse@example.com", "support", "new", None)
+    # Form, rastgele adreslere e-posta yollatmak için kullanılamaz.
+    assert conn.execute("SELECT count(*) FROM email_outbox").fetchone() == (0,)
+
+
+async def test_contact_links_logged_in_customer(
+    client: httpx.AsyncClient, conn: psycopg.Connection
+) -> None:
+    await register_and_verify(client, conn)
+    assert (
+        await client.post("/v1/auth/login", json={"email": "can@example.com", "password": PASSWORD})
+    ).status_code == 200
+    assert (await client.post("/v1/contact", json=CONTACT)).status_code == 202
+    row = conn.execute(
+        "SELECT m.customer_id = c.id FROM contact_messages m, customers c WHERE c.email = 'can@example.com'"
+    ).fetchone()
+    assert row == (True,)
+
+
+async def test_contact_honeypot_rate_limit_and_origin(
+    client: httpx.AsyncClient, conn: psycopg.Connection
+) -> None:
+    bot = await client.post("/v1/contact", json={**CONTACT, "website": "http://spam.example"})
+    assert bot.status_code == 202  # bot fark etmez
+    assert conn.execute("SELECT count(*) FROM contact_messages").fetchone() == (0,)
+    foreign = await client.post(
+        "/v1/contact", json=CONTACT, headers={"Origin": "https://kotu.example"}
+    )
+    assert foreign.status_code == 403
+    short = await client.post("/v1/contact", json={**CONTACT, "message": "kısa"})
+    assert short.status_code == 422
+    codes = [(await client.post("/v1/contact", json=CONTACT)).status_code for _ in range(5)]
+    assert codes == [202, 202, 202, 202, 429]  # tuzak isteği de sınırdan düşer

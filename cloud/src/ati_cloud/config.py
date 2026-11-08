@@ -24,6 +24,8 @@ class CloudSettings(BaseSettings):
     public_web_url: str = "http://localhost:3000"
     session_cookie_secure: bool = True
     session_days: int = 30
+    # İstemci adresini X-Forwarded-For'dan almaya yetkili vekiller (yük dengeleyici).
+    trusted_proxies: list[str] = ["127.0.0.1"]
 
     @model_validator(mode="after")
     def _production_requires_tls(self) -> Self:

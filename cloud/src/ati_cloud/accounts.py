@@ -119,6 +119,42 @@ class SlidingWindowLimiter:
         return True
 
 
+def client_ip(request: Request) -> str:
+    """İstemci adresi. Güvenilen vekil sunucu arkasında uvicorn ``X-Forwarded-For``'dan çözer
+    (``ATI_TRUSTED_PROXIES``); başlık başka yerden gelirse yok sayılır."""
+    return request.client.host if request.client else "0.0.0.0"  # noqa: S104
+
+
+def check_origin(settings: CloudSettings, request: Request) -> None:
+    """Durum değiştiren istek yalnızca web sitesinin kökeninden gelebilir (CSRF)."""
+    if request.headers.get("origin") not in settings.web_origins:
+        raise HTTPException(status_code=403, detail="İstek kaynağı doğrulanamadı")
+
+
+def limited(limiter: SlidingWindowLimiter, key: str) -> None:
+    if not limiter.allow(key):
+        raise HTTPException(
+            status_code=429, detail="Çok fazla deneme. Biraz bekleyip tekrar deneyin."
+        )
+
+
+async def session_customer_id(db: Database, request: Request) -> Any | None:
+    """Geçerli oturum çerezi varsa müşteri kimliği (isteğe bağlı kimlik doğrulama)."""
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token or len(token) > 200:
+        return None
+    async with db.connection() as conn:
+        cur = await conn.execute(
+            "SELECT s.customer_id FROM customer_sessions s "
+            "JOIN customers c ON c.id = s.customer_id "
+            "WHERE s.refresh_token_hash = %s AND s.revoked_at IS NULL AND s.expires_at > now() "
+            "AND c.status = 'active'",
+            (token_digest(token),),
+        )
+        row = await cur.fetchone()
+    return row["customer_id"] if row else None
+
+
 # --- Şemalar ------------------------------------------------------------------------------------
 
 
@@ -204,19 +240,8 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
     register_ip = SlidingWindowLimiter(5, 3600)
     reset_ip = SlidingWindowLimiter(5, 3600)
 
-    def client_ip(request: Request) -> str:
-        return request.client.host if request.client else "0.0.0.0"  # noqa: S104
-
     def require_origin(request: Request) -> None:
-        origin = request.headers.get("origin")
-        if origin not in settings.web_origins:
-            raise HTTPException(status_code=403, detail="İstek kaynağı doğrulanamadı")
-
-    def limited(limiter: SlidingWindowLimiter, key: str) -> None:
-        if not limiter.allow(key):
-            raise HTTPException(
-                status_code=429, detail="Çok fazla deneme. Biraz bekleyip tekrar deneyin."
-            )
+        check_origin(settings, request)
 
     async def audit(
         conn: psycopg.AsyncConnection[Any],
