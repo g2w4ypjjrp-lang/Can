@@ -864,3 +864,43 @@ class DecisionInfo(BaseModel):
 
 class AutoTradeRequest(BaseModel):
     enabled: bool
+
+
+# --- Lisans (Aşama 15) ---------------------------------------------------------------------------
+
+
+class LicenseStatusResponse(BaseModel):
+    """Bu bilgisayardaki lisans durumu. ``valid`` yanlışken ve ``enforced`` açıkken yeni işlem
+    açılmaz (açık pozisyonlar yönetilmeye devam eder)."""
+
+    state: Literal[
+        "not_configured",
+        "unlicensed",
+        "active",
+        "offline_grace",
+        "lease_expired",
+        "license_expired",
+        "revoked",
+        "clock_error",
+    ]
+    valid: bool
+    enforced: bool
+    configured: bool
+    message: str
+    key_hint: str | None = None
+    license_id: str | None = None
+    serial: int | None = None
+    plan_code: str | None = None
+    plan_name: str | None = None
+    device_limit: int | None = None
+    companion_device_limit: int | None = None
+    license_expires_at: int | None = None
+    valid_until: int | None = None
+    offline_until: int | None = None
+    last_renewed_at: int | None = None
+    last_error: str | None = None
+    server_url: str
+
+
+class LicenseActivateRequest(BaseModel):
+    key: str = Field(min_length=16, max_length=40)

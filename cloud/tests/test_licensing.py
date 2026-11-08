@@ -542,3 +542,14 @@ async def test_signing_key_endpoint_matches(client: httpx.AsyncClient) -> None:
     assert public == LEASE_PUBLIC.public_bytes_raw()
     assert body["kid"] == hashlib.sha256(public).hexdigest()[:16]
     Ed25519PublicKey.from_public_bytes(public)
+
+
+def test_shared_vectors_are_up_to_date() -> None:
+    """shared/protocol/test-vectors/license-v1.json bu koddan üretilir; motor bunlarla doğrular."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "scripts" / "gen_license_vectors.py"
+    result = subprocess.run([sys.executable, str(script), "--check"], check=False)  # noqa: S603
+    assert result.returncode == 0, "uv run python scripts/gen_license_vectors.py ile yenileyin"

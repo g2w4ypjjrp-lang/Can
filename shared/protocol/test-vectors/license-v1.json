@@ -1,0 +1,45 @@
+{
+  "description": "Lisans protokolü v1 test vektörleri (shared/protocol/license-v1.md)",
+  "keys": {
+    "valid": [
+      {
+        "key": "ATI-7XK9-PQ82-MN45-ZR61",
+        "normalized": "7XK9PQ82MN45ZR61",
+        "hint": "ATI-****-****-****-ZR61"
+      },
+      {
+        "key": "ATI-0000-0000-0000-0000",
+        "normalized": "0000000000000000",
+        "hint": "ATI-****-****-****-0000"
+      },
+      {
+        "key": "ATI-ZZZZ-ZZZZ-ZZZZ-ZZZF",
+        "normalized": "ZZZZZZZZZZZZZZZF",
+        "hint": "ATI-****-****-****-ZZZF"
+      },
+      {
+        "key": "ATI-ABCD-EFGH-JKMN-PQRM",
+        "normalized": "ABCDEFGHJKMNPQRM",
+        "hint": "ATI-****-****-****-PQRM"
+      }
+    ],
+    "invalid": [
+      "ATI-7XK9-PQ82-MN45-ZR60",
+      "ATI-X7K9-PQ82-MN45-ZR61",
+      "ATI-7XK9-PQ82-MN45",
+      "ATI-UUUU-UUUU-UUUU-UUUU",
+      ""
+    ]
+  },
+  "lease": {
+    "kid": "56475aa75463474c",
+    "public_key": "A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=",
+    "device_key": "Kay64UG8yvCyLhqU000LxzYeUm0L/hLIl5S8kyKWbdc=",
+    "fingerprint": "8a4466f7c7183e439cfe3bdf0dda28565a8d591e3999df8d3491295177b10a20",
+    "license_id": "7b3f3f0e-3c2a-4f4e-9d3b-2f6f0e1a5c11",
+    "signed": {
+      "p": "{\"companion_device_limit\":2,\"device_id\":\"0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e\",\"device_key\":\"Kay64UG8yvCyLhqU000LxzYeUm0L/hLIl5S8kyKWbdc=\",\"device_limit\":1,\"fingerprint\":\"8a4466f7c7183e439cfe3bdf0dda28565a8d591e3999df8d3491295177b10a20\",\"issued_at\":1800000000000,\"kid\":\"56475aa75463474c\",\"lease_id\":\"11111111-2222-4333-8444-555555555555\",\"license_expires_at\":1802592000000,\"license_id\":\"7b3f3f0e-3c2a-4f4e-9d3b-2f6f0e1a5c11\",\"offline_until\":1800259200000,\"plan_code\":\"d30_1dev\",\"plan_name\":\"30 Gün - 1 Cihaz\",\"serial\":42,\"status\":\"active\",\"type\":\"license_lease\",\"v\":1,\"valid_until\":1800086400000}",
+      "s": "O6tLIyXY8qmnwJE0dHt2HPChWca/FclE+PqdXubfT4zFikgmCQ7ceB/ZkNhJ5uZd4CLj1iUSin344yfQJhL5Cw=="
+    }
+  }
+}

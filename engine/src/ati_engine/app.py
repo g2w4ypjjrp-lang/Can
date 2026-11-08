@@ -42,6 +42,7 @@ from ati_engine.history.archive import INTERVAL_MS
 from ati_engine.history.service import HistoryService
 from ati_engine.history.store import KlineStore
 from ati_engine.history.sync import RestSource
+from ati_engine.licensing.manager import LicenseManager
 from ati_engine.market.discovery import SymbolRegistry, UniverseFilter
 from ati_engine.market.events import AggTrade
 from ati_engine.market.orderbook import OrderBook, SyncState
@@ -186,6 +187,7 @@ class Engine:
                 await self._start_paper(runtime)
             if settings.execution.testnet_enabled:
                 self._start_execution(runtime)
+            await self._start_license(runtime)
             await self._start_remote(runtime)
 
             supervisor.spawn("loop-lag-monitor", loop_monitor.run)
@@ -237,6 +239,28 @@ class Engine:
             await self._shutdown(server, server_task, supervisor, bus, db)
 
     @staticmethod
+    async def _start_license(runtime: EngineRuntime) -> None:
+        """Lisans: kayıtlı kirayı doğrular, zorunluysa ``license.valid`` hazırlık koşulunu kaydeder
+        ve kirayı düzenli yeniler. Lisans sunucusu yapılandırılmamışsa yalnızca durum gösterilir."""
+        manager = LicenseManager(
+            settings=runtime.settings.license,
+            db=runtime.db,
+            vault=runtime.vault,
+            safety=runtime.safety,
+            fingerprint_override=runtime.settings.license.fingerprint_override,
+        )
+        await manager.load()
+        runtime.license = manager
+        if manager.trusted:
+            runtime.supervisor.spawn(
+                "license-renewal",
+                manager.run,
+                RestartPolicy(
+                    max_restarts=50, window_s=3600, backoff_initial_s=5, backoff_max_s=300
+                ),
+            )
+
+    @staticmethod
     async def _start_remote(runtime: EngineRuntime) -> None:
         """Uzaktan kontrol: motor kimliği (Ed25519) kasada kalıcıdır. Aktarma servisi adresi
         ayarlanmışsa servise giden bağlantı açılır; yoksa yalnızca eşleştirme ekranı kapalıdır."""
@@ -256,6 +280,7 @@ class Engine:
             snapshot_interval_s=cfg.snapshot_interval_s,
             max_skew_s=cfg.max_clock_skew_s,
             pairing_ttl_s=cfg.pairing_ttl_s,
+            companion_limit=runtime.license.companion_limit if runtime.license else None,
         )
         runtime.remote = service
         subscribe_notifications(runtime, service)

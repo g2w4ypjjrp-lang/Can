@@ -82,6 +82,8 @@ _API_MODELS: tuple[type[BaseModel], ...] = (
     schemas.RiskEventInfo,
     schemas.DecisionInfo,
     schemas.AutoTradeRequest,
+    schemas.LicenseStatusResponse,
+    schemas.LicenseActivateRequest,
 )
 
 
@@ -258,6 +260,14 @@ def build_protocol_schema() -> dict[str, Any]:
             "POST /v1/remote/pairing": {"response": "object", "auth": True},
             "POST /v1/remote/devices/revoke?device_id=": {"response": "object", "auth": True},
             "GET /v1/remote/commands?limit=": {"response": "object[]", "auth": True},
+            "GET /v1/license": {"response": "LicenseStatusResponse", "auth": True},
+            "POST /v1/license/activate": {
+                "request": "LicenseActivateRequest",
+                "response": "LicenseStatusResponse",
+                "auth": True,
+            },
+            "POST /v1/license/refresh": {"response": "LicenseStatusResponse", "auth": True},
+            "POST /v1/license/deactivate": {"response": "LicenseStatusResponse", "auth": True},
             "POST /v1/autotrade": {
                 "request": "AutoTradeRequest",
                 "response": "object",

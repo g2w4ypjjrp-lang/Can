@@ -164,9 +164,12 @@ class PairingManager:
         ttl_s: float = 300.0,
         max_skew_s: float = 120.0,
         clock: Callable[[], int] | None = None,
+        companion_limit: Callable[[], int | None] | None = None,
     ) -> None:
         self.identity = identity
         self.registry = registry
+        # Lisans zorunluyken kiradaki telefon sınırı (Aşama 15); None: sınır yok.
+        self.companion_limit = companion_limit
         self.ttl_s = ttl_s
         self.max_skew_s = max_skew_s
         self._clock = clock or (lambda: int(time.time() * 1000))
@@ -226,6 +229,11 @@ class PairingManager:
         if protection not in ("secure_enclave", "software"):
             raise PairingError("malformed")
         name = str(p.get("name") or "iPhone")[:MAX_NAME]
+        limit = self.companion_limit() if self.companion_limit else None
+        if limit is not None:
+            active = [d for d in await self.registry.all() if d.revoked_at is None]
+            if device_id not in {d.id for d in active} and len(active) >= limit:
+                raise PairingError("device_limit")
         self.session = None  # tek kullanımlık
         await self.registry.add(
             device_id=device_id,

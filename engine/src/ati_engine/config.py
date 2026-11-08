@@ -15,6 +15,8 @@ Güvenli varsayılanlar:
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import ipaddress
 from decimal import Decimal
 from pathlib import Path
@@ -176,6 +178,46 @@ class RemoteSettings(BaseModel):
         if value.startswith(loopback):  # yalnızca yerel test için şifresiz
             return value.rstrip("/")
         raise ValueError("Aktarma servisi adresi wss:// ile başlamalı")
+
+
+class LicenseSettings(BaseModel):
+    """Lisans (Aşama 15). Kira, buluttaki lisans servisinin Ed25519 anahtarıyla imzalanır;
+    güvenilir açık anahtar(lar) sürüme gömülür. Üretim anahtarı lisans servisi yayına alınınca
+    (G5) eklenir; o zamana kadar ``enforce`` kapalıdır ve lisans işlemleri engellemez."""
+
+    server_url: str = "https://api.canarslan.net.tr"
+    # kid -> base64 Ed25519 açık anahtarı (``ati-cloud-license public-key`` çıktısı).
+    trusted_keys: dict[str, str] = Field(default_factory=dict)
+    # Açıkken geçerli kira olmadan yeni işlem açılmaz ve telefon sınırı uygulanır.
+    enforce: bool = False
+    renew_interval_s: float = Field(default=6 * 3600.0, ge=60, le=24 * 3600)
+    retry_interval_s: float = Field(default=300.0, ge=10, le=3600)
+    request_timeout_s: float = Field(default=15.0, ge=1, le=120)
+    # Parmak izi kaynağını değiştirir (testler, klonlanmış sanal makineler). Lisans paylaşımına
+    # yaramaz: aynı parmak izi + farklı cihaz anahtarı diğer kurulumun kirasını geçersiz kılar.
+    fingerprint_override: str | None = None
+
+    @field_validator("server_url")
+    @classmethod
+    def _secure_server(cls, value: str) -> str:
+        if value.startswith(("https://", "http://127.0.0.1", "http://localhost", "http://[::1]")):
+            return value.rstrip("/")
+        raise ValueError("Lisans sunucusu adresi https:// ile başlamalı")
+
+    @field_validator("trusted_keys")
+    @classmethod
+    def _valid_keys(cls, value: dict[str, str]) -> dict[str, str]:
+        for kid, public in value.items():
+            raw = base64.b64decode(public, validate=True)
+            if len(raw) != 32 or hashlib.sha256(raw).hexdigest()[:16] != kid:
+                raise ValueError(f"Geçersiz kira anahtarı: {kid}")
+        return value
+
+    @model_validator(mode="after")
+    def _enforce_needs_keys(self) -> Self:
+        if self.enforce and not self.trusted_keys:
+            raise ValueError("Lisans zorunluluğu için en az bir güvenilir kira anahtarı gerekir")
+        return self
 
 
 class ExecutionSettings(BaseModel):
@@ -388,6 +430,7 @@ class EngineSettings(BaseSettings):
     execution: ExecutionSettings = Field(default_factory=ExecutionSettings)
     autotrade: AutoTradeSettings = Field(default_factory=AutoTradeSettings)
     remote: RemoteSettings = Field(default_factory=RemoteSettings)
+    license: LicenseSettings = Field(default_factory=LicenseSettings)
 
     @property
     def paths(self) -> DataPaths:

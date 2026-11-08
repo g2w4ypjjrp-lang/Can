@@ -322,3 +322,50 @@ def test_shared_test_vectors_are_consistent() -> None:
         vectors["relay"]["engine_hello_text"]
         == relay_hello_text("engine", engine["engine_id"], "1794100000000").decode()
     )
+
+
+async def test_pairing_respects_license_companion_limit(db: Database) -> None:
+    """Lisans zorunluyken kiradaki telefon sınırı (Aşama 15): sınır dolunca yeni telefon
+    reddedilir ve (kanıt doğrulandığı için) nedeni telefona bildirilir; iptal edilen telefonun
+    yeri boşalır; aynı telefon yeniden eşleşebilir."""
+    limit: list[int | None] = [1]
+    service = RemoteService(
+        db=db,
+        identity=EngineIdentity.generate(),
+        relay_url=None,
+        executors={},
+        snapshot=lambda: _empty_snapshot(),
+        companion_limit=lambda: limit[0],
+    )
+    sent: list[dict[str, Any]] = []
+
+    async def capture(device_id: str, payload: dict[str, Any]) -> None:
+        sent.append(payload)
+
+    service._send_to = capture  # type: ignore[method-assign]
+    first, second = DeviceSim("Telefon 1"), DeviceSim("Telefon 2")
+    qr = json.loads(service.pairing.start("wss://relay.example")[0])
+    assert (await service.handle(first.pair_request(qr), first.device_id))["ok"]
+    qr = json.loads(service.pairing.start("wss://relay.example")[0])
+    reply = await service.handle(second.pair_request(qr), second.device_id)
+    assert reply is not None and not reply["ok"] and reply["reason"] == "device_limit"
+    assert sent[-1]["reason"] == "device_limit"  # telefona bildirildi
+    # Aynı telefonun yeniden eşleşmesi yer tüketmez.
+    qr = json.loads(service.pairing.start("wss://relay.example")[0])
+    assert (await service.handle(first.pair_request(qr), first.device_id))["ok"]
+    # Lisans geçersizse (sınır 0) yeni telefon eşleşemez; iptal edilen yer boşalır.
+    await service.registry.revoke(first.device_id, 1)
+    limit[0] = 0
+    qr = json.loads(service.pairing.start("wss://relay.example")[0])
+    assert not (await service.handle(second.pair_request(qr), second.device_id))["ok"]
+    limit[0] = 1
+    qr = json.loads(service.pairing.start("wss://relay.example")[0])
+    assert (await service.handle(second.pair_request(qr), second.device_id))["ok"]
+    # Diğer eşleştirme hatalarına yanıt gönderilmez.
+    count = len(sent)
+    await service.handle(DeviceSim().pair_request(qr), "baska")
+    assert len(sent) == count
+
+
+async def _empty_snapshot() -> dict[str, Any]:
+    return {}

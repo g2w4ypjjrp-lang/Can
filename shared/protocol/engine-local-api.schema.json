@@ -1653,6 +1653,214 @@
       "title": "LevelsResponse",
       "type": "object"
     },
+    "LicenseActivateRequest": {
+      "properties": {
+        "key": {
+          "maxLength": 40,
+          "minLength": 16,
+          "title": "Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "LicenseActivateRequest",
+      "type": "object"
+    },
+    "LicenseStatusResponse": {
+      "description": "Bu bilgisayardaki lisans durumu. ``valid`` yanlışken ve ``enforced`` açıkken yeni işlem\naçılmaz (açık pozisyonlar yönetilmeye devam eder).",
+      "properties": {
+        "companion_device_limit": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Companion Device Limit"
+        },
+        "configured": {
+          "title": "Configured",
+          "type": "boolean"
+        },
+        "device_limit": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device Limit"
+        },
+        "enforced": {
+          "title": "Enforced",
+          "type": "boolean"
+        },
+        "key_hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key Hint"
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Error"
+        },
+        "last_renewed_at": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Renewed At"
+        },
+        "license_expires_at": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Expires At"
+        },
+        "license_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Id"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "offline_until": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offline Until"
+        },
+        "plan_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Code"
+        },
+        "plan_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Name"
+        },
+        "serial": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Serial"
+        },
+        "server_url": {
+          "title": "Server Url",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "not_configured",
+            "unlicensed",
+            "active",
+            "offline_grace",
+            "lease_expired",
+            "license_expired",
+            "revoked",
+            "clock_error"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "valid": {
+          "title": "Valid",
+          "type": "boolean"
+        },
+        "valid_until": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid Until"
+        }
+      },
+      "required": [
+        "state",
+        "valid",
+        "enforced",
+        "configured",
+        "message",
+        "server_url"
+      ],
+      "title": "LicenseStatusResponse",
+      "type": "object"
+    },
     "LoopLagInfo": {
       "properties": {
         "last_ms": {
@@ -5316,6 +5524,10 @@
       "auth": true,
       "response": "TrendResponse"
     },
+    "GET /v1/license": {
+      "auth": true,
+      "response": "LicenseStatusResponse"
+    },
     "GET /v1/market/status": {
       "auth": true,
       "response": "MarketStatusResponse"
@@ -5484,6 +5696,19 @@
       "auth": true,
       "request": "KillSwitchReleaseRequest",
       "response": "KillSwitchResponse"
+    },
+    "POST /v1/license/activate": {
+      "auth": true,
+      "request": "LicenseActivateRequest",
+      "response": "LicenseStatusResponse"
+    },
+    "POST /v1/license/deactivate": {
+      "auth": true,
+      "response": "LicenseStatusResponse"
+    },
+    "POST /v1/license/refresh": {
+      "auth": true,
+      "response": "LicenseStatusResponse"
     },
     "POST /v1/market/focus": {
       "auth": true,

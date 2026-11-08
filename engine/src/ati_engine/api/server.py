@@ -60,6 +60,8 @@ from ati_engine.api.schemas import (
     KillSwitchResponse,
     LevelInfo,
     LevelsResponse,
+    LicenseActivateRequest,
+    LicenseStatusResponse,
     LoopLagInfo,
     MarketServiceInfo,
     MarketStatusResponse,
@@ -115,6 +117,8 @@ from ati_engine.execution.engine import TakeProfit, TradeIntent
 from ati_engine.execution.service import ExecutionService, ExecutionUnavailable
 from ati_engine.execution.venue import ExecutionBlocked
 from ati_engine.history.service import HistoryService, SyncJob
+from ati_engine.licensing.keys import InvalidLicenseKey
+from ati_engine.licensing.manager import LicenseManager, LicenseRejected, LicenseUnavailable
 from ati_engine.market.service import MarketDataService
 from ati_engine.ml.registry import ModelError
 from ati_engine.paper.competition import LIVE_CANDIDATE, PaperCompetition
@@ -1266,6 +1270,62 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         _: Auth, limit: Annotated[int, Query(ge=1, le=1000)] = 100
     ) -> list[dict[str, Any]]:
         return await remote_or_404().commands(limit)
+
+    # --- Lisans (Aşama 15) ------------------------------------------------------------------------
+
+    def license_or_404() -> LicenseManager:
+        if runtime.license is None:
+            raise HTTPException(status_code=404, detail="Lisans modülü etkin değil")
+        return runtime.license
+
+    def license_http_error(exc: LicenseRejected) -> HTTPException:
+        status = exc.status if exc.status in (400, 401, 403, 404, 409, 429) else 400
+        return HTTPException(status_code=status, detail=exc.message)
+
+    @app.get("/v1/license", response_model=LicenseStatusResponse)
+    async def license_status(_: Auth) -> dict[str, Any]:
+        return license_or_404().status()
+
+    @app.post("/v1/license/activate", response_model=LicenseStatusResponse)
+    async def license_activate(body: LicenseActivateRequest, _: Auth) -> dict[str, Any]:
+        manager = license_or_404()
+        try:
+            status = await manager.activate(body.key)
+        except InvalidLicenseKey as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except LicenseRejected as exc:
+            await runtime.audit.record(
+                actor=LOCAL_ACTOR, action="license.activation_failed", details={"code": exc.code}
+            )
+            raise license_http_error(exc) from exc
+        except LicenseUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # Anahtarın kendisi denetim kaydına yazılmaz; yalnızca ipucu.
+        await runtime.audit.record(
+            actor=LOCAL_ACTOR,
+            action="license.activated",
+            details={"key_hint": status["key_hint"], "plan": status["plan_code"]},
+        )
+        return status
+
+    @app.post("/v1/license/refresh", response_model=LicenseStatusResponse)
+    async def license_refresh(_: Auth) -> dict[str, Any]:
+        return await license_or_404().refresh()
+
+    @app.post("/v1/license/deactivate", response_model=LicenseStatusResponse)
+    async def license_deactivate(_: Auth) -> dict[str, Any]:
+        manager = license_or_404()
+        try:
+            status = await manager.deactivate()
+        except LicenseRejected as exc:
+            raise license_http_error(exc) from exc
+        except LicenseUnavailable as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"{exc}. Bilgisayarı müşteri panelinden de kaldırabilirsiniz.",
+            ) from exc
+        await runtime.audit.record(actor=LOCAL_ACTOR, action="license.deactivated")
+        return status
 
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:

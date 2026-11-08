@@ -16,6 +16,7 @@ from ati_engine.core.supervisor import TaskSupervisor
 from ati_engine.execution.auto import AutoTrader
 from ati_engine.execution.service import ExecutionService
 from ati_engine.history.service import HistoryService
+from ati_engine.licensing.manager import LicenseManager
 from ati_engine.market.service import MarketDataService
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.paper.competition import PaperCompetition
@@ -53,6 +54,7 @@ class EngineRuntime:
     execution: ExecutionService | None = None
     autotrader: AutoTrader | None = None
     remote: RemoteService | None = None
+    license: LicenseManager | None = None
     version: str = __version__
     started_monotonic: float = field(default_factory=time.monotonic)
     shutdown_requested: asyncio.Event = field(default_factory=asyncio.Event)

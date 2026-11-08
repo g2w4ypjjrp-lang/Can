@@ -106,6 +106,8 @@ export interface EngineProtocol {
   KillSwitchResponse?: KillSwitchResponse;
   LevelInfo?: LevelInfo;
   LevelsResponse?: LevelsResponse;
+  LicenseActivateRequest?: LicenseActivateRequest;
+  LicenseStatusResponse?: LicenseStatusResponse;
   LoopLagInfo?: LoopLagInfo;
   Market?: Market;
   MarketServiceInfo?: MarketServiceInfo;
@@ -936,6 +938,48 @@ export interface LevelsResponse {
   levels: LevelInfo[];
   market: Market;
   symbol: string;
+}
+/**
+ * This interface was referenced by `EngineProtocol`'s JSON-Schema
+ * via the `definition` "LicenseActivateRequest".
+ */
+export interface LicenseActivateRequest {
+  key: string;
+}
+/**
+ * Bu bilgisayardaki lisans durumu. ``valid`` yanlışken ve ``enforced`` açıkken yeni işlem
+ * açılmaz (açık pozisyonlar yönetilmeye devam eder).
+ *
+ * This interface was referenced by `EngineProtocol`'s JSON-Schema
+ * via the `definition` "LicenseStatusResponse".
+ */
+export interface LicenseStatusResponse {
+  companion_device_limit?: number | null;
+  configured: boolean;
+  device_limit?: number | null;
+  enforced: boolean;
+  key_hint?: string | null;
+  last_error?: string | null;
+  last_renewed_at?: number | null;
+  license_expires_at?: number | null;
+  license_id?: string | null;
+  message: string;
+  offline_until?: number | null;
+  plan_code?: string | null;
+  plan_name?: string | null;
+  serial?: number | null;
+  server_url: string;
+  state:
+    | "not_configured"
+    | "unlicensed"
+    | "active"
+    | "offline_grace"
+    | "lease_expired"
+    | "license_expired"
+    | "revoked"
+    | "clock_error";
+  valid: boolean;
+  valid_until?: number | null;
 }
 /**
  * This interface was referenced by `EngineProtocol`'s JSON-Schema

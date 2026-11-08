@@ -61,6 +61,7 @@ class RemoteService:
         max_skew_s: float = 120.0,
         pairing_ttl_s: float = 300.0,
         clock: Callable[[], int] | None = None,
+        companion_limit: Callable[[], int | None] | None = None,
     ) -> None:
         self.db = db
         self.identity = identity
@@ -71,7 +72,12 @@ class RemoteService:
         self._clock = clock or (lambda: int(time.time() * 1000))
         self.registry = DeviceRegistry(db)
         self.pairing = PairingManager(
-            identity, self.registry, ttl_s=pairing_ttl_s, max_skew_s=max_skew_s, clock=clock
+            identity,
+            self.registry,
+            ttl_s=pairing_ttl_s,
+            max_skew_s=max_skew_s,
+            clock=clock,
+            companion_limit=companion_limit,
         )
         self.verifier = CommandVerifier(identity, self.registry, max_skew_s=max_skew_s, clock=clock)
         self.connected = False
@@ -225,7 +231,11 @@ class RemoteService:
         except PairingError as exc:
             await self._log(device_id, None, "pair", False, exc.reason, None)
             reply.update(ok=False, reason=exc.reason)
-            return reply  # başarısız eşleştirmeye yanıt gönderilmez
+            if exc.reason == "device_limit":
+                # Kanıt (QR gizli değeri) ve imza doğrulandıktan sonra oluşur: istek gerçekten
+                # kullanıcının ekranındaki koddan geliyor; telefona nedeni bildirilir.
+                await self._send_to(device_id, reply)
+            return reply  # diğer başarısız eşleştirmelere yanıt gönderilmez
         self.stats["paired"] += 1
         await self._log(device_id, None, "pair", True, "ok", device.name)
         reply.update(ok=True, reason="ok", name=device.name)

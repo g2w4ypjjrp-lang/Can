@@ -110,6 +110,17 @@ async def build_snapshot(runtime: EngineRuntime) -> dict[str, Any]:
             "version": runtime.version,
         }
     }
+    if runtime.license is not None:
+        lic = runtime.license.status()
+        # Telefona yalnızca özet: anahtar, cihaz kimliği veya sunucu ayrıntısı gönderilmez.
+        data["license"] = {
+            "state": lic["state"],
+            "valid": lic["valid"],
+            "enforced": lic["enforced"],
+            "plan_name": lic["plan_name"],
+            "expires_at": lic["license_expires_at"],
+            "message": lic["message"],
+        }
     try:
         if runtime.execution is not None:
             account = runtime.execution.monitor.last

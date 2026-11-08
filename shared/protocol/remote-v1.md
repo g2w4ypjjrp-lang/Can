@@ -58,6 +58,10 @@ Alıcı önce imzayı `p` metninin UTF-8 baytları üzerinde doğrular, sonra `p
    Gizli değeri bilmeyen aktarma servisi geçerli kanıt üretemez. Aynı istek tekrar
    gönderilirse oturum bittiği için reddedilir.
 
+   Başarısız eşleştirmeye yanıt verilmez. Tek istisna `device_limit`'tir (Aşama 15): lisans
+   zorunluyken kiradaki telefon sınırı doluysa reddedilir. Kanıt ve imza doğrulandıktan sonra
+   oluştuğu için imzalı `pair_result` (`ok: false`, `reason: device_limit`) gönderilir.
+
 ## Komutlar (telefon → motor)
 
 `p` içeriği:
