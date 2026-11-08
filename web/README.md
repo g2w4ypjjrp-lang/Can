@@ -56,4 +56,5 @@ npx playwright test         # API'yi boş "ati_e2e" veritabanıyla kendisi başl
 npx lhci autorun            # Chrome yolu gerekirse: CHROME_PATH=/yol/chrome
 ```
 
-Eşikler (CI): performans ≥ 90, erişilebilirlik = 100, en iyi uygulamalar ≥ 95, SEO ≥ 95.
+Eşikler (CI): performans ≥ 90, erişilebilirlik = 100, en iyi uygulamalar ≥ 95, SEO ≥ 95. Her sayfa
+3 kez ölçülür; eşikler ortanca sonuca uygulanır (sunucu ısınması ve CI dalgalanması tek ölçümü bozmasın).

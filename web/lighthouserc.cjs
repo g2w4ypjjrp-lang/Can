@@ -21,15 +21,17 @@ module.exports = {
       startServerCommand: `npx next start -p ${PORT} -H 127.0.0.1`,
       startServerReadyPattern: "Ready",
       url: PAGES.map((path) => `http://127.0.0.1:${PORT}${path}`),
-      numberOfRuns: 1,
+      // Her sayfa 3 kez ölçülür, eşikler ortanca sonuca uygulanır: sunucunun ilk isteğindeki
+      // ısınma süresi ve paylaşımlı CI makinelerindeki dalgalanma tek ölçümü bozmasın.
+      numberOfRuns: 3,
       settings: { chromeFlags: "--headless=new --no-sandbox --disable-dev-shm-usage" },
     },
     assert: {
       assertions: {
-        "categories:performance": ["error", { minScore: 0.9 }],
-        "categories:accessibility": ["error", { minScore: 1 }],
-        "categories:best-practices": ["error", { minScore: 0.95 }],
-        "categories:seo": ["error", { minScore: 0.95 }],
+        "categories:performance": ["error", { minScore: 0.9, aggregationMethod: "median-run" }],
+        "categories:accessibility": ["error", { minScore: 1, aggregationMethod: "median-run" }],
+        "categories:best-practices": ["error", { minScore: 0.95, aggregationMethod: "median-run" }],
+        "categories:seo": ["error", { minScore: 0.95, aggregationMethod: "median-run" }],
       },
     },
     upload: { target: "filesystem", outputDir: ".lighthouseci/reports" },
