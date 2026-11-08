@@ -132,6 +132,25 @@ async def test_testnet_trading_through_local_api(
     assert "BTCUSDT" not in exchange.futures_positions
     assert not [a for a in exchange.algo_orders.values() if a["algoStatus"] == "NEW"]
 
+    risk = (await client.get("/v1/risk/status")).json()
+    names = {c["name"] for c in risk["conditions"]}
+    assert {
+        "risk.daily_loss",
+        "exchange.usdm_futures.stream",
+        "exchange.usdm_futures.reconciled",
+    } <= names
+    assert risk["engine_state"] == "running" and risk["limits"]["max_leverage"] == 3
+    assert risk["gate"]["approved"] == 1 and risk["gate"]["rejected"] == 3
+    decisions = (await client.get("/v1/risk/decisions")).json()
+    assert sorted(d["risk_verdict"] for d in decisions) == ["approved"] + ["rejected"] * 3
+    rejected_codes = {r["code"] for d in decisions for r in d["risk_reasons"]}
+    assert {"stop_required", "stop_side", "leverage"} <= rejected_codes
+    events = (await client.get("/v1/risk/events")).json()
+    assert {"gate.stop_required", "gate.stop_side", "gate.leverage"} <= {e["rule"] for e in events}
+    auto = await client.post("/v1/autotrade", json={"enabled": True})
+    assert auto.json()["enabled"] is True and auto.json()["environment"] == "testnet"
+    assert (await client.get("/v1/autotrade")).json()["enabled"] is True
+
     audit = (await client.get("/v1/audit?limit=200")).text
     assert "execution.open" in audit and "execution.testnet_key" in audit
     assert SECRET not in audit and API_KEY not in audit

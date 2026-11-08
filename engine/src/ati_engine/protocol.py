@@ -79,6 +79,9 @@ _API_MODELS: tuple[type[BaseModel], ...] = (
     schemas.ExecutionPositionInfo,
     schemas.ExecutionOrderInfo,
     schemas.ExecutionCloseRequest,
+    schemas.RiskEventInfo,
+    schemas.DecisionInfo,
+    schemas.AutoTradeRequest,
 )
 
 
@@ -247,6 +250,15 @@ def build_protocol_schema() -> dict[str, Any]:
             },
             "POST /v1/execution/close-all?reason=": {"response": "object", "auth": True},
             "POST /v1/execution/reconcile?market=": {"response": "object", "auth": True},
+            "GET /v1/risk/status": {"response": "object", "auth": True},
+            "GET /v1/risk/events?limit=": {"response": "RiskEventInfo[]", "auth": True},
+            "GET /v1/risk/decisions?limit=": {"response": "DecisionInfo[]", "auth": True},
+            "GET /v1/autotrade": {"response": "object", "auth": True},
+            "POST /v1/autotrade": {
+                "request": "AutoTradeRequest",
+                "response": "object",
+                "auth": True,
+            },
             "POST /v1/market/focus": {
                 "request": "FocusRequest",
                 "response": "FocusResponse",

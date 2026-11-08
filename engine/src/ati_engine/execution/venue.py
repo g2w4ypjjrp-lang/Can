@@ -47,6 +47,10 @@ class VenueError(Exception):
         self.unknown = unknown
 
 
+class ExecutionBlocked(RuntimeError):
+    """Ön koşul sağlanmadığı için işlem açılmadı (gerekçe mesajdadır)."""
+
+
 class OrderRejected(VenueError):
     """Borsa emri kesin olarak reddetti (yetersiz bakiye, filtre hatası vb.)."""
 
@@ -186,6 +190,11 @@ class Venue(Protocol):
     async def fills(self, symbol: str, exchange_order_id: str) -> list[Fill]: ...
 
     async def balances(self) -> list[Balance]: ...
+
+    async def price(self, symbol: str) -> Decimal | None:
+        """Emrin gerçekleşeceği yerdeki güncel fiyat (test ağı fiyatı gerçek piyasadan
+        farklıdır)."""
+        ...
 
     async def positions(self) -> list[VenuePosition]: ...
 

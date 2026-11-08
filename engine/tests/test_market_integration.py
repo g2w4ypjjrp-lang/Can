@@ -84,7 +84,11 @@ async def test_engine_waits_for_market_data_then_runs(stack: Stack) -> None:
     runtime = stack.engine.runtime
     assert runtime is not None
     conditions = {c.name: c.ready for c in runtime.safety.conditions()}
-    assert conditions == {"market_data.spot": True, "market_data.usdm_futures": True}
+    assert conditions == {
+        "market_data.spot": True,
+        "market_data.usdm_futures": True,
+        "risk.daily_loss": True,  # risk bekçisi (Aşama 11)
+    }
     expected = {
         "!miniTicker@arr",
         "!ticker@arr",

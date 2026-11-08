@@ -18,24 +18,26 @@ import contextlib
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 from ati_engine.config import EngineSettings
+from ati_engine.core.bus import EventBus
 from ati_engine.core.models import EngineState, Market, SymbolInfo, TradingMode
 from ati_engine.exchange.rate_limit import Priority, WeightBudget
 from ati_engine.exchange.rest import BinanceRestClient
 from ati_engine.exchange.signing import RequestSigner
 from ati_engine.execution.binance_venue import BinanceFuturesVenue, BinanceSpotVenue
-from ati_engine.execution.engine import (
-    ExecutionBlocked,
-    ManagedPosition,
-    TradeIntent,
-    TradingEngine,
-)
+from ati_engine.execution.engine import ManagedPosition, TradeIntent, TradingEngine
 from ati_engine.execution.orders import OrderRecord
 from ati_engine.execution.reconcile import Reconciler, ReconcileReport
+from ati_engine.execution.venue import ExecutionBlocked
 from ati_engine.market.discovery import parse_exchange_info
 from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT
+from ati_engine.risk.account import AccountMonitor
+from ati_engine.risk.gate import RiskGate
+from ati_engine.risk.guard import RiskGuard
+from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.security.exchange_keys import ExchangeKeyStore, KeyCheck, StoredKey, verify_key
 from ati_engine.storage.audit import AuditLog
 from ati_engine.storage.database import Database
@@ -77,6 +79,8 @@ class ExecutionService:
         trading_mode: Callable[[], TradingMode],
         engine_state: Callable[[], EngineState],
         endpoints: dict[Market, TestnetEndpoints] | None = None,
+        safety: SafetyCoordinator | None = None,
+        bus: EventBus | None = None,
     ) -> None:
         self.settings = settings
         self.cfg = settings.execution
@@ -100,6 +104,45 @@ class ExecutionService:
         self.markets: dict[Market, MarketExecution] = {}
         self.last_error: dict[Market, str] = {}
         self._lock = asyncio.Lock()
+
+        # Risk yönetimi (Aşama 11): kapı her açılışı denetler; bekçi sürekli izler.
+        def engines() -> list[TradingEngine]:
+            return [m.engine for m in self.markets.values()]
+
+        self.monitor = AccountMonitor(
+            db, mode=TradingMode.TESTNET, engines=engines, quote_asset=settings.quote_asset
+        )
+        self.gate = RiskGate(
+            limits=settings.risk,
+            db=db,
+            monitor=self.monitor,
+            engines=engines,
+            trading_mode=trading_mode,
+            engine_state=engine_state,
+            fees={
+                Market.SPOT: Decimal(str(settings.scoring.spot_taker_fee)),
+                Market.USDM_FUTURES: Decimal(str(settings.scoring.futures_taker_fee)),
+            },
+        )
+        self.guard: RiskGuard | None = None
+        if safety is not None:
+            self.guard = RiskGuard(
+                limits=settings.risk,
+                monitor=self.monitor,
+                safety=safety,
+                db=db,
+                targets=lambda: list(self.markets.values()),
+                bus=bus,
+                close_all=lambda reason: self.close_all(reason=reason, actor="risk_guard"),
+            )
+        self._guard_stop = asyncio.Event()
+        self._guard_task: asyncio.Task[None] | None = None
+
+    def start_guard(self) -> None:
+        if self.guard is None or self._guard_task is not None:
+            return
+        self.guard.start()
+        self._guard_task = asyncio.create_task(self.guard.run(self._guard_stop), name="risk-guard")
 
     # --- Anahtarlar ---------------------------------------------------------------------------
 
@@ -187,6 +230,7 @@ class ExecutionService:
                 venue=venue,
                 db=self.db,
                 symbols=symbols.get,
+                risk_gate=self.gate,
                 engine_state=self.engine_state,
                 fill_timeout_s=self.cfg.fill_timeout_s,
             )
@@ -201,6 +245,8 @@ class ExecutionService:
             )
             self.markets[market] = execution
             self.last_error.pop(market, None)
+            if self.guard is not None:
+                self.guard.attach(market)
             await self.audit.record(
                 actor="system",
                 action="execution.connected",
@@ -232,8 +278,15 @@ class ExecutionService:
                 await execution.task
         await execution.engine.stop()
         await execution.rest.close()
+        if self.guard is not None:
+            await self.guard.detach(market)
 
     async def close(self) -> None:
+        self._guard_stop.set()
+        if self._guard_task is not None:
+            self._guard_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._guard_task
         for market in list(self.markets):
             await self.disconnect(market)
 
@@ -246,22 +299,12 @@ class ExecutionService:
     # --- İşlemler -------------------------------------------------------------------------------
 
     def _validate(self, intent: TradeIntent) -> None:
+        # Diğer tüm kurallar (zorunlu stop, işlem başına risk, günlük zarar, kaldıraç, tasfiye
+        # uzaklığı...) risk kapısındadır ve motor her açılışta onu çağırır.
         if self.trading_mode() is not TradingMode.TESTNET:
             raise ExecutionBlocked(
                 "İşlem modu TESTNET değil: test ağı işlemi için önce işlem modunu TESTNET yapın"
             )
-        if intent.stop_loss is None and intent.trailing_callback_pct is None:
-            raise ExecutionBlocked("Zarar durdur (veya iz süren stop) zorunludur")
-        if intent.leverage is not None and intent.leverage > self.cfg.max_leverage:
-            raise ExecutionBlocked(f"Kaldıraç üst sınırı {self.cfg.max_leverage}x")
-        if intent.stop_loss is not None:
-            wrong_side = (
-                intent.stop_loss >= intent.reference_price
-                if intent.direction > 0
-                else intent.stop_loss <= intent.reference_price
-            )
-            if wrong_side:
-                raise ExecutionBlocked("Zarar durdur fiyatı pozisyonun yanlış tarafında")
 
     async def open(self, intent: TradeIntent, *, actor: str) -> ManagedPosition:
         self._validate(intent)
@@ -329,11 +372,29 @@ class ExecutionService:
                     last_reconcile=last.as_dict() if last else None,
                 )
             markets[market.value] = entry
+        snapshot = self.monitor.last
         return {
             "environment": "testnet",
             "trading_mode": self.trading_mode().value,
             "live_locked": True,
             "markets": markets,
+            "risk": {
+                "limits": self.settings.risk.model_dump(mode="json"),
+                "gate": dict(self.gate.stats),
+                "guard": self.guard.last.as_dict() if self.guard and self.guard.last else None,
+                "account": None
+                if snapshot is None
+                else {
+                    "ts_ms": snapshot.ts_ms,
+                    "day": snapshot.day,
+                    "equity": str(snapshot.equity),
+                    "day_start_equity": str(snapshot.day_start_equity),
+                    "daily_loss_pct": round(float(snapshot.daily_loss_pct), 4),
+                    "halted": snapshot.halted_at is not None,
+                    "halt_reason": snapshot.halt_reason,
+                    "open_positions": len(snapshot.positions),
+                },
+            },
         }
 
     def positions(self) -> list[dict[str, Any]]:

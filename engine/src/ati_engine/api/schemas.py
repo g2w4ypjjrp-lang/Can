@@ -829,3 +829,38 @@ class ExecutionCloseRequest(BaseModel):
     market: Market
     symbol: str = Field(min_length=5, max_length=20, pattern=r"^[A-Z0-9]+$")
     reason: str = Field(default="kullanıcı", max_length=200)
+
+
+# --- Risk yönetimi (Aşama 11) ---------------------------------------------------------------------
+
+
+class RiskEventInfo(BaseModel):
+    id: int
+    ts_ms: int
+    rule: str
+    severity: Literal["info", "warning", "critical"]
+    market: str | None = None
+    symbol: str | None = None
+    action: str
+    details: dict[str, Any]
+
+
+class DecisionInfo(BaseModel):
+    """Karar günlüğü: işlem neden açıldı / neden açılmadı."""
+
+    id: str
+    created_ms: int
+    mode: str
+    market: str
+    symbol: str
+    direction: str
+    opportunity_score: float | None = None
+    risk_verdict: Literal["approved", "rejected", "pending"]
+    risk_reasons: list[dict[str, Any]]
+    risk_metrics: dict[str, Any]
+    outcome: str | None = None
+    reason: str | None = None
+
+
+class AutoTradeRequest(BaseModel):
+    enabled: bool

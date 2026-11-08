@@ -167,8 +167,9 @@ stateDiagram-v2
 | HALTED | **Hayır** | Evet (yalnızca azaltma) |
 | STARTING / STOPPING | Hayır | Hayır (mutabakat bekleniyor) |
 
-Hazırlık koşulları her aşamada eklenir: `market_data.*` (Aşama 2), `exchange.reconciled`
-(Aşama 10), `risk.daily_loss` (Aşama 11), `license.valid` (Aşama 15).
+Hazırlık koşulları her aşamada eklenir: `market_data.*` (Aşama 2),
+`exchange.<piyasa>.stream` ve `exchange.<piyasa>.reconciled` (Aşama 10-11; yürütücü bağlıyken),
+`risk.daily_loss` (Aşama 11), `license.valid` (Aşama 15).
 
 ### 3.3 Masaüstü uygulaması (`desktop/`, Aşama 12)
 

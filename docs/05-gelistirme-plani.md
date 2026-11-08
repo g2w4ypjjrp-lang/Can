@@ -34,8 +34,8 @@ kısıtı).
 | 8 | Backtest | ✅ **Tamamlandı** |
 | 9 | Paper Trading | ✅ **Tamamlandı** |
 | 10 | Otomatik işlem motoru | ✅ **Tamamlandı** (test ağı; gerçek hesap G1/G2 ile) |
-| 11 | Risk yönetimi | ⏭️ Sıradaki |
-| 12 | Windows EXE | |
+| 11 | Risk yönetimi | ✅ **Tamamlandı** |
+| 12 | Windows EXE | ⏭️ Sıradaki |
 | 13 | iOS uygulaması | |
 | 14 | Web sitesi | |
 | 15 | Lisans sistemi | |
@@ -505,11 +505,66 @@ gün ister. Bu süre motor kullanıcının bilgisayarında çalıştıkça dolar
 Tüm adresler ayarlardan değiştirilebilir. Not: test ağında BTCUSDT en düşük emir değeri
 50 USDT'dir.
 
-### Aşama 11 — Risk yönetimi
-Bağımsız risk kapısı (işlem başına risk, günlük zarar, maksimum açık pozisyon, kaldıraç,
-tasfiye mesafesi) ve ayrı izleyen risk bekçisi; günlük zarar sınırında otomatik durma;
-bağlantı kesintisinde güvenli mod. **Kabul:** her kural için ret testleri; risk kapısını
-atlayan bir kod yolunun olmadığının testle gösterilmesi.
+### Aşama 11 — Risk yönetimi ✅
+
+**Çıktılar (uygulandı):**
+
+- **`risk/gate.py`: risk kapısı.** İşlem açılmadan önce bağımsız denetim. Kurallar:
+  - Motor durumu RUNNING ve işlem modu yürütücüyle aynı olmalı.
+  - Zarar durdur zorunlu ve doğru tarafta olmalı.
+  - Fiyat, işlemin yapılacağı yerden (test ağı) okunur; sinyalden %1'den fazla sapmışsa ret.
+  - Hesap bilgisi borsadan okunamazsa ret.
+  - İşlem başına risk: stopta kayıp + iki yön komisyon + kayma payı, özsermayenin %0,5'ini
+    aşamaz.
+  - Günlük zarar bütçesi: bugünkü kayıp + bu işlemin riski günlük sınırı (%2) aşamaz. Gün
+    kilitliyse ret.
+  - En fazla 3 açık pozisyon. Eşzamanlı açılışlar sınırı birlikte aşamaz.
+  - Kaldıraç ≤ 3x (verilmezse 1x; motor kaldıracı her zaman açıkça ayarlar). Toplam pozisyon ≤
+    özsermayenin 3 katı. Spot'ta kaldıraç yok.
+  - Tahmini tasfiye uzaklığı ≥ %15 (ayrık ve çapraz tahminin kötüsü). Stop tasfiye fiyatından
+    önce olmalı.
+
+  Tüm sınırlar ayarlardan değiştirilebilir ama kodda üst sınırları vardır (işlem başına en
+  fazla %5, günlük en fazla %20, kaldıraç en fazla 20x).
+- **Tek kapı (`execution/approval.py`).** Onaylanan işleme kapı **imzalı, 60 sn geçerli, tek
+  kullanımlık** bir onay verir. Emir yöneticisi giriş emrini bu onay olmadan göndermez.
+  Onaysız gönderilebilen emirler riski artıramaz: Futures'ta `reduceOnly`/`closePosition`
+  zorunlu; Spot'ta yalnızca satış. Emir yöneticisi ve işlem motoru risk kapısı olmadan
+  kurulamaz.
+- **`risk/account.py`: hesap izleyici.** Özsermaye borsadan okunur: cüzdan + gerçekleşmemiş
+  kâr/zarar. Gün başı özsermaye UTC gününün ilk ölçümünde `risk_daily` tablosuna yazılır;
+  motorun yeniden başlatılması günlük zarar sayacını sıfırlamaz.
+- **`risk/guard.py`: risk bekçisi.** Ayrı görevde, 5 sn'de bir çalışır:
+  - Günlük zarar sınırında gün kilitlenir. Motor güvenli moda iner ve UTC gün sonuna kadar
+    yeni işlem açılmaz (özsermaye toparlansa da). Pozisyonların kapatılması da istenebilir;
+    varsayılan: kapatma, borsadaki stoplar yerinde kalır.
+  - Kullanıcı akışı 30 sn'den uzun koparsa güvenli mod.
+  - Mutabakatta kritik fark varsa güvenli mod.
+  - Stopu olmayan pozisyonda kritik olay yazılır ve koruma yeniden kurulur.
+  - Tasfiye fiyatı %15'ten yakınsa uyarı; %5'ten yakınsa pozisyon acil kapatılır.
+- **`execution/auto.py`: otomatik işlem.** Eşik üstü fırsat sinyallerini **test ağında**
+  işleme çevirir. Varsayılan **kapalı**.
+  - Test ağı fiyatı gerçek piyasadan farklı olduğu için sinyalin stop/hedef **uzaklıkları**
+    test ağı fiyatına uygulanır.
+  - Miktar riske göre hesaplanır (varsayılan %0,25). Hedef uzaksa yarısı 1R'de alınır, sonra
+    stop girişe çekilir.
+  - Saatlik giriş sınırı ve sembol bekleme süresi vardır. Aynı sinyal iki kez işleme dönmez.
+- **Karar günlüğü:** her niyet için kapının kararı, gerekçeleri ve ölçümleri `decisions`
+  tablosunda; retler ayrıca `risk_events`'te.
+- **Yerel API:** `/v1/risk/status|events|decisions`, `/v1/autotrade` (aç/kapat, durum).
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Her kural için ret testi | ✅ 17 kuralın her biri ayrı testle reddediliyor. Ret kaydı (karar + gerekçe + olay) ve "ret sonrası hiçbir emir, kaldıraç ayarı bile gönderilmedi" testle doğrulandı |
+| Risk kapısını atlayan kod yolu olmadığı | ✅ Çalışma anında: onaysız, sahte imzalı, süresi dolmuş, tekrar kullanılan, başka sembol/yön/piyasa için veya fazla miktarlı onayla giriş emri reddediliyor (7 deneme, borsaya 0 emir). Onaysız emirlerin riski artıramadığı test edildi. Statik: kaynak kodda borsaya emir gönderen tek dosya emir yöneticisi; emir yöneticisi ve işlem motoru risk kapısı olmadan kurulamıyor |
+| Günlük zarar sınırında otomatik durma | ✅ %2,1 kayıpta güvenli mod, kritik olay ve uyarı. Özsermaye toparlansa da gün kilitli kaldı; kilit yeniden başlatmada da korundu; yeni UTC gününde kalktı |
+| Bağlantı kesintisinde güvenli mod | ✅ Kullanıcı akışı tolerans süresinden uzun kopunca güvenli mod; bağlanınca geri döndü. Mutabakatta kritik pozisyon farkı olunca güvenli mod; bilinmeyen (kullanıcının) pozisyonu yalnızca uyarı |
+| Otomatik işlem | ✅ Sahte borsada: sinyal riske göre boyutlandı (116,279 BTC = 250 USDT risk), uzaklıklar test ağı fiyatına uygulandı, stop ve kademeli hedefler borsaya kondu. Uygunsuz sinyal (düşük puan, eski, seviyesiz, yanlış piyasa, test ağında olmayan sembol) atlandı. Kapalıyken veya mod TESTNET değilken işlem yok |
+
+**Not:** Risk kapısı kayıpları **sınırlar**, kârı garanti etmez. Test ağı sonuçları gerçek
+piyasa sonuçlarını göstermez (likidite ve fiyatlar farklıdır).
 
 ### Aşama 12 — Windows EXE
 Tauri 2 + React; ekranlar: canlı piyasa, tüm coinler, en iyi fırsatlar, balina radarı, AI

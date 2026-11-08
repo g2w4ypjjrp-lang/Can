@@ -4,8 +4,9 @@ Hazırlık koşulları (readiness conditions), motorun yeni pozisyon açabilmesi
 olması gereken önermelerdir. Her alt sistem kendi koşulunu kaydeder ve günceller:
 
 * Aşama 2: ``market_data.spot`` / ``market_data.futures`` - WebSocket akışları canlı mı?
-* Aşama 10: ``exchange.reconciled`` - yerel emir/pozisyon durumu borsa ile eşleşti mi?
-* Aşama 11: ``risk.daily_loss`` - günlük zarar sınırı aşılmadı mı?
+* Aşama 11: ``exchange.<piyasa>.reconciled`` - son mutabakatta kritik fark yok mu?
+* Aşama 11: ``exchange.<piyasa>.stream`` - kullanıcı veri akışı bağlı mı?
+* Aşama 11: ``risk.daily_loss`` - günlük zarar sınırı bugün aşılmadı mı?
 * Aşama 15: ``license.valid`` - lisans kirası geçerli mi?
 
 Koşullardan biri bile yanlışsa motor RUNNING'den SAFE_MODE'a iner; hepsi doğru olunca
@@ -57,6 +58,11 @@ class SafetyCoordinator:
         self._conditions[name] = Condition(
             name, ready, detail or ("hazır" if ready else "bekleniyor")
         )
+
+    async def unregister_condition(self, name: str) -> None:
+        """Artık izlenmeyen koşulu kaldırır (ör. test ağı bağlantısı kapatıldı)."""
+        if self._conditions.pop(name, None) is not None:
+            await self.reevaluate()
 
     def conditions(self) -> list[Condition]:
         return list(self._conditions.values())

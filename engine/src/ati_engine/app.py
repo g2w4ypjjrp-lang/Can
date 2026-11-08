@@ -35,6 +35,7 @@ from ati_engine.core.supervisor import RestartPolicy, TaskSupervisor
 from ati_engine.exchange.endpoints import endpoints_for
 from ati_engine.exchange.rate_limit import WeightBudget
 from ati_engine.exchange.rest import BinanceRestClient
+from ati_engine.execution.auto import AutoTrader
 from ati_engine.execution.fills import FillSimulator
 from ati_engine.execution.service import ExecutionService
 from ati_engine.history.archive import INTERVAL_MS
@@ -55,7 +56,7 @@ from ati_engine.safety.kill_switch import KillSwitch
 from ati_engine.safety.state import EngineStateMachine
 from ati_engine.safety.trading_mode import TradingModeController
 from ati_engine.scanner.scanner import MarketScanner
-from ati_engine.scoring.live import OpportunityEngine
+from ati_engine.scoring.live import OpportunityEngine, OpportunityScored
 from ati_engine.security.exchange_keys import ExchangeKeyStore
 from ati_engine.security.vault import SecretVault, default_cipher
 from ati_engine.storage.audit import AuditLog
@@ -238,8 +239,19 @@ class Engine:
             keys=ExchangeKeyStore(runtime.vault),
             trading_mode=lambda: runtime.trading_mode.mode,
             engine_state=lambda: runtime.safety.state.state,
+            safety=runtime.safety,
+            bus=runtime.bus,
         )
         runtime.execution = service
+        service.start_guard()
+        autotrader = AutoTrader(
+            settings=runtime.settings.autotrade,
+            limits=runtime.settings.risk,
+            service=service,
+            trading_mode=lambda: runtime.trading_mode.mode,
+        )
+        runtime.autotrader = autotrader
+        runtime.bus.subscribe(OpportunityScored, autotrader.on_opportunity, name="autotrader")
 
         async def connect() -> None:
             try:

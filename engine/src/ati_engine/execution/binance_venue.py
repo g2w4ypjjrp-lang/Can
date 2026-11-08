@@ -164,6 +164,16 @@ class _BaseBinanceVenue:
                 return None
             raise
 
+    async def _ticker(self, path: str, symbol: str, *, weight: int) -> Decimal | None:
+        try:
+            data = await self.rest.request(
+                "GET", path, params={"symbol": symbol}, weight=weight, priority=Priority.HIGH
+            )
+        except Exception as exc:
+            raise map_error(exc) from exc
+        value = data.get("price") if isinstance(data, dict) else None
+        return _dec(value) if value not in (None, "") else None
+
     def events(self) -> AsyncIterator[VenueEvent]:
         if self._stream_task is None:
             self._stream_task = asyncio.create_task(self._stream_loop())
@@ -416,6 +426,9 @@ class BinanceSpotVenue(_BaseBinanceVenue):
 
     async def positions(self) -> list[VenuePosition]:
         return []
+
+    async def price(self, symbol: str) -> Decimal | None:
+        return await self._ticker("/api/v3/ticker/price", symbol, weight=2)
 
     async def set_leverage(self, symbol: str, leverage: int) -> None:
         return None
@@ -674,6 +687,9 @@ class BinanceFuturesVenue(_BaseBinanceVenue):
 
     async def set_leverage(self, symbol: str, leverage: int) -> None:
         await self._call("POST", "/fapi/v1/leverage", {"symbol": symbol, "leverage": leverage})
+
+    async def price(self, symbol: str) -> Decimal | None:
+        return await self._ticker("/fapi/v1/ticker/price", symbol, weight=1)
 
     async def _listen_key(self, method: str) -> str:
         try:

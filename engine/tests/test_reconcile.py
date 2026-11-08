@@ -15,8 +15,10 @@ from ati_engine.execution.engine import TradingEngine
 from ati_engine.execution.orders import make_client_id
 from ati_engine.execution.reconcile import Reconciler
 from ati_engine.execution.venue import OrderRequest
+from ati_engine.risk.gate import RiskGate
 from ati_engine.storage.database import Database
 from fake_exchange import FakeExchange
+from risk_helpers import approve, make_gate
 from test_binance_venue import futures_venue, info, intent, spot_venue, wait_for
 
 D = Decimal
@@ -43,13 +45,16 @@ async def start_engine(
     exchange: FakeExchange, db: Database, market: Market = Market.USDM_FUTURES
 ) -> TradingEngine:
     venue = futures_venue(exchange) if market is Market.USDM_FUTURES else spot_venue(exchange)
+    holder: list[TradingEngine] = []
     engine = TradingEngine(
         venue=venue,
         db=db,
         symbols=lambda s: info(s, market),
+        risk_gate=make_gate(db, venue.mode, holder),
         engine_state=lambda: EngineState.RUNNING,
         fill_timeout_s=3.0,
     )
+    holder.append(engine)
     await engine.start()
     await wait_for(lambda: venue.stream_connected)  # type: ignore[attr-defined]
     return engine
@@ -208,16 +213,17 @@ async def test_unresolved_submission_closed_after_grace(
     engine.orders.backoff_s = 0.01
     exchange.fail_next.extend(["503_before"] * 3)
     cid = make_client_id(TradingMode.TESTNET, "entry", "belirsiz")
-    record = await engine.orders.submit(
-        OrderRequest(
-            client_id=cid,
-            symbol="BTCUSDT",
-            side=Side.BUY,
-            type=OrderType.MARKET,
-            quantity=D(1),
-            purpose="entry",
-        )
+    request = OrderRequest(
+        client_id=cid,
+        symbol="BTCUSDT",
+        side=Side.BUY,
+        type=OrderType.MARKET,
+        quantity=D(1),
+        purpose="entry",
     )
+    gate = engine.risk_gate
+    assert isinstance(gate, RiskGate)
+    record = await engine.orders.submit(request, approval=approve(gate, request, engine.venue))
     assert record.unresolved
     waiting = await Reconciler(engine, unknown_grace_s=3600).run("test")
     assert waiting.issues == [] and record.status is OrderStatus.PENDING_NEW

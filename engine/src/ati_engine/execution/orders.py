@@ -32,6 +32,13 @@ from ati_engine.core.models import (
     TradingMode,
     format_decimal,
 )
+from ati_engine.execution.approval import (
+    ENTRY_PURPOSES,
+    ApprovalError,
+    ApprovalVerifier,
+    RiskApproval,
+    check_risk_reducing,
+)
 from ati_engine.execution.venue import (
     CONDITIONAL_TYPES,
     DuplicateOrder,
@@ -108,6 +115,7 @@ class OrderManager:
         db: Database,
         venue: Venue,
         *,
+        verifier: ApprovalVerifier,
         max_attempts: int = 3,
         backoff_s: float = 0.5,
         on_fill: FillCallback | None = None,
@@ -115,6 +123,7 @@ class OrderManager:
     ) -> None:
         self.db = db
         self.venue = venue
+        self.verifier = verifier
         self.mode = venue.mode
         self.market = venue.market
         self.max_attempts = max_attempts
@@ -226,7 +235,19 @@ class OrderManager:
 
     # --- Gönderim -------------------------------------------------------------------------
 
-    async def submit(self, request: OrderRequest, *, decision_id: str | None = None) -> OrderRecord:
+    async def submit(
+        self,
+        request: OrderRequest,
+        *,
+        decision_id: str | None = None,
+        approval: RiskApproval | None = None,
+    ) -> OrderRecord:
+        # Tek kapı: giriş emri risk kapısının onayı olmadan, diğer emirler riski artıracak
+        # biçimde gönderilemez (``ApprovalError``).
+        if request.purpose in ENTRY_PURPOSES:
+            self.verifier.verify(approval, request, mode=self.mode, market=self.market)
+        else:
+            check_risk_reducing(request, self.market)
         existing = self.records.get(request.client_id)
         if existing is not None and existing.status is not OrderStatus.PENDING_NEW:
             return existing  # aynı karar ikinci kez gönderilmez
@@ -305,6 +326,8 @@ class OrderManager:
     async def submit_oco(
         self, request: OcoRequest, *, decision_id: str | None = None
     ) -> list[OrderRecord]:
+        if request.side is not Side.SELL or self.market is not Market.SPOT:
+            raise ApprovalError("OCO yalnızca Spot'ta pozisyon kapatan satış olabilir")
         records = []
         for client_id, otype, price, trigger in (
             (request.tp_client_id, OrderType.LIMIT, request.take_profit_price, None),

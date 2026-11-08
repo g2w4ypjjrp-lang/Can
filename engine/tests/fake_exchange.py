@@ -698,6 +698,13 @@ class FakeExchange:
         async def server_time() -> Any:
             return {"serverTime": _now()}
 
+        @app.get("/api/v3/ticker/price")
+        @app.get("/fapi/v1/ticker/price")
+        async def ticker_price(symbol: str) -> Any:
+            if symbol not in exchange.prices:
+                return _err(-1121, "Invalid symbol.")
+            return {"symbol": symbol, "price": str(exchange.prices[symbol]), "time": _now()}
+
         @app.get("/api/v3/exchangeInfo")
         @app.get("/fapi/v1/exchangeInfo")
         async def exchange_info() -> Any:

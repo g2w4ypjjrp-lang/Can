@@ -176,9 +176,10 @@ ile, denetim kaydına yazılarak.
 | `history_sync_state` | Her sembol/veri kümesi için en son işlenen zaman → artımlı güncelleme |
 | `strategies` | Strateji kayıt defteri ve terfi hattı: `research → backtest → walk_forward → paper → live_candidate → live`. **`live` aşaması kullanıcı onayı kaydı olmadan veritabanı tarafından reddedilir.** |
 | `strategy_metrics` | Başarı oranı, Profit Factor, Sharpe, Sortino, Maksimum Düşüş (mod ve pencere bazlı) |
-| `decisions` | "Neden açıldı / hangi sinyaller / hangi strateji / neden kâr-zarar" günlüğü |
+| `decisions` | "Neden açıldı / neden açılmadı / hangi sinyaller / hangi strateji / neden kâr-zarar" günlüğü; risk kapısının kararı (`risk_verdict`), gerekçeleri ve ölçümleri (`risk_reasons`) |
 | `orders`, `fills`, `positions` | Emir yaşam döngüsü; `mode` sütunu sanal ve gerçek kayıtların karışmasını engeller; sembol+yön başına tek açık pozisyon |
-| `risk_events` | Risk kuralı tetiklenmeleri ve alınan aksiyon |
+| `risk_events` | Risk kuralı tetiklenmeleri ve alınan aksiyon (kapı retleri `gate.*`, bekçi `guard.*`, mutabakat `reconcile.*`) |
+| `risk_daily` | Mod ve UTC günü başına gün başı / son / en düşük özsermaye ve günlük zarar kilidi (yeniden başlatmada sıfırlanmaz) |
 | `whale_events` | Balina olayları (Binance ve zincir üstü) |
 | `alerts` | Bildirim merkezi |
 | `audit_log` | Hash zincirli, değiştirilemez yerel denetim kaydı (`ati-engine verify-audit`) |

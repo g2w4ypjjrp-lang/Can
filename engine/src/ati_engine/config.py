@@ -45,6 +45,18 @@ class RiskLimits(BaseModel):
     max_open_positions: int = Field(default=3, ge=1, le=50)
     max_leverage: int = Field(default=3, ge=1)
     min_liquidation_distance_pct: Decimal = Field(default=Decimal("15"), gt=0, le=100)
+    # Aşama 11 ek sınırları
+    max_price_deviation_pct: Decimal = Field(default=Decimal("1.0"), gt=0, le=10)
+    max_total_leverage: Decimal = Field(default=Decimal("3"), gt=0)  # toplam pozisyon / özsermaye
+    maintenance_margin_rate: Decimal = Field(default=Decimal("0.01"), ge=0, lt=Decimal("0.5"))
+    slippage_allowance_pct: Decimal = Field(default=Decimal("0.05"), ge=0, le=5)
+    max_snapshot_age_s: float = Field(default=30.0, gt=0, le=600)
+    approval_ttl_s: float = Field(default=60.0, gt=0, le=600)
+    guard_interval_s: float = Field(default=5.0, gt=0, le=300)
+    stream_grace_s: float = Field(default=30.0, ge=0, le=600)
+    # Günlük zarar sınırında açık pozisyonları da kapat (varsayılan: kapatma; borsa tarafındaki
+    # stoplar yerinde kalır, yalnızca yeni işlem durur).
+    close_positions_on_daily_loss: bool = False
 
     @field_validator("max_risk_per_trade_pct")
     @classmethod
@@ -71,6 +83,8 @@ class RiskLimits(BaseModel):
     def _daily_vs_trade(self) -> Self:
         if self.max_daily_loss_pct < self.max_risk_per_trade_pct:
             raise ValueError("Günlük zarar sınırı, işlem başına riskten küçük olamaz")
+        if self.max_total_leverage > HARD_MAX_LEVERAGE:
+            raise ValueError(f"Toplam kaldıraç en fazla {HARD_MAX_LEVERAGE}x olabilir")
         return self
 
 
@@ -126,6 +140,22 @@ class BinanceEndpoints(BaseModel):
     futures_testnet_ws_private: str = "wss://fstream.binancefuture.com/private"
 
 
+class AutoTradeSettings(BaseModel):
+    """Otomatik işlem (Aşama 11): eşik üstü fırsat sinyallerini Binance test ağında işleme
+    dönüştürür. Varsayılan KAPALI; gerçek hesapla çalışmaz. Her işlem risk kapısından geçer."""
+
+    enabled: bool = False
+    markets: list[Market] = Field(default_factory=lambda: [Market.USDM_FUTURES])
+    min_score: float = Field(default=70.0, ge=0, le=100)
+    risk_per_trade_pct: Decimal = Field(
+        default=Decimal("0.25"), gt=0, le=HARD_MAX_RISK_PER_TRADE_PCT
+    )
+    leverage: int = Field(default=2, ge=1, le=HARD_MAX_LEVERAGE)
+    max_entries_per_hour: int = Field(default=4, ge=1, le=100)
+    symbol_cooldown_s: float = Field(default=3600.0, ge=0)
+    max_signal_age_s: float = Field(default=120.0, gt=0, le=3600)
+
+
 class ExecutionSettings(BaseModel):
     """Emir yürütme (Aşama 10). Gerçek hesap (LIVE) bu sürümde kilitlidir; yürütücü yalnızca
     Binance test ağında, kullanıcı test ağı anahtarını girdiğinde çalışır."""
@@ -136,7 +166,6 @@ class ExecutionSettings(BaseModel):
     reconcile_interval_s: float = Field(default=60.0, ge=5, le=3600)
     unknown_order_grace_s: float = Field(default=60.0, ge=0, le=3600)
     recv_window_ms: int = Field(default=5000, ge=1000, le=60_000)
-    max_leverage: int = Field(default=5, ge=1, le=20)
 
 
 class MarketDataSettings(BaseModel):
@@ -335,6 +364,7 @@ class EngineSettings(BaseSettings):
     scoring: ScoringSettings = Field(default_factory=ScoringSettings)
     paper: PaperSettings = Field(default_factory=PaperSettings)
     execution: ExecutionSettings = Field(default_factory=ExecutionSettings)
+    autotrade: AutoTradeSettings = Field(default_factory=AutoTradeSettings)
 
     @property
     def paths(self) -> DataPaths:

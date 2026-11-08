@@ -32,10 +32,12 @@ from ati_engine.analysis.service import AnalysisService, TrainJob
 from ati_engine.api.schemas import (
     AnalysisSnapshotResponse,
     AuditEntry,
+    AutoTradeRequest,
     BacktestJobInfo,
     BacktestRequest,
     CandlesResponse,
     CheckInfo,
+    DecisionInfo,
     ErrorResponse,
     ExecutionCloseRequest,
     ExecutionOrderInfo,
@@ -70,6 +72,7 @@ from ati_engine.api.schemas import (
     PositioningInfo,
     PredictionResponse,
     ReadinessInfo,
+    RiskEventInfo,
     ScannerStatsInfo,
     ScannerTopResponse,
     ScanRowInfo,
@@ -106,8 +109,10 @@ from ati_engine.backtest.service import BacktestJob, BacktestService
 from ati_engine.core.bus import OverflowPolicy
 from ati_engine.core.events import Event, SystemEvent, encode_event
 from ati_engine.core.models import Market
-from ati_engine.execution.engine import ExecutionBlocked, TakeProfit, TradeIntent
+from ati_engine.execution.auto import AutoTrader
+from ati_engine.execution.engine import TakeProfit, TradeIntent
 from ati_engine.execution.service import ExecutionService, ExecutionUnavailable
+from ati_engine.execution.venue import ExecutionBlocked
 from ati_engine.history.service import HistoryService, SyncJob
 from ati_engine.market.service import MarketDataService
 from ati_engine.ml.registry import ModelError
@@ -1129,6 +1134,98 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         except ExecutionUnavailable as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return report.as_dict()
+
+    # --- Risk yönetimi ve otomatik işlem (Aşama 11) ---------------------------------------------
+
+    @app.get("/v1/risk/status")
+    async def risk_status(_: Auth) -> dict[str, Any]:
+        service = execution_or_404()
+        status_ = await service.status()
+        return {
+            **status_["risk"],
+            "engine_state": runtime.safety.state.state.value,
+            "conditions": [
+                {"name": c.name, "ready": c.ready, "detail": c.detail}
+                for c in runtime.safety.conditions()
+            ],
+        }
+
+    @app.get("/v1/risk/events", response_model=list[RiskEventInfo])
+    async def risk_events(
+        _: Auth, limit: Annotated[int, Query(ge=1, le=1000)] = 100
+    ) -> list[RiskEventInfo]:
+        rows = await runtime.db.fetchall(
+            "SELECT id, ts, rule, severity, market, symbol, action, details FROM risk_events "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        return [
+            RiskEventInfo(
+                id=r[0],
+                ts_ms=r[1],
+                rule=r[2],
+                severity=r[3],
+                market=r[4],
+                symbol=r[5],
+                action=r[6],
+                details=json.loads(r[7]),
+            )
+            for r in rows
+        ]
+
+    @app.get("/v1/risk/decisions", response_model=list[DecisionInfo])
+    async def risk_decisions(
+        _: Auth, limit: Annotated[int, Query(ge=1, le=1000)] = 100
+    ) -> list[DecisionInfo]:
+        rows = await runtime.db.fetchall(
+            "SELECT id, created_at, mode, market, symbol, direction, opportunity_score, "
+            "risk_verdict, risk_reasons, outcome, features FROM decisions "
+            "ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        )
+        result = []
+        for r in rows:
+            reasons = json.loads(r[8])
+            if isinstance(reasons, list):  # eski kayıt biçimi
+                reasons = {"reasons": reasons, "metrics": {}}
+            features = json.loads(r[10])
+            result.append(
+                DecisionInfo(
+                    id=r[0],
+                    created_ms=r[1],
+                    mode=r[2],
+                    market=r[3],
+                    symbol=r[4],
+                    direction=r[5],
+                    opportunity_score=r[6],
+                    risk_verdict=r[7],
+                    risk_reasons=reasons.get("reasons", []),
+                    risk_metrics=reasons.get("metrics", {}),
+                    outcome=r[9],
+                    reason=features.get("reason") if isinstance(features, dict) else None,
+                )
+            )
+        return result
+
+    def autotrader_or_404() -> AutoTrader:
+        if runtime.autotrader is None:
+            raise HTTPException(status_code=404, detail="Otomatik işlem etkin değil")
+        return runtime.autotrader
+
+    @app.get("/v1/autotrade")
+    async def autotrade_status(_: Auth) -> dict[str, Any]:
+        return autotrader_or_404().status()
+
+    @app.post("/v1/autotrade")
+    async def autotrade_toggle(body: AutoTradeRequest, _: Auth) -> dict[str, Any]:
+        trader = autotrader_or_404()
+        trader.enabled = body.enabled
+        await runtime.audit.record(
+            actor=LOCAL_ACTOR,
+            action="autotrade.toggle",
+            details={"enabled": body.enabled, "environment": "testnet"},
+        )
+        return trader.status()
 
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:

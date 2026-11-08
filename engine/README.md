@@ -108,6 +108,36 @@ Mutabakat akış kopunca, açılışta ve dakikada bir çalışır. Borsa tek do
 kaçırılan dolumlar alınır, kaybolan stop yeniden kurulur, pozisyon farkı kritik olay olarak
 yazılır. Kullanıcının elle verdiği emirlere dokunulmaz.
 
+## Risk yönetimi ve otomatik işlem (Aşama 11)
+
+Her işlem açılmadan önce **risk kapısından** geçer. Kapı onaylamazsa hiçbir emir gönderilmez;
+karar ve gerekçeleri kaydedilir (`GET /v1/risk/decisions`). Varsayılan sınırlar:
+
+| Sınır | Varsayılan | Ayar (`[risk]`) |
+|---|---|---|
+| İşlem başına risk (stop + komisyon + kayma) | özsermayenin %0,5'i | `max_risk_per_trade_pct` |
+| Günlük zarar (gerçekleşmiş + gerçekleşmemiş) | %2 → gün kilitlenir | `max_daily_loss_pct` |
+| Açık pozisyon | 3 | `max_open_positions` |
+| Kaldıraç / toplam pozisyon | 3x / özsermayenin 3 katı | `max_leverage`, `max_total_leverage` |
+| Tasfiye uzaklığı | en az %15 | `min_liquidation_distance_pct` |
+| Sinyalden fiyat sapması | en fazla %1 | `max_price_deviation_pct` |
+
+Zarar durdur zorunludur. Giriş emri, kapının verdiği imzalı ve tek kullanımlık onay olmadan
+borsaya gönderilemez.
+
+**Risk bekçisi** ayrı çalışır:
+- günlük zarar sınırında UTC gün sonuna kadar yeni işlemi durdurur;
+- kullanıcı akışı koparsa veya mutabakatta kritik fark varsa motoru güvenli moda alır;
+- stopu kaybolan pozisyonun korumasını yeniden kurar;
+- tasfiyeye çok yaklaşan pozisyonu kapatır.
+
+Durum: `GET /v1/risk/status`, olaylar: `GET /v1/risk/events`.
+
+**Otomatik işlem** (yalnızca test ağı, varsayılan kapalı): `POST /v1/autotrade {"enabled": true}`.
+Eşik üstü fırsat sinyalleri riske göre boyutlanır ve sinyalin stop/hedef uzaklıkları test ağı
+fiyatına uygulanır. Hedef uzaksa yarısı 1R'de alınır. İşlem modu TESTNET olmalıdır.
+Sonuçlar garanti değildir; test ağı gerçek piyasayı birebir yansıtmaz.
+
 ## Sanal işlem yarışması (Aşama 9)
 
 Her strateji ve fırsat puanı, her piyasa için **ayrı bir sanal hesapla** (varsayılan 10.000

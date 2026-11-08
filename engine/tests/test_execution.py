@@ -35,6 +35,7 @@ from ati_engine.execution.venue import (
     VenueEvent,
 )
 from ati_engine.storage.database import Database
+from risk_helpers import approve, make_gate
 
 D = Decimal
 
@@ -80,13 +81,16 @@ async def make_engine(
     venue: PaperVenue | None = None,
 ) -> tuple[TradingEngine, PaperVenue]:
     venue = venue or PaperVenue(market, fills=ExactFills(), initial_quote=D(100_000))
+    holder: list[TradingEngine] = []
     engine = TradingEngine(
         venue=venue,
         db=db,
         symbols=lambda s: info(s, market),
+        risk_gate=make_gate(db, venue.mode, holder, state=lambda: state),
         engine_state=lambda: state,
         fill_timeout_s=2.0,
     )
+    holder.append(engine)
     await engine.start()
     return engine, venue
 
@@ -150,8 +154,10 @@ def market_request(cid: str = "atitenTEST00") -> OrderRequest:
 
 async def test_timeout_after_acceptance_does_not_duplicate(db: Database) -> None:
     venue = FlakyVenue(after=True)
-    manager = OrderManager(db, venue, backoff_s=0.01)
-    record = await manager.submit(market_request())
+    gate = make_gate(db, venue.mode)
+    manager = OrderManager(db, venue, verifier=gate, backoff_s=0.01)
+    request = market_request()
+    record = await manager.submit(request, approval=approve(gate, request, venue))
     assert record.status is OrderStatus.FILLED
     assert venue.place_calls == 1  # sorgu emri buldu: yeniden gönderilmedi
     assert len(venue._orders) == 1
@@ -159,8 +165,10 @@ async def test_timeout_after_acceptance_does_not_duplicate(db: Database) -> None
 
 async def test_timeout_before_acceptance_retries_same_id(db: Database) -> None:
     venue = FlakyVenue(after=False)
-    manager = OrderManager(db, venue, backoff_s=0.01)
-    record = await manager.submit(market_request())
+    gate = make_gate(db, venue.mode)
+    manager = OrderManager(db, venue, verifier=gate, backoff_s=0.01)
+    request = market_request()
+    record = await manager.submit(request, approval=approve(gate, request, venue))
     assert record.status is OrderStatus.FILLED
     assert venue.place_calls == 2  # bulunamadı → aynı kimlikle bir kez daha
     assert list(venue._orders) == ["atitenTEST00"]
@@ -170,10 +178,12 @@ async def test_timeout_before_acceptance_retries_same_id(db: Database) -> None:
 async def test_rejection_is_final_and_resubmission_is_ignored(db: Database) -> None:
     venue = PaperVenue(Market.SPOT, fills=ExactFills(), initial_quote=D(10))
     venue.prices["BTCUSDT"] = D(100)
-    manager = OrderManager(db, venue)
-    record = await manager.submit(market_request())
+    gate = make_gate(db, venue.mode)
+    manager = OrderManager(db, venue, verifier=gate)
+    request = market_request()
+    record = await manager.submit(request, approval=approve(gate, request, venue))
     assert record.status is OrderStatus.REJECTED and "-2010" in (record.last_error or "")
-    again = await manager.submit(market_request())
+    again = await manager.submit(request, approval=approve(gate, request, venue))
     assert again is record  # aynı karar ikinci kez gönderilmez
     row = await db.fetchone("SELECT status FROM orders WHERE id = 'atitenTEST00'")
     assert row == ("REJECTED",)
@@ -186,11 +196,13 @@ async def test_unknown_state_left_for_reconciliation(db: Database) -> None:
             raise VenueError("bağlantı yok", unknown=True)
 
     venue = AlwaysDown(after=False)
-    manager = OrderManager(db, venue, max_attempts=3, backoff_s=0.01)
-    record = await manager.submit(market_request())
+    gate = make_gate(db, venue.mode)
+    manager = OrderManager(db, venue, verifier=gate, max_attempts=3, backoff_s=0.01)
+    request = market_request()
+    record = await manager.submit(request, approval=approve(gate, request, venue))
     assert record.status is OrderStatus.PENDING_NEW and record.unresolved
     assert venue.place_calls == 3 and manager.stats["unknown"] == 1
-    reloaded = OrderManager(db, venue)
+    reloaded = OrderManager(db, venue, verifier=gate)
     (open_record,) = await reloaded.load_open()
     assert open_record.client_id == "atitenTEST00" and open_record.unresolved
 
@@ -203,9 +215,16 @@ async def test_duplicate_fills_counted_once_and_orphans_linked(db: Database) -> 
     async def on_fill(record: Any, fill: Fill) -> None:
         seen.append(fill)
 
-    manager = OrderManager(db, venue, on_fill=on_fill)
+    manager = OrderManager(db, venue, verifier=make_gate(db, venue.mode), on_fill=on_fill)
     request = OrderRequest(
-        "atitslTEST00", "BTCUSDT", Side.SELL, OrderType.STOP_MARKET, D(1), trigger_price=D(90)
+        "atitslTEST00",
+        "BTCUSDT",
+        Side.SELL,
+        OrderType.STOP_MARKET,
+        D(1),
+        trigger_price=D(90),
+        reduce_only=True,
+        purpose="stop_loss",
     )
     await manager.submit(request)
     fill = Fill("", "999", "T1", "BTCUSDT", Side.SELL, D(90), D(1), D(0), "USDT", False, 1)
@@ -331,7 +350,7 @@ async def test_futures_trailing_stop(db: Database) -> None:
     await venue.on_price("BTCUSDT", D(100))
     await engine.open(
         futures_intent(
-            stop_loss=None,
+            stop_loss=D(90),  # risk kapısı: zarar durdur zorunlu (iz süren stop ek korumadır)
             take_profits=(),
             trailing_callback_pct=D(2),
             trailing_activation=D(105),

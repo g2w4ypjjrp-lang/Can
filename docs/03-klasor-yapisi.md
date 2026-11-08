@@ -46,12 +46,14 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   │                              ✅ 10 emir yöneticisi (idempotent), pozisyon defteri, işlem
 │   │   │                                    motoru (stop/hedef/başa baş/OCO), Binance yürütücüleri,
 │   │   │                                    mutabakat, test ağı servisi (gerçek hesap: G1/G2)
+│   │   │                              ✅ 11 otomatik işlem (test ağı, varsayılan kapalı)
 │   │   ├── paper/                     ✅ 9  sanal işlem yarışması: bağımsız hesaplar, terfi hattı
-│   │   ├── risk/                      🔜 11 risk kapısı ve bağımsız risk bekçisi
+│   │   ├── risk/                      ✅ 11 risk kapısı (imzalı tek kullanımlık onay), hesap izleyici,
+│   │   │                                    bağımsız risk bekçisi
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
 │   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
 │   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
-│   └── tests/                         ✅ 413 test (birim, gerçek mesaj fikstürleri, sahte Binance
+│   └── tests/                         ✅ 450 test (birim, gerçek mesaj fikstürleri, sahte Binance
 │                                          sunucusuyla uçtan uca, alt süreç duman testi)
 │
 ├── cloud/                             ✅ Bulut servisi (FastAPI) — yönetilen bulutta çalışır

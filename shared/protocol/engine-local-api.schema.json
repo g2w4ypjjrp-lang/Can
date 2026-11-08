@@ -115,6 +115,19 @@
       "title": "AuditEntry",
       "type": "object"
     },
+    "AutoTradeRequest": {
+      "properties": {
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "title": "AutoTradeRequest",
+      "type": "object"
+    },
     "BacktestJobInfo": {
       "properties": {
         "error": {
@@ -483,6 +496,106 @@
         "notes"
       ],
       "title": "CostInfo",
+      "type": "object"
+    },
+    "DecisionInfo": {
+      "description": "Karar günlüğü: işlem neden açıldı / neden açılmadı.",
+      "properties": {
+        "created_ms": {
+          "title": "Created Ms",
+          "type": "integer"
+        },
+        "direction": {
+          "title": "Direction",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "market": {
+          "title": "Market",
+          "type": "string"
+        },
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "opportunity_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opportunity Score"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "risk_metrics": {
+          "additionalProperties": true,
+          "title": "Risk Metrics",
+          "type": "object"
+        },
+        "risk_reasons": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Risk Reasons",
+          "type": "array"
+        },
+        "risk_verdict": {
+          "enum": [
+            "approved",
+            "rejected",
+            "pending"
+          ],
+          "title": "Risk Verdict",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "created_ms",
+        "mode",
+        "market",
+        "symbol",
+        "direction",
+        "risk_verdict",
+        "risk_reasons",
+        "risk_metrics"
+      ],
+      "title": "DecisionInfo",
       "type": "object"
     },
     "EngineEvent": {
@@ -3048,6 +3161,74 @@
       "title": "RestBudgetInfo",
       "type": "object"
     },
+    "RiskEventInfo": {
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "market": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Market"
+        },
+        "rule": {
+          "title": "Rule",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "critical"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symbol"
+        },
+        "ts_ms": {
+          "title": "Ts Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "ts_ms",
+        "rule",
+        "severity",
+        "action",
+        "details"
+      ],
+      "title": "RiskEventInfo",
+      "type": "object"
+    },
     "ScanRowInfo": {
       "properties": {
         "baseline_minutes": {
@@ -5083,6 +5264,10 @@
       "auth": true,
       "response": "AuditEntry[]"
     },
+    "GET /v1/autotrade": {
+      "auth": true,
+      "response": "object"
+    },
     "GET /v1/backtest/jobs": {
       "auth": true,
       "response": "BacktestJobInfo[]"
@@ -5175,6 +5360,18 @@
       "auth": true,
       "response": "PaperTradeInfo[]"
     },
+    "GET /v1/risk/decisions?limit=": {
+      "auth": true,
+      "response": "DecisionInfo[]"
+    },
+    "GET /v1/risk/events?limit=": {
+      "auth": true,
+      "response": "RiskEventInfo[]"
+    },
+    "GET /v1/risk/status": {
+      "auth": true,
+      "response": "object"
+    },
     "GET /v1/scanner/signals?limit=": {
       "auth": true,
       "response": "SignalInfo[]"
@@ -5219,6 +5416,11 @@
       "auth": true,
       "request": "TrainRequest",
       "response": "TrainJobInfo"
+    },
+    "POST /v1/autotrade": {
+      "auth": true,
+      "request": "AutoTradeRequest",
+      "response": "object"
     },
     "POST /v1/backtest/run": {
       "auth": true,

@@ -30,18 +30,22 @@ from decimal import ROUND_DOWN, Decimal
 from typing import Any
 
 from ati_engine.core.models import EngineState, Market, OrderStatus, OrderType, Side, SymbolInfo
+from ati_engine.execution.approval import RiskDecision, RiskGateLike, RiskRejected
 from ati_engine.execution.orders import OrderManager, OrderRecord, make_client_id
 from ati_engine.execution.positions import PositionBook
-from ati_engine.execution.venue import Fill, OcoRequest, OrderRequest, Purpose, Venue
+from ati_engine.execution.venue import (
+    ExecutionBlocked,
+    Fill,
+    OcoRequest,
+    OrderRequest,
+    Purpose,
+    Venue,
+)
 from ati_engine.storage.database import Database
 
 logger = logging.getLogger(__name__)
 
 PROTECTIVE = frozenset({"stop_loss", "take_profit", "trailing_stop"})
-
-
-class ExecutionBlocked(RuntimeError):
-    """Ön koşul sağlanmadığı için işlem açılmadı (gerekçe mesajdadır)."""
 
 
 @dataclass(frozen=True)
@@ -69,15 +73,15 @@ class TradeIntent:
     strategy_id: str | None = None
     opportunity_score: float | None = None
     signals: tuple[str, ...] = ()
-    # Aşama 11'de risk kapısı kararı; risk kapısı bağlanana kadar "pending" kaydedilir.
-    risk_verdict: str = "pending"
 
 
 @dataclass
 class ManagedPosition:
     intent: TradeIntent
     entry_client_id: str
-    state: str = "opening"  # opening | open | closing | closed | failed
+    # evaluating (risk kapısında) | opening (onaylandı, giriş emri) | open | closing | closed
+    # | failed | rejected (risk kapısı reddetti)
+    state: str = "evaluating"
     protection: list[str] = field(default_factory=list)
     filled_qty: Decimal = Decimal(0)
     tp_filled: int = 0
@@ -92,10 +96,12 @@ class TradingEngine:
         venue: Venue,
         db: Database,
         symbols: Callable[[str], SymbolInfo | None],
+        risk_gate: RiskGateLike,
         engine_state: Callable[[], EngineState] | None = None,
         fill_timeout_s: float = 30.0,
     ) -> None:
         self.venue = venue
+        self.risk_gate = risk_gate
         self.db = db
         self.market = venue.market
         self.mode = venue.mode
@@ -103,7 +109,13 @@ class TradingEngine:
         self.engine_state = engine_state or (lambda: EngineState.RUNNING)
         self.fill_timeout_s = fill_timeout_s
         self.positions = PositionBook(db, mode=self.mode, market=self.market)
-        self.orders = OrderManager(db, venue, on_fill=self._on_fill, on_terminal=self._on_terminal)
+        self.orders = OrderManager(
+            db,
+            venue,
+            verifier=risk_gate,
+            on_fill=self._on_fill,
+            on_terminal=self._on_terminal,
+        )
         self.managed: dict[str, ManagedPosition] = {}
         self._events_task: asyncio.Task[None] | None = None
         self._lock = asyncio.Lock()
@@ -251,6 +263,7 @@ class TradingEngine:
         if self.market is Market.SPOT and intent.direction < 0:
             raise ExecutionBlocked("Spot'ta short açılamaz")
         if intent.symbol in self.managed and self.managed[intent.symbol].state in (
+            "evaluating",
             "opening",
             "open",
             "closing",
@@ -275,9 +288,21 @@ class TradingEngine:
                 entry_client_id=make_client_id(self.mode, "entry", intent.decision_id),
             )
             self.managed[intent.symbol] = managed
-        await self._record_decision(intent)
-        if intent.leverage and self.market is Market.USDM_FUTURES:
-            await self.venue.set_leverage(intent.symbol, intent.leverage)
+        # Risk kapısı: reddederse hiçbir emir gönderilmez; karar ve gerekçeler kaydedilir.
+        try:
+            decision = await self.risk_gate.evaluate(intent, self)
+        except Exception:
+            managed.state = "failed"
+            raise
+        await self._record_decision(intent, decision)
+        if not decision.approved:
+            managed.state = "rejected"
+            managed.error = decision.summary
+            raise RiskRejected(decision)
+        managed.state = "opening"
+        if self.market is Market.USDM_FUTURES:
+            # Kaldıraç her zaman açıkça ayarlanır (verilmezse 1x): hesaptaki eski değere güvenilmez.
+            await self.venue.set_leverage(intent.symbol, intent.leverage or 1)
         if intent.limit_price is not None:
             price = info.quantize_price(intent.limit_price, side=entry_side)
             request = OrderRequest(
@@ -299,7 +324,9 @@ class TradingEngine:
                 quantity=qty,
                 purpose="entry",
             )
-        record = await self.orders.submit(request, decision_id=intent.decision_id)
+        record = await self.orders.submit(
+            request, decision_id=intent.decision_id, approval=decision.approval
+        )
         try:
             record = await self.orders.wait_terminal(record.client_id, self.fill_timeout_s)
         except TimeoutError:
@@ -317,13 +344,15 @@ class TradingEngine:
         await self._protect(managed, info)
         return managed
 
-    async def _record_decision(self, intent: TradeIntent) -> None:
-        """Karar günlüğü: "işlem neden açıldı" kaydı (emir ve pozisyon buna bağlanır)."""
+    async def _record_decision(self, intent: TradeIntent, decision: RiskDecision) -> None:
+        """Karar günlüğü: "işlem neden açıldı / neden açılmadı" kaydı (emir ve pozisyon buna
+        bağlanır). Risk kapısının kararı ve gerekçeleri aynı satıra yazılır."""
         await self.db.execute(
             """
             INSERT OR IGNORE INTO decisions (id, created_at, mode, market, symbol, direction,
-                strategy_id, opportunity_score, signals, features, risk_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                strategy_id, opportunity_score, signals, features, risk_verdict, risk_reasons,
+                outcome)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 intent.decision_id,
@@ -357,7 +386,18 @@ class TradingEngine:
                     },
                     ensure_ascii=False,
                 ),
-                intent.risk_verdict,
+                "approved" if decision.approved else "rejected",
+                json.dumps(
+                    {
+                        "reasons": [
+                            {"code": r.code, "message": r.message} for r in decision.reasons
+                        ],
+                        "metrics": decision.metrics,
+                    },
+                    ensure_ascii=False,
+                    default=str,
+                ),
+                None if decision.approved else "not_executed",
             ),
         )
 

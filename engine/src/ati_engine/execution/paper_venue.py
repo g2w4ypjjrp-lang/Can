@@ -283,6 +283,9 @@ class PaperVenue:
     async def balances(self) -> list[Balance]:
         return [Balance(asset, amount, ZERO) for asset, amount in self.wallet.items()]
 
+    async def price(self, symbol: str) -> Decimal | None:
+        return self.prices.get(symbol)
+
     async def positions(self) -> list[VenuePosition]:
         return [
             VenuePosition(symbol=s, quantity=q, entry_price=e, leverage=self.leverage.get(s, 1))

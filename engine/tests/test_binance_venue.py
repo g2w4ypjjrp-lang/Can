@@ -40,6 +40,7 @@ from ati_engine.execution.venue import (
 )
 from ati_engine.storage.database import Database
 from fake_exchange import FakeExchange
+from risk_helpers import approve, make_gate
 
 D = Decimal
 
@@ -314,10 +315,12 @@ async def test_unknown_outcome_after_acceptance_is_not_resent(
     exchange: FakeExchange, db: Database, failure: str
 ) -> None:
     venue = futures_venue(exchange)
-    manager = OrderManager(db, venue, backoff_s=0.01)
+    gate = make_gate(db, venue.mode)
+    manager = OrderManager(db, venue, verifier=gate, backoff_s=0.01)
     exchange.fail_next.append(failure)
     cid = make_client_id(TradingMode.TESTNET, "entry", f"karar-{failure}")
-    record = await manager.submit(order(cid, qty="1"))
+    request = order(cid, qty="1")
+    record = await manager.submit(request, approval=approve(gate, request, venue))
     assert record.status is OrderStatus.FILLED
     places = [r for r in exchange.requests if r[:2] == ("POST", "/fapi/v1/order")]
     assert len(places) == 1  # ikinci kez gönderilmedi; istemci kimliğiyle sorgulandı
@@ -329,10 +332,12 @@ async def test_failure_before_acceptance_is_retried_with_same_id(
     exchange: FakeExchange, db: Database
 ) -> None:
     venue = spot_venue(exchange)
-    manager = OrderManager(db, venue, backoff_s=0.01)
+    gate = make_gate(db, venue.mode)
+    manager = OrderManager(db, venue, verifier=gate, backoff_s=0.01)
     exchange.fail_next.append("503_before")
     cid = make_client_id(TradingMode.TESTNET, "entry", "karar-once")
-    record = await manager.submit(order(cid))
+    request = order(cid)
+    record = await manager.submit(request, approval=approve(gate, request, venue))
     assert record.status is OrderStatus.FILLED
     places = [r for r in exchange.requests if r[:2] == ("POST", "/api/v3/order")]
     assert [p[2]["newClientOrderId"] for p in places] == [cid, cid]
@@ -402,13 +407,16 @@ async def test_engine_futures_end_to_end_tp1_breakeven_then_stop(
     exchange: FakeExchange, db: Database
 ) -> None:
     venue = futures_venue(exchange)
+    holder: list[TradingEngine] = []
     engine = TradingEngine(
         venue=venue,
         db=db,
+        risk_gate=make_gate(db, venue.mode, holder),
         symbols=lambda s: info(s, Market.USDM_FUTURES),
         engine_state=lambda: EngineState.RUNNING,
         fill_timeout_s=3.0,
     )
+    holder.append(engine)
     await engine.start()
     await wait_for(lambda: venue.stream_connected)
     managed = await engine.open(intent(Market.USDM_FUTURES))
@@ -455,13 +463,16 @@ async def test_engine_futures_end_to_end_tp1_breakeven_then_stop(
 
 async def test_engine_spot_end_to_end_oco(exchange: FakeExchange, db: Database) -> None:
     venue = spot_venue(exchange)
+    holder: list[TradingEngine] = []
     engine = TradingEngine(
         venue=venue,
         db=db,
+        risk_gate=make_gate(db, venue.mode, holder),
         symbols=lambda s: info(s, Market.SPOT),
         engine_state=lambda: EngineState.RUNNING,
         fill_timeout_s=3.0,
     )
+    holder.append(engine)
     await engine.start()
     await wait_for(lambda: venue.stream_connected)
     await engine.open(intent(Market.SPOT, leverage=1))
