@@ -7,7 +7,6 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { runtimeConfig } from "@/lib/config";
 
-import "@fontsource-variable/inter";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {

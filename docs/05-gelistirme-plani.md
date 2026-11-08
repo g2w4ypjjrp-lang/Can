@@ -693,8 +693,8 @@ görebilir; hassas veri gönderilmez. Uçtan uca şifreleme Aşama 18'de.
     `nosniff`, `Referrer-Policy`, `Permissions-Policy`, üretimde HSTS. Doğrulama ve sıfırlama
     belirteçleri adres çubuğundan silinir. Giriş sonrası yönlendirme yalnızca site içine.
   - İçerik kuralı: hiçbir sayfada kazanç vaadi yok (otomatik test). Her sayfada risk uyarısı.
-  - Modern tasarım: Inter yazı tipi (siteyle birlikte sunulur, dış istek yok), ikonlar, ızgara
-    ve ışık efektli başlıklar, örnek arayüz görselleri (kazanç rakamı içermez, "örnek" olarak
+  - Modern tasarım: sistem yazı tipleri (Segoe UI Variable / SF Pro; indirme yok, ilk görüntü
+    gecikmez), ikonlar, ızgara ve ışık efektli başlıklar, örnek arayüz görselleri (kazanç rakamı içermez, "örnek" olarak
     etiketli), platform bölümü (Windows + iPhone).
   - Açık/koyu tema, klavye ile tam kullanım, "içeriğe geç" bağlantısı, etkin sayfa işareti
     (`aria-current`), sayfa değişince ve Escape ile kapanan mobil menü, hareket azaltma tercihi.
@@ -711,7 +711,7 @@ görebilir; hassas veri gönderilmez. Uçtan uca şifreleme Aşama 18'de.
 | Birim testleri | ✅ 29 test (vitest): açık yönlendirme koruması, fiyat/tarih biçimi, API hata çevirisi, CSP, içerik kuralı, paket gruplama, ayarlar |
 | Uçtan uca | ✅ 22 senaryo (Playwright, gerçek API + PostgreSQL + derlenmiş site): tüm herkese açık sayfalarda güvenlik başlıkları, CSP ihlali ve konsol hatası olmaması, tek `h1`, risk uyarısı, kazanç vaadi olmaması; kayıt → doğrulama bağlantısını yeniden isteme → doğrulama → giriş → panel → çıkış; panelde lisans; parola sıfırlama; açık yönlendirme denemesi; paketler ve kapalı ödeme; iletişim formu; çerezin `HttpOnly`/`SameSite=Strict` ve JavaScript'e kapalı olması |
 | Erişilebilirlik denetimi | ✅ axe (WCAG 2.1 AA + en iyi uygulamalar): 10 herkese açık sayfa açık ve koyu temada, mobil menü ve müşteri paneli — 0 ihlal |
-| Performans denetimi | ✅ Lighthouse (mobil öykünme): 10 sayfada performans 93-96, erişilebilirlik 100, en iyi uygulamalar 100, SEO 100 (CI eşikleri: 90 / 100 / 95 / 95; her sayfa 3 kez ölçülür, ortanca sonuç esas alınır) |
+| Performans denetimi | ✅ Lighthouse (mobil öykünme): 10 sayfada performans 97-99, erişilebilirlik 100, en iyi uygulamalar 100, SEO 100 (CI eşikleri: 90 / 100 / 95 / 95; her sayfa 3 kez ölçülür, ortanca sonuç esas alınır) |
 | Yasal metinlerin hukukçu onayı | ⏸️ Kullanım koşulları, gizlilik/KVKK ve risk bildirimi taslak; şirket bilgileri ve hukukçu onayı bekliyor. Mesafeli satış sözleşmesi ve ön bilgilendirme formu Aşama 17'de |
 | Yayına alma (alan adı, TLS, e-posta gönderimi) | ⏸️ G5 |
 

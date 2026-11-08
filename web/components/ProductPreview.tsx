@@ -39,7 +39,7 @@ function Chart() {
 export function ProductPreview() {
   return (
     <figure className="relative">
-      <div aria-hidden="true" className="absolute -inset-6 rounded-[2rem] bg-accent/10 blur-2xl" />
+      <div aria-hidden="true" className="preview-halo absolute -inset-8 rounded-[2.5rem]" />
       <div aria-hidden="true" className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-soft">
         <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
           <span className="h-2.5 w-2.5 rounded-full bg-danger-border" />

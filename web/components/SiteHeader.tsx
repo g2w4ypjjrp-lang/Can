@@ -18,7 +18,7 @@ const navActive = "bg-surface-2 text-fg";
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-30 border-b border-border/70 bg-bg/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 border-b border-border/70 bg-bg/85 backdrop-blur-md">
       <Container className="flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2.5 rounded-md focus-visible:outline-2 focus-visible:outline-accent">
           <LogoMark />
