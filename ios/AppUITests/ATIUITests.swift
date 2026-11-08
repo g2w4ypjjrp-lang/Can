@@ -23,7 +23,7 @@ final class ATIUITests: XCTestCase {
     func testPairingShowsEngineSummary() {
         let app = launchPaired()
         XCTAssertEqual(app.staticTexts["engine-state"].label, "Çalışıyor")
-        XCTAssertTrue(app.staticTexts["Test ağı"].exists)
+        XCTAssertEqual(app.staticTexts["trading-mode"].label, "Test ağı")
     }
 
     func testKillSwitchIsOneTapWithConfirmation() {
@@ -57,6 +57,7 @@ final class ATIUITests: XCTestCase {
         let counter = app.staticTexts["rejected-count"]
         XCTAssertTrue(counter.waitForExistence(timeout: 5))
         XCTAssertEqual(counter.label, "0")
+        app.scrollTo(app.buttons["inject-forgery"])
         app.buttons["inject-forgery"].tap()
         XCTAssertTrue(counter.waitForLabel("1", timeout: 10))
         app.tabBars.buttons["Özet"].tap()
@@ -66,15 +67,29 @@ final class ATIUITests: XCTestCase {
     func testBotControlAndUnpair() {
         let app = launchPaired()
         let state = app.staticTexts["bot-state"]
+        app.scrollTo(state)
         XCTAssertTrue(state.waitForExistence(timeout: 5))
         XCTAssertEqual(state.label, "Kapalı")
+        app.scrollTo(app.buttons["bot-resume"])
         app.buttons["bot-resume"].tap()
         app.alerts.firstMatch.buttons["Başlat (Face ID)"].tap()
         XCTAssertTrue(state.waitForLabel("Açık", timeout: 10))
         app.tabBars.buttons["Ayarlar"].tap()
+        app.scrollTo(app.buttons["unpair"])
         app.buttons["unpair"].tap()
         app.alerts.firstMatch.buttons["Kaldır"].tap()
         XCTAssertTrue(app.buttons["pair-button"].waitForExistence(timeout: 10))
+    }
+}
+
+extension XCUIApplication {
+    /// Tembel listelerde ekran dışındaki öğeye ulaşana kadar kaydırır (küçük ekranlı cihazlar).
+    func scrollTo(_ element: XCUIElement, attempts: Int = 6) {
+        var tries = 0
+        while !(element.exists && element.isHittable) && tries < attempts {
+            swipeUp()
+            tries += 1
+        }
     }
 }
 

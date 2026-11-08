@@ -46,7 +46,8 @@ jobs:
           import json, sys
           data = json.load(sys.stdin)['devices']
           phones = [(rt, d) for rt, ds in data.items() if 'iOS' in rt for d in ds if d['name'].startswith('iPhone')]
-          phones.sort(key=lambda x: x[0])
+          # En yeni iOS; tercihen standart boyutlu (SE/mini olmayan) iPhone.
+          phones.sort(key=lambda x: (x[0], 'SE' not in x[1]['name'] and 'mini' not in x[1]['name']))
           print(phones[-1][1]['udid'])
           ")
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"

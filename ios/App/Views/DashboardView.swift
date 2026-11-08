@@ -66,7 +66,7 @@ struct DashboardView: View {
             ValueRow(
                 title: "Durum", value: Fmt.stateText(data.engine.state), id: "engine-state",
                 color: data.engine.state == "running" ? Theme.up : Theme.down)
-            LabeledContent("İşlem modu", value: Fmt.modeText(data.engine.trading_mode))
+            ValueRow(title: "İşlem modu", value: Fmt.modeText(data.engine.trading_mode), id: "trading-mode")
             if let risk = data.risk {
                 LabeledContent("Günlük zarar", value: "%" + Fmt.number(risk.daily_loss_pct))
                 LabeledContent("Özsermaye", value: Fmt.number(risk.equity) + " USDT")
