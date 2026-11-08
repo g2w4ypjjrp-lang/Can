@@ -87,7 +87,14 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   ├── App/                           ✅ SwiftUI ekranları, Secure Enclave anahtarları, WebSocket
 │   ├── AppUITests/                    ✅ XCUITest senaryoları
 │   └── project.yml                    ✅ XcodeGen proje tanımı
-└── web/                               🔜 14 Next.js web sitesi, müşteri paneli, admin paneli
+└── web/                               ✅ 14 Next.js web sitesi ve müşteri paneli (admin paneli 16)
+    ├── app/                           ✅ sayfalar (App Router): tanıtım, paketler, hesap, panel, yasal
+    ├── components/                    ✅ arayüz bileşenleri, hesap formları
+    ├── lib/                           ✅ API istemcisi, CSP, biçimlendirme, içerik kuralı
+    ├── proxy.ts                       ✅ istek başına nonce'lu CSP ve HSTS
+    ├── tests/                         ✅ birim testleri (vitest)
+    ├── e2e/                           ✅ Playwright + axe (gerçek API + PostgreSQL)
+    └── lighthouserc.cjs               ✅ Lighthouse CI eşikleri
 ```
 
 ## Kullanıcı bilgisayarındaki veri dizini

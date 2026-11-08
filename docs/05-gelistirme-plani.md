@@ -37,8 +37,8 @@ kısıtı).
 | 11 | Risk yönetimi | ✅ **Tamamlandı** |
 | 12 | Windows EXE | ✅ **Tamamlandı** (imzasız; G6 bekliyor) |
 | 13 | iOS uygulaması | ✅ **Tamamlandı** (kod + testler; cihaz/App Store G6, bulut G5) |
-| 14 | Web sitesi | ⏭️ Sıradaki |
-| 15 | Lisans sistemi | |
+| 14 | Web sitesi | ✅ **Tamamlandı** (kod + testler; yasal metinler hukukçu onayı, yayın G5) |
+| 15 | Lisans sistemi | ⏭️ Sıradaki |
 | 16 | Admin paneli | |
 | 17 | Ödeme sistemi | |
 | 18 | Güvenlik ve performans testleri | |
@@ -657,7 +657,7 @@ paketi sıkıştırılmıştır.
 | İmzasız/tekrar oynatılmış komutun reddi | ✅ Motor (Python, 21 test): imzasız, çöp imza, başka anahtar, değiştirilmiş içerik, eski/ileri tarihli, başka motora ait, eski sıra numarası, izin dışı komut, Face ID'siz korumalı komut ve başka cihaz adına yönlendirme reddediliyor; hiçbiri uygulanmıyor. Sıra numarası yeniden başlatmada korunuyor; eşzamanlı 5 kopyadan yalnızca biri uygulanıyor |
 | Gerçek aktarma servisiyle uçtan uca | ✅ Ayrı süreçte gerçek aktarma servisi, gerçek motor ve telefon benzetimi. Eşleştirme, imzalı acil durdurma, tekrar oynatmanın reddi, imzasızın yanıtsız kalması, Face ID'siz kaldırmanın reddi, başka cihaz adına gönderimin reddi, korumalı anahtarla kaldırma, eşleştirme kaldırılınca reddi doğrulandı. Aktarma servisi testleri (10): kimlik kanıtı, kanal yalıtımı, hız ve cihaz sınırı |
 | XCTest | ✅ `ATICore`, 23 test, Linux'ta Swift 6.4 ile geçti. Kapsam: Python'un imzaladığı mesajın doğrulanması ve değiştirilmişin reddi; aynı anahtardan aynı kimlik; HMAC kanıtı ve hello metninin motorla eşleşmesi; eski özetin ve başka cihaza ait mesajın yok sayılması; denetleyici akışları (eşleştirme, imzalı komut, iptal edilen Face ID'de hiçbir şey gönderilmemesi, sahte mesajın yok sayılması, tekrar oynatmanın reddi). macOS'ta CryptoKit ile CI'da çalışır |
-| Arayüz testleri (XCUITest) | 5 senaryo, macOS CI'da simülatörde: eşleştirme, acil durdurma, onaylı pozisyon kapatma, aktarma servisinden gelen sahte mesajın yok sayılması, bot başlatma ve eşleştirme kaldırma |
+| Arayüz testleri (XCUITest) | ✅ 5/5 senaryo macOS CI'da (Xcode 16, iOS simülatörü) geçti: eşleştirme, acil durdurma, onaylı pozisyon kapatma, aktarma servisinden gelen sahte mesajın yok sayılması, bot başlatma ve eşleştirme kaldırma |
 | Cihaza kurulum, TestFlight, App Store | ⏸️ Apple Developer hesabı (G6) |
 | Uygulama kapalıyken anlık bildirim (APNs) | ⏸️ Bulut dağıtımı (G5) ve Apple hesabı (G6) |
 | Hesap girişi ve lisans ekranı | ⏸️ Bulut hesap/lisans API'si Aşama 15'te; iOS ekranı o zaman bağlanacak |
@@ -665,10 +665,50 @@ paketi sıkıştırılmıştır.
 **Gizlilik notu:** mesajlar imzalıdır ama şifreli değildir. Aktarma servisi özet içeriğini
 görebilir; hassas veri gönderilmez. Uçtan uca şifreleme Aşama 18'de.
 
-### Aşama 14 — Web sitesi
-Ana sayfa, özellikler, paketler, satın alma, müşteri girişi/paneli, SSS, iletişim, kullanım
-koşulları, gizlilik politikası, risk bildirimi. **Kabul:** erişilebilirlik ve performans
-denetimi; yasal metinlerin hukukçu onayı.
+### Aşama 14 — Web sitesi ✅ (kod ve testler; yasal metinler hukukçu onayı, dağıtım G5, ödeme G3 bekliyor)
+
+**Çıktılar (uygulandı):**
+
+- **Hesap API'si (`cloud/src/ati_cloud/accounts.py`).**
+  - Kayıt, e-posta doğrulama (ve bağlantıyı yeniden gönderme), giriş/çıkış, parola sıfırlama,
+    müşteri paneli (`/v1/me`), satıştaki paketler (`/v1/plans`).
+  - Parolalar Argon2id ile özetlenir. Var olmayan kullanıcıda da aynı doğrulama süresi harcanır.
+  - Oturum: 256 bitlik belirteç `HttpOnly; Secure; SameSite=Strict` çerezde. Veritabanında
+    yalnızca SHA-256 özeti tutulur. Doğrulama/sıfırlama belirteçleri tek kullanımlıktır.
+  - Kayıt, sıfırlama ve yeniden gönderme, adresin kayıtlı olup olmadığını açığa vurmaz.
+  - Durum değiştiren her istekte `Origin` denetimi (CSRF), IP ve e-posta başına hız sınırı.
+  - Parola sıfırlanınca tüm oturumlar kapatılır. Olaylar hash zincirli denetim kaydına yazılır.
+- **İletişim formu (`cloud/src/ati_cloud/contact.py`, geçiş `0003`).** Mesaj veritabanına
+  yazılır, gönderene otomatik e-posta gitmez (form spam aracı olarak kullanılamaz). Bot tuzağı
+  alanı ve hız sınırı vardır.
+- **API sunucusu (`ati-cloud-api`).** İstemci IP'si yalnızca güvenilen vekillerden gelen
+  `X-Forwarded-For` ile çözülür.
+- **Web sitesi (`web/`, Next.js 16 App Router, TypeScript, Tailwind 4).**
+  - Sayfalar: ana sayfa, özellikler, paketler, satın alma, giriş, kayıt, e-posta doğrulama,
+    parola sıfırlama, müşteri paneli, SSS, iletişim, kullanım koşulları, gizlilik/KVKK, risk
+    bildirimi.
+  - Paketler API'den gelir. Fiyat girilmemişse "yakında" gösterilir; satın alma düğmesi
+    ödeme sistemi (Aşama 17, G3) açılana kadar kapalıdır.
+  - Güvenlik: her istekte yeni nonce'lu CSP (satır içi betik yok), çerçeveleme yasak,
+    `nosniff`, `Referrer-Policy`, `Permissions-Policy`, üretimde HSTS. Doğrulama ve sıfırlama
+    belirteçleri adres çubuğundan silinir. Giriş sonrası yönlendirme yalnızca site içine.
+  - İçerik kuralı: hiçbir sayfada kazanç vaadi yok (otomatik test). Her sayfada risk uyarısı.
+  - Açık/koyu tema, klavye ile tam kullanım, "içeriğe geç" bağlantısı, hareket azaltma
+    tercihi.
+  - Yasal metinler "Taslak — hukukçu onayı bekliyor" olarak işaretli; şirket bilgileri köşeli
+    parantezle bırakıldı.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Hesap API'si | ✅ 19 test (gerçek PostgreSQL): kayıt/doğrulama/giriş/panel/çıkış, yanlış parola ile bilinmeyen e-postanın aynı yanıtı, kayıtta hesap sızdırmama, zayıf parolalar, koşul onayı, yabancı kökenin reddi, giriş hız sınırı, parola sıfırlamanın oturumları kapatması, engelli müşteri, yalnızca satıştaki paketler, panelde lisans ve cihaz sayısı, iletişim formu (tuzak, sınır, köken), doğrulama bağlantısını yeniden gönderme. Bulut toplamı 82 test |
+| Birim testleri | ✅ 29 test (vitest): açık yönlendirme koruması, fiyat/tarih biçimi, API hata çevirisi, CSP, içerik kuralı, paket gruplama, ayarlar |
+| Uçtan uca | ✅ 22 senaryo (Playwright, gerçek API + PostgreSQL + derlenmiş site): tüm herkese açık sayfalarda güvenlik başlıkları, CSP ihlali ve konsol hatası olmaması, tek `h1`, risk uyarısı, kazanç vaadi olmaması; kayıt → doğrulama bağlantısını yeniden isteme → doğrulama → giriş → panel → çıkış; panelde lisans; parola sıfırlama; açık yönlendirme denemesi; paketler ve kapalı ödeme; iletişim formu; çerezin `HttpOnly`/`SameSite=Strict` ve JavaScript'e kapalı olması |
+| Erişilebilirlik denetimi | ✅ axe (WCAG 2.1 AA + en iyi uygulamalar): 10 herkese açık sayfa açık ve koyu temada, mobil menü ve müşteri paneli — 0 ihlal |
+| Performans denetimi | ✅ Lighthouse (mobil öykünme): 10 sayfada performans 96-99, erişilebilirlik 100, en iyi uygulamalar 100, SEO 100 (CI eşikleri: 90 / 100 / 95 / 95) |
+| Yasal metinlerin hukukçu onayı | ⏸️ Kullanım koşulları, gizlilik/KVKK ve risk bildirimi taslak; şirket bilgileri ve hukukçu onayı bekliyor. Mesafeli satış sözleşmesi ve ön bilgilendirme formu Aşama 17'de |
+| Yayına alma (alan adı, TLS, e-posta gönderimi) | ⏸️ G5 |
 
 ### Aşama 15 — Lisans sistemi
 Anahtar üretimi (CSPRNG + Luhn mod 32), HMAC özet + zarf şifreleme, aktivasyon, Ed25519

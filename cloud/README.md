@@ -17,6 +17,28 @@ uv run pytest
 uv run ruff check . && uv run mypy
 ```
 
+## Hesap API'si (Aşama 14)
+
+```bash
+export ATI_DATABASE_URL=postgresql://...
+uv run ati-cloud-api --host 127.0.0.1 --port 8000   # TLS sonlandıran yük dengeleyicinin arkasında
+```
+
+| Uç nokta | Açıklama |
+|---|---|
+| `GET /v1/plans` | Satıştaki paketler (fiyatı girilmiş ve etkin) |
+| `POST /v1/auth/register` | Kayıt; adres kayıtlıysa da aynı yanıt (hesap sızdırmaz) |
+| `POST /v1/auth/verify-email`, `POST /v1/auth/resend-verification` | E-posta doğrulama |
+| `POST /v1/auth/login`, `POST /v1/auth/logout` | Oturum (`ati_session` çerezi) |
+| `POST /v1/auth/password-reset`, `POST /v1/auth/password-reset/confirm` | Parola sıfırlama; tüm oturumları kapatır |
+| `GET /v1/me` | Müşteri paneli: profil, lisanslar, etkin cihaz sayısı |
+| `POST /v1/contact` | İletişim formu |
+
+Ayarlar (`ATI_` önekli): `WEB_ORIGINS` (CSRF için izinli kökenler), `PUBLIC_WEB_URL`
+(e-posta bağlantıları), `SESSION_COOKIE_SECURE` (staging/üretimde zorunlu `true`),
+`SESSION_DAYS`, `TRUSTED_PROXIES` (`X-Forwarded-For`'a güvenilen vekiller). E-postalar
+`email_outbox` tablosuna yazılır; gönderim, e-posta sağlayıcısı seçilince (G5).
+
 ## Geçişler (migrations)
 
 ```bash

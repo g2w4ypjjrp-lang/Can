@@ -224,6 +224,10 @@ GENERIC_REGISTER = {
     "status": "ok",
     "message": "Kayıt alındı. Hesabınızı etkinleştirmek için e-postanızdaki bağlantıyı açın.",
 }
+GENERIC_RESEND = {
+    "status": "ok",
+    "message": "Bu adres kayıtlı ve doğrulanmamışsa yeni bir doğrulama bağlantısı gönderildi.",
+}
 GENERIC_RESET = {
     "status": "ok",
     "message": "Bu adres kayıtlıysa parola sıfırlama bağlantısı gönderildi.",
@@ -239,6 +243,8 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
     login_email = SlidingWindowLimiter(5, 60)
     register_ip = SlidingWindowLimiter(5, 3600)
     reset_ip = SlidingWindowLimiter(5, 3600)
+    resend_ip = SlidingWindowLimiter(5, 3600)
+    resend_email = SlidingWindowLimiter(3, 3600)
 
     def require_origin(request: Request) -> None:
         check_origin(settings, request)
@@ -399,6 +405,38 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
                 request=request,
             )
         return {"status": "ok", "message": "E-posta adresiniz doğrulandı. Giriş yapabilirsiniz."}
+
+    @router.post("/auth/resend-verification", status_code=202)
+    async def resend_verification(body: ResetRequest, request: Request) -> dict[str, str]:
+        """Doğrulama bağlantısını yeniden gönderir. Yanıt, adresin durumunu açığa vurmaz."""
+        require_origin(request)
+        email = str(body.email).strip().lower()
+        limited(resend_ip, client_ip(request))
+        if not resend_email.allow(email):
+            return GENERIC_RESEND  # sınır dolunca da aynı yanıt; e-posta gönderilmez
+        async with db.connection() as conn, conn.transaction():
+            cur = await conn.execute(
+                "SELECT id, locale FROM customers WHERE email = %s AND status = 'active' "
+                "AND email_verified_at IS NULL",
+                (email,),
+            )
+            row = await cur.fetchone()
+            if row is not None:
+                # Önceki bağlantılar geçersiz olur; yalnızca en yenisi çalışır.
+                await conn.execute(
+                    "UPDATE customer_tokens SET used_at = now() WHERE customer_id = %s "
+                    "AND purpose = 'email_verification' AND used_at IS NULL",
+                    (row["id"],),
+                )
+                token = await new_token(conn, row["id"], "email_verification", VERIFY_TTL)
+                await enqueue_email(
+                    conn,
+                    email,
+                    "verify_email",
+                    f"{settings.public_web_url}/eposta-dogrula?token={token}",
+                    row["locale"],
+                )
+        return GENERIC_RESEND
 
     # --- Giriş / çıkış ------------------------------------------------------------------------
 

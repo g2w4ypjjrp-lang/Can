@@ -368,3 +368,45 @@ async def test_contact_honeypot_rate_limit_and_origin(
     assert short.status_code == 422
     codes = [(await client.post("/v1/contact", json=CONTACT)).status_code for _ in range(5)]
     assert codes == [202, 202, 202, 202, 429]  # tuzak isteği de sınırdan düşer
+
+
+async def test_resend_verification_replaces_old_link_and_reveals_nothing(
+    client: httpx.AsyncClient, conn: psycopg.Connection
+) -> None:
+    response = await client.post(
+        "/v1/auth/register",
+        json={"email": "can@example.com", "password": PASSWORD, "accept_terms": True},
+    )
+    assert response.status_code == 202
+    first = token_of(outbox_link(conn, "can@example.com", "verify_email"))
+    known = await client.post("/v1/auth/resend-verification", json={"email": "CAN@example.com"})
+    unknown = await client.post("/v1/auth/resend-verification", json={"email": "yok@example.com"})
+    assert known.status_code == unknown.status_code == 202 and known.json() == unknown.json()
+    second = token_of(outbox_link(conn, "can@example.com", "verify_email"))
+    assert second != first
+    assert (await client.post("/v1/auth/verify-email", json={"token": first})).status_code == 400
+    assert (await client.post("/v1/auth/verify-email", json={"token": second})).status_code == 200
+    # Doğrulanmış hesaba yeni bağlantı gitmez.
+    before = conn.execute("SELECT count(*) FROM email_outbox").fetchone()
+    await client.post("/v1/auth/resend-verification", json={"email": "can@example.com"})
+    assert conn.execute("SELECT count(*) FROM email_outbox").fetchone() == before
+
+
+async def test_resend_verification_is_limited_per_address(
+    client: httpx.AsyncClient, conn: psycopg.Connection
+) -> None:
+    await client.post(
+        "/v1/auth/register",
+        json={"email": "can@example.com", "password": PASSWORD, "accept_terms": True},
+    )
+    for _ in range(5):
+        assert (
+            await client.post("/v1/auth/resend-verification", json={"email": "can@example.com"})
+        ).status_code == 202
+    sent = conn.execute(
+        "SELECT count(*) FROM email_outbox WHERE template = 'verify_email'"
+    ).fetchone()
+    assert sent == (4,)  # kayıt + 3 yeniden gönderim; sonrası sessizce yok sayılır
+    assert (
+        await client.post("/v1/auth/resend-verification", json={"email": "can@example.com"})
+    ).status_code == 429

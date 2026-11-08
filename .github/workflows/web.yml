@@ -1,0 +1,70 @@
+name: Web sitesi
+
+on:
+  push:
+    paths:
+      - "web/**"
+      - "cloud/**"
+      - ".github/workflows/web.yml"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site:
+    name: Site (birim, uçtan uca, erişilebilirlik, Lighthouse)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ati_test
+          POSTGRES_PASSWORD: ati_test
+          POSTGRES_DB: ati_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ati_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ATI_TEST_DATABASE_URL: postgresql://ati_test:ati_test@127.0.0.1:5432/ati_test
+      NEXT_TELEMETRY_DISABLED: "1"
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Bulut API bağımlılıkları (uçtan uca arka uç)
+        working-directory: cloud
+        run: uv sync --locked
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Uçtan uca testler ve axe erişilebilirlik denetimi (gerçek API + PostgreSQL)
+        run: npx playwright test --trace off
+      - name: Lighthouse (performans, erişilebilirlik, en iyi uygulamalar, SEO)
+        run: npx lhci autorun
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-raporlari
+          path: |
+            web/playwright-report
+            web/.lighthouseci/reports
+          retention-days: 7
+          if-no-files-found: ignore
