@@ -254,6 +254,10 @@ def build_protocol_schema() -> dict[str, Any]:
             "GET /v1/risk/events?limit=": {"response": "RiskEventInfo[]", "auth": True},
             "GET /v1/risk/decisions?limit=": {"response": "DecisionInfo[]", "auth": True},
             "GET /v1/autotrade": {"response": "object", "auth": True},
+            "GET /v1/remote/status": {"response": "object", "auth": True},
+            "POST /v1/remote/pairing": {"response": "object", "auth": True},
+            "POST /v1/remote/devices/revoke?device_id=": {"response": "object", "auth": True},
+            "GET /v1/remote/commands?limit=": {"response": "object[]", "auth": True},
             "POST /v1/autotrade": {
                 "request": "AutoTradeRequest",
                 "response": "object",

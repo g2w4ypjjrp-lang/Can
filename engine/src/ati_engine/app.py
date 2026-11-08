@@ -50,6 +50,13 @@ from ati_engine.ml.registry import ModelRegistry
 from ati_engine.observability.logging import configure_logging
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.paper.competition import PaperCompetition
+from ati_engine.remote.crypto import EngineIdentity, b64, unb64
+from ati_engine.remote.runtime_bridge import (
+    build_executors,
+    build_snapshot,
+    subscribe_notifications,
+)
+from ati_engine.remote.service import RemoteService
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.safety.kill_switch import KillSwitch
@@ -179,6 +186,7 @@ class Engine:
                 await self._start_paper(runtime)
             if settings.execution.testnet_enabled:
                 self._start_execution(runtime)
+            await self._start_remote(runtime)
 
             supervisor.spawn("loop-lag-monitor", loop_monitor.run)
             supervisor.spawn(
@@ -227,6 +235,38 @@ class Engine:
             return 0
         finally:
             await self._shutdown(server, server_task, supervisor, bus, db)
+
+    @staticmethod
+    async def _start_remote(runtime: EngineRuntime) -> None:
+        """Uzaktan kontrol: motor kimliği (Ed25519) kasada kalıcıdır. Aktarma servisi adresi
+        ayarlanmışsa servise giden bağlantı açılır; yoksa yalnızca eşleştirme ekranı kapalıdır."""
+        cfg = runtime.settings.remote
+        stored = await runtime.vault.get("remote.engine_key")
+        if stored is None:
+            identity = EngineIdentity.generate()
+            await runtime.vault.put("remote.engine_key", b64(identity.private_raw()))
+        else:
+            identity = EngineIdentity.from_private_raw(unb64(stored.get_secret_value()))
+        service = RemoteService(
+            db=runtime.db,
+            identity=identity,
+            relay_url=cfg.relay_url,
+            executors=build_executors(runtime),
+            snapshot=lambda: build_snapshot(runtime),
+            snapshot_interval_s=cfg.snapshot_interval_s,
+            max_skew_s=cfg.max_clock_skew_s,
+            pairing_ttl_s=cfg.pairing_ttl_s,
+        )
+        runtime.remote = service
+        subscribe_notifications(runtime, service)
+        if cfg.relay_url:
+            runtime.supervisor.spawn(
+                "remote-relay",
+                service.run,
+                RestartPolicy(
+                    max_restarts=50, window_s=3600, backoff_initial_s=2, backoff_max_s=60
+                ),
+            )
 
     @staticmethod
     def _start_execution(runtime: EngineRuntime) -> None:
@@ -371,6 +411,9 @@ class Engine:
             if supervisor is not None:
                 await supervisor.stop_all()
             if runtime is not None:
+                if runtime.remote is not None:
+                    with contextlib.suppress(Exception):
+                        await runtime.remote.stop()
                 if runtime.execution is not None:
                     with contextlib.suppress(Exception):
                         await runtime.execution.close()

@@ -1,0 +1,54 @@
+# XcodeGen tanımı: `xcodegen generate` ile ATI.xcodeproj üretilir (proje dosyası depoda tutulmaz).
+name: ATI
+options:
+  bundleIdPrefix: com.aitradingintelligence
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: tr
+packages:
+  ATICore:
+    path: ATICore
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.13.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ATI:
+    type: application
+    platform: iOS
+    sources: [App]
+    dependencies:
+      - package: ATICore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aitradingintelligence.ios
+        PRODUCT_NAME: "AI Trading"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: "AI Trading"
+        INFOPLIST_KEY_NSCameraUsageDescription: "Bilgisayarınızdaki eşleştirme QR kodunu okumak için"
+        INFOPLIST_KEY_NSFaceIDUsageDescription: "Pozisyon kapatma, botu başlatma ve acil durdurmayı kaldırma gibi işlemleri onaylamak için"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+  ATIUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [AppUITests]
+    dependencies:
+      - target: ATI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aitradingintelligence.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: ATI
+schemes:
+  ATI:
+    build:
+      targets:
+        ATI: all
+        ATIUITests: [test]
+    test:
+      targets: [ATIUITests]

@@ -1,0 +1,33 @@
+{
+  "comment": "Uzaktan kontrol v1 test vektörleri (yalnızca test anahtarları). Üretici: engine/scripts/gen_remote_vectors.py",
+  "engine": {
+    "key": "w/qQaAmrYNVe55XY9tXD6veXAStl+8H92YoUMzxjm+c=",
+    "engine_id": "2ef3302352aba13d2659acdc49ab7490",
+    "snapshot": {
+      "p": "{\"data\":{\"engine\":{\"kill_switch\":false,\"state\":\"running\",\"trading_mode\":\"testnet\"},\"positions\":[{\"market\":\"usdm_futures\",\"quantity\":\"0.5\",\"symbol\":\"BTCUSDT\"}]},\"device_id\":\"3462c3c774c626a35b2c5059923e95b0\",\"engine_id\":\"2ef3302352aba13d2659acdc49ab7490\",\"events\":[{\"body\":\"Büyük alım ğüşıöç\",\"kind\":\"whale\",\"title\":\"Balina: BTCUSDT\",\"ts_ms\":1794099990000}],\"ts_ms\":1794100000000,\"type\":\"snapshot\",\"v\":1}",
+      "s": "JFe4j4uRvT2lOGMTFVXUsHJNRgkDMTLoeBUyLlj36TcidWnvR7xCVGlq+DPmWdrAKg2dModQUYcI+XZHzMn9CA=="
+    },
+    "tampered_snapshot": {
+      "p": "{\"data\":{\"engine\":{\"kill_switch\":true,\"state\":\"running\",\"trading_mode\":\"testnet\"},\"positions\":[{\"market\":\"usdm_futures\",\"quantity\":\"0.5\",\"symbol\":\"BTCUSDT\"}]},\"device_id\":\"3462c3c774c626a35b2c5059923e95b0\",\"engine_id\":\"2ef3302352aba13d2659acdc49ab7490\",\"events\":[{\"body\":\"Büyük alım ğüşıöç\",\"kind\":\"whale\",\"title\":\"Balina: BTCUSDT\",\"ts_ms\":1794099990000}],\"ts_ms\":1794100000000,\"type\":\"snapshot\",\"v\":1}",
+      "s": "JFe4j4uRvT2lOGMTFVXUsHJNRgkDMTLoeBUyLlj36TcidWnvR7xCVGlq+DPmWdrAKg2dModQUYcI+XZHzMn9CA=="
+    }
+  },
+  "device": {
+    "private_scalar_hex": "3366ee3737af904bb25a57e04fa371e45e92f82e63f80d670b663a6f293dbf59",
+    "public_x963": "BOGCqP6MT7O2LXJY27apQUgDMUlEGDzXLMnHqwC2rmF9LF+xPWwiDyMVnA4jQIzAP/GISlTBuTTpQwJe2lplJg4=",
+    "device_id": "3462c3c774c626a35b2c5059923e95b0",
+    "command": {
+      "p": "{\"v\":1,\"type\":\"command\",\"engine_id\":\"2ef3302352aba13d2659acdc49ab7490\",\"device_id\":\"3462c3c774c626a35b2c5059923e95b0\",\"key\":\"signing\",\"seq\":1794100000123,\"ts_ms\":1794100000123,\"command\":\"engage_kill_switch\",\"args\":{\"reason\":\"telefon\"}}",
+      "s": "UYHy5g05ZCCFM1gOis8um+x1jkIBrErxTUsYmyMHcndjwzIn28YMsQRH1x4AzCKU415vfVvU7/2cb/2uwvMDGQ=="
+    }
+  },
+  "pairing": {
+    "secret_b64url": "gF40IF5fy1yHYEjKjEBjcJIwSxM5hrAgUY2SxQWhfk4",
+    "payload": "{\"type\":\"pair_request\",\"name\":\"Test\"}",
+    "proof": "4O6rWKicx/NpvlnylzIM45cnkeADSdbQvmeBSG2LD5g="
+  },
+  "relay": {
+    "device_hello_text": "ati-relay-hello|device|3462c3c774c626a35b2c5059923e95b0|2ef3302352aba13d2659acdc49ab7490|1794100000000",
+    "engine_hello_text": "ati-relay-hello|engine|2ef3302352aba13d2659acdc49ab7490|1794100000000"
+  }
+}

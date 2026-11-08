@@ -11,10 +11,13 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "psycopg[binary]>=3.2",
+    "cryptography>=43",
+    "websockets>=14",
 ]
 
 [project.scripts]
 ati-cloud-migrate = "ati_cloud.db.migrate:main"
+ati-cloud-relay = "ati_cloud.relay:main"
 
 [dependency-groups]
 dev = [

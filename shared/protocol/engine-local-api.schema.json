@@ -5360,6 +5360,14 @@
       "auth": true,
       "response": "PaperTradeInfo[]"
     },
+    "GET /v1/remote/commands?limit=": {
+      "auth": true,
+      "response": "object[]"
+    },
+    "GET /v1/remote/status": {
+      "auth": true,
+      "response": "object"
+    },
     "GET /v1/risk/decisions?limit=": {
       "auth": true,
       "response": "DecisionInfo[]"
@@ -5481,6 +5489,14 @@
       "auth": true,
       "request": "FocusRequest",
       "response": "FocusResponse"
+    },
+    "POST /v1/remote/devices/revoke?device_id=": {
+      "auth": true,
+      "response": "object"
+    },
+    "POST /v1/remote/pairing": {
+      "auth": true,
+      "response": "object"
     },
     "POST /v1/trading-mode": {
       "auth": true,

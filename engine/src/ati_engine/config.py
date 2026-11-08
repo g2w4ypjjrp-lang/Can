@@ -156,6 +156,28 @@ class AutoTradeSettings(BaseModel):
     max_signal_age_s: float = Field(default=120.0, gt=0, le=3600)
 
 
+class RemoteSettings(BaseModel):
+    """Uzaktan kontrol (Aşama 13): telefon ↔ aktarma servisi ↔ motor, uçtan uca imzalı.
+    Aktarma servisi adresi verilmeden kapalıdır (servis dağıtımı G5 onayına bağlı)."""
+
+    relay_url: str | None = None
+    snapshot_interval_s: float = Field(default=15.0, ge=2, le=600)
+    max_clock_skew_s: float = Field(default=120.0, ge=10, le=600)
+    pairing_ttl_s: float = Field(default=300.0, ge=30, le=3600)
+
+    @field_validator("relay_url")
+    @classmethod
+    def _secure_relay(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        if value.startswith("wss://"):
+            return value.rstrip("/")
+        loopback = ("ws://127.0.0.1", "ws://localhost", "ws://[::1]")
+        if value.startswith(loopback):  # yalnızca yerel test için şifresiz
+            return value.rstrip("/")
+        raise ValueError("Aktarma servisi adresi wss:// ile başlamalı")
+
+
 class ExecutionSettings(BaseModel):
     """Emir yürütme (Aşama 10). Gerçek hesap (LIVE) bu sürümde kilitlidir; yürütücü yalnızca
     Binance test ağında, kullanıcı test ağı anahtarını girdiğinde çalışır."""
@@ -365,6 +387,7 @@ class EngineSettings(BaseSettings):
     paper: PaperSettings = Field(default_factory=PaperSettings)
     execution: ExecutionSettings = Field(default_factory=ExecutionSettings)
     autotrade: AutoTradeSettings = Field(default_factory=AutoTradeSettings)
+    remote: RemoteSettings = Field(default_factory=RemoteSettings)
 
     @property
     def paths(self) -> DataPaths:

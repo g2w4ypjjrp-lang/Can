@@ -1,0 +1,5 @@
+ATI.xcodeproj/
+ATICore/.build/
+ATICore/.swiftpm/
+DerivedData/
+*.xcresult

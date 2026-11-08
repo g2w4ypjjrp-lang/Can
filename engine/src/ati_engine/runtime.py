@@ -19,6 +19,7 @@ from ati_engine.history.service import HistoryService
 from ati_engine.market.service import MarketDataService
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.paper.competition import PaperCompetition
+from ati_engine.remote.service import RemoteService
 from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.safety.trading_mode import TradingModeController
 from ati_engine.scanner.scanner import MarketScanner
@@ -51,6 +52,7 @@ class EngineRuntime:
     paper: PaperCompetition | None = None
     execution: ExecutionService | None = None
     autotrader: AutoTrader | None = None
+    remote: RemoteService | None = None
     version: str = __version__
     started_monotonic: float = field(default_factory=time.monotonic)
     shutdown_requested: asyncio.Event = field(default_factory=asyncio.Event)

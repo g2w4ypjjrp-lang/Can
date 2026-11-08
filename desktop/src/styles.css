@@ -472,3 +472,16 @@ tr.clickable:hover td {
 .boot h1 {
   color: var(--accent);
 }
+
+.pairing {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  background: #fff1;
+  border-radius: 10px;
+  padding: 12px;
+}
+.pairing img {
+  background: #fff;
+  border-radius: 6px;
+}

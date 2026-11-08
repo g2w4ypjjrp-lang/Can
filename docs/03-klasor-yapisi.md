@@ -51,10 +51,10 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── risk/                      ✅ 11 risk kapısı (imzalı tek kullanımlık onay), hesap izleyici,
 │   │   │                                    bağımsız risk bekçisi
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
-│   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
+│   │   └── remote/                    ✅ 13 eşleştirme, imzalı komut doğrulama, aktarma istemcisi
 │   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
 │   ├── packaging/                     ✅ 12 PyInstaller tanımı (tek klasör motor paketi)
-│   └── tests/                         ✅ 450 test (birim, gerçek mesaj fikstürleri, sahte Binance
+│   └── tests/                         ✅ 473 test (birim, gerçek mesaj fikstürleri, sahte Binance
 │                                          sunucusuyla uçtan uca, alt süreç duman testi)
 │
 ├── cloud/                             ✅ Bulut servisi (FastAPI) — yönetilen bulutta çalışır
@@ -72,7 +72,8 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   └── relay/                     🔜 13 iOS ↔ motor aktarma servisi
 │   └── tests/                         ✅ 53 test (gerçek PostgreSQL üzerinde)
 │
-├── shared/protocol/                   ✅ engine-local-api.schema.json (CI ile koddan senkron)
+├── shared/protocol/                   ✅ engine-local-api.schema.json (CI ile koddan senkron),
+│                                            remote-v1.md + test-vectors (uzaktan kontrol protokolü)
 ├── desktop/                           ✅ 12 Windows uygulaması
 │   ├── src/                           ✅ React + TypeScript: 10 ekran, API istemcisi, olay akışı,
 │   │                                        şemadan üretilen tipler (api/types.gen.ts)
@@ -80,7 +81,12 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │                                        başlatma, düzgün kapatma, iş nesnesi), NSIS paketi
 │   ├── e2e/                           ✅ Playwright uçtan uca testleri (8 senaryo)
 │   └── scripts/gen-types.mjs          ✅ protokol şemasından TypeScript tipleri
-├── ios/                               🔜 13 SwiftUI uygulaması
+├── ios/                               ✅ 13 iOS uygulaması
+│   ├── ATICore/                       ✅ Swift paketi: protokol, imza, doğrulama, oturum denetleyicisi,
+│   │                                        motor benzetimi (Linux ve macOS'ta test edilir)
+│   ├── App/                           ✅ SwiftUI ekranları, Secure Enclave anahtarları, WebSocket
+│   ├── AppUITests/                    ✅ XCUITest senaryoları
+│   └── project.yml                    ✅ XcodeGen proje tanımı
 └── web/                               🔜 14 Next.js web sitesi, müşteri paneli, admin paneli
 ```
 

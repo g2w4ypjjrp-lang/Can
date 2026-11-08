@@ -36,8 +36,8 @@ kısıtı).
 | 10 | Otomatik işlem motoru | ✅ **Tamamlandı** (test ağı; gerçek hesap G1/G2 ile) |
 | 11 | Risk yönetimi | ✅ **Tamamlandı** |
 | 12 | Windows EXE | ✅ **Tamamlandı** (imzasız; G6 bekliyor) |
-| 13 | iOS uygulaması | ⏭️ Sıradaki |
-| 14 | Web sitesi | |
+| 13 | iOS uygulaması | ✅ **Tamamlandı** (kod + testler; cihaz/App Store G6, bulut G5) |
+| 14 | Web sitesi | ⏭️ Sıradaki |
 | 15 | Lisans sistemi | |
 | 16 | Admin paneli | |
 | 17 | Ödeme sistemi | |
@@ -614,11 +614,56 @@ Düzeltildi ve testle doğrulandı.
 **Not:** Paketlenmiş motor ~320 MB'tır (DuckDB, SciPy, ONNX Runtime, NumPy, LightGBM); kurulum
 paketi sıkıştırılmıştır.
 
-### Aşama 13 — iOS uygulaması
-SwiftUI; giriş, lisans aktivasyonu, canlı özet, balina bildirimleri, AI analizleri, sinyaller,
-pozisyonlar, kâr/zarar, bot kontrolü, acil durdurma, bildirim merkezi. Aktarma servisi ve
-uçtan uca imzalı komutlar. **Kabul:** XCTest + UI testleri; imzasız/tekrar oynatılmış komutun
-reddedildiğinin testi.
+### Aşama 13 — iOS uygulaması ✅ (kod ve testler; cihaza kurulum G6, bulut dağıtımı G5 bekliyor)
+
+**Çıktılar (uygulandı):**
+
+- **Protokol (`shared/protocol/remote-v1.md`).**
+  - Telefon ↔ aktarma servisi ↔ motor arasında uçtan uca imzalı mesajlar.
+  - Telefonda iki P-256 anahtarı (Secure Enclave), motorda Ed25519 anahtarı.
+  - İmza, gönderilen metnin kendisi üzerine atılır; diller arası kanonikleştirme gerekmez.
+  - Ortak test vektörleri (`test-vectors/remote-v1.json`): Python üretir, Swift doğrular.
+- **Motor (`engine/src/ati_engine/remote`).**
+  - Eşleştirme: tek kullanımlık, 5 dakikalık QR gizli değeri. HMAC kanıtı sayesinde aktarma
+    servisi cihaz ekleyemez.
+  - Komut doğrulama sırası: biçim → motor kimliği → kayıtlı/iptal edilmemiş cihaz → imza →
+    zaman farkı → kalıcı sıra numarası (tekrar oynatma) → izin listesi → korumalı anahtar.
+  - Face ID gerektiren komutlar ayrı, biyometrik erişim denetimli anahtarla imzalanır. Kanıt
+    donanıma dayanır.
+  - Motor mesajları imzalıdır ve yalnızca eşleştirilmiş cihazlara tek tek gönderilir.
+  - Masaüstünde QR ile eşleştirme, cihaz listesi ve eşleştirme kaldırma, uzaktan komut kaydı.
+- **Aktarma servisi (`cloud/src/ati_cloud/relay.py`).**
+  - Anahtar tutmaz. Bağlanan tarafın kimliğini imzalı `hello` ile doğrular.
+  - Kanalları yalıtır. Hız sınırı ve motor başına 20 telefon sınırı vardır.
+- **iOS uygulaması (`ios/`).**
+  - `ATICore` Swift paketi: protokol, imza, doğrulama, oturum denetleyicisi, motor benzetimi.
+    Linux'ta da test edilir.
+  - SwiftUI uygulaması:
+    - eşleştirme (QR okuyucu veya yapıştırma);
+    - özet (motor durumu, günlük zarar, sanal K/Z);
+    - acil durdurma (tek dokunuş) ve bot başlat/durdur;
+    - pozisyonlar ve kapatma (Face ID);
+    - fırsatlar ve balina hareketleri;
+    - bildirim merkezi (uygulama arka plandayken yerel bildirim);
+    - ayarlar (doğrulanamayan mesaj sayacı, eşleştirmeyi kaldırma).
+  - Anahtarlar Secure Enclave'de; korumalı anahtar `.biometryCurrentSet` ile üretilir.
+- **Uzaktan asla yapılamayanlar:** para çekme, yeni pozisyon açma, risk sınırı değiştirme,
+  API anahtarı girme, işlem modu değiştirme.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| İmzasız/tekrar oynatılmış komutun reddi | ✅ Motor (Python, 21 test): imzasız, çöp imza, başka anahtar, değiştirilmiş içerik, eski/ileri tarihli, başka motora ait, eski sıra numarası, izin dışı komut, Face ID'siz korumalı komut ve başka cihaz adına yönlendirme reddediliyor; hiçbiri uygulanmıyor. Sıra numarası yeniden başlatmada korunuyor; eşzamanlı 5 kopyadan yalnızca biri uygulanıyor |
+| Gerçek aktarma servisiyle uçtan uca | ✅ Ayrı süreçte gerçek aktarma servisi, gerçek motor ve telefon benzetimi. Eşleştirme, imzalı acil durdurma, tekrar oynatmanın reddi, imzasızın yanıtsız kalması, Face ID'siz kaldırmanın reddi, başka cihaz adına gönderimin reddi, korumalı anahtarla kaldırma, eşleştirme kaldırılınca reddi doğrulandı. Aktarma servisi testleri (10): kimlik kanıtı, kanal yalıtımı, hız ve cihaz sınırı |
+| XCTest | ✅ `ATICore`, 23 test, Linux'ta Swift 6.4 ile geçti. Kapsam: Python'un imzaladığı mesajın doğrulanması ve değiştirilmişin reddi; aynı anahtardan aynı kimlik; HMAC kanıtı ve hello metninin motorla eşleşmesi; eski özetin ve başka cihaza ait mesajın yok sayılması; denetleyici akışları (eşleştirme, imzalı komut, iptal edilen Face ID'de hiçbir şey gönderilmemesi, sahte mesajın yok sayılması, tekrar oynatmanın reddi). macOS'ta CryptoKit ile CI'da çalışır |
+| Arayüz testleri (XCUITest) | 5 senaryo, macOS CI'da simülatörde: eşleştirme, acil durdurma, onaylı pozisyon kapatma, aktarma servisinden gelen sahte mesajın yok sayılması, bot başlatma ve eşleştirme kaldırma |
+| Cihaza kurulum, TestFlight, App Store | ⏸️ Apple Developer hesabı (G6) |
+| Uygulama kapalıyken anlık bildirim (APNs) | ⏸️ Bulut dağıtımı (G5) ve Apple hesabı (G6) |
+| Hesap girişi ve lisans ekranı | ⏸️ Bulut hesap/lisans API'si Aşama 15'te; iOS ekranı o zaman bağlanacak |
+
+**Gizlilik notu:** mesajlar imzalıdır ama şifreli değildir. Aktarma servisi özet içeriğini
+görebilir; hassas veri gönderilmez. Uçtan uca şifreleme Aşama 18'de.
 
 ### Aşama 14 — Web sitesi
 Ana sayfa, özellikler, paketler, satın alma, müşteri girişi/paneli, SSS, iletişim, kullanım

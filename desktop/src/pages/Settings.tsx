@@ -3,6 +3,7 @@ import { useAction, usePoll } from "../api/hooks";
 import type { AuditEntry, Market, StatusResponse, TestnetKeyResponse, TradingModeResponse } from "../api/types.gen";
 import { Badge, Card, DataTable, ErrorBox, Field } from "../components/ui";
 import { MARKET_LABELS, MODE_LABELS, time } from "../lib/format";
+import { PhoneSection } from "./Phone";
 
 interface ExecutionStatus {
   live_locked: boolean;
@@ -74,6 +75,8 @@ export function Settings() {
           <KeyForm key={market} market={market} info={execution.data?.markets[market]} onChange={execution.refresh} />
         ))}
       </div>
+
+      <PhoneSection />
 
       <Card title="Denetim kaydı (son işlemler)">
         <ErrorBox error={audit.error} />

@@ -28,3 +28,18 @@ uv run ati-cloud-migrate --check  # yalnızca durumu raporlar
 Geçişler `src/ati_cloud/db/migrations/NNNN_ad.sql` dosyalarıdır. Uygulanmış bir geçiş
 dosyası değiştirilirse (özet uyuşmazlığı) çalıştırıcı hata verir. Aynı anda birden fazla
 örnek açılırsa PostgreSQL advisory lock ile yalnızca biri geçiş uygular.
+
+## Aktarma servisi (Aşama 13)
+
+iOS ↔ masaüstü motoru arasında uçtan uca imzalı mesajları yönlendirir
+([protokol](../shared/protocol/remote-v1.md)). Servis hiçbir anahtar tutmaz ve içerikleri
+yorumlamaz. Ele geçirilse bile komut üretemez, durum sahteleyemez, cihaz eşleştiremez.
+Ayrı bir süreç olarak çalışır:
+
+```bash
+uv run ati-cloud-relay --host 0.0.0.0 --port 8765   # TLS (wss://) önündeki yük dengeleyicide
+```
+
+Uç noktalar `/v1/relay/engine` ve `/v1/relay/device`. Bağlanan taraf kimliğini imzalı `hello`
+ile kanıtlar. Hız sınırı ve motor başına 20 telefon sınırı vardır. Tek örnek durumu bellektedir;
+birden çok örnek için Redis pub/sub dağıtım aşamasında (G5) eklenecek.

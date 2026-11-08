@@ -17,6 +17,7 @@ import hmac
 import itertools
 import json
 import socket
+import time
 import uuid
 from typing import Annotated, Any, Literal
 
@@ -117,6 +118,7 @@ from ati_engine.history.service import HistoryService, SyncJob
 from ati_engine.market.service import MarketDataService
 from ati_engine.ml.registry import ModelError
 from ati_engine.paper.competition import LIVE_CANDIDATE, PaperCompetition
+from ati_engine.remote.service import RemoteService
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
 from ati_engine.scanner.scanner import MarketScanner, row_dict
@@ -1226,6 +1228,44 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             details={"enabled": body.enabled, "environment": "testnet"},
         )
         return trader.status()
+
+    # --- Uzaktan kontrol: telefon eşleştirme (Aşama 13) -----------------------------------------
+
+    def remote_or_404() -> RemoteService:
+        if runtime.remote is None:
+            raise HTTPException(status_code=404, detail="Uzaktan kontrol etkin değil")
+        return runtime.remote
+
+    @app.get("/v1/remote/status")
+    async def remote_status(_: Auth) -> dict[str, Any]:
+        return await remote_or_404().status()
+
+    @app.post("/v1/remote/pairing")
+    async def remote_pairing(_: Auth) -> dict[str, Any]:
+        service = remote_or_404()
+        if not service.relay_url:
+            raise HTTPException(
+                status_code=409,
+                detail="Aktarma servisi adresi ayarlanmamış (bulut dağıtımı G5 onayını bekliyor)",
+            )
+        payload, expires = service.pairing.start(service.relay_url)
+        await runtime.audit.record(actor=LOCAL_ACTOR, action="remote.pairing_started")
+        return {"qr": payload, "expires_ms": expires}
+
+    @app.post("/v1/remote/devices/revoke")
+    async def remote_revoke(device_id: str, _: Auth) -> dict[str, Any]:
+        service = remote_or_404()
+        revoked = await service.registry.revoke(device_id, int(time.time() * 1000))
+        await runtime.audit.record(
+            actor=LOCAL_ACTOR, action="remote.device_revoked", details={"device_id": device_id}
+        )
+        return {"revoked": revoked}
+
+    @app.get("/v1/remote/commands")
+    async def remote_commands(
+        _: Auth, limit: Annotated[int, Query(ge=1, le=1000)] = 100
+    ) -> list[dict[str, Any]]:
+        return await remote_or_404().commands(limit)
 
     @app.websocket("/v1/events")
     async def events(websocket: WebSocket) -> None:
