@@ -32,6 +32,14 @@ class CloudSettings(BaseSettings):
         if self.environment in ("staging", "production") and not self.session_cookie_secure:
             raise ValueError("staging/production ortamında oturum çerezi Secure olmalı")
         if self.environment in ("staging", "production"):
+            insecure = [
+                u for u in [self.public_web_url, *self.web_origins] if not u.startswith("https://")
+            ]
+            if insecure:
+                raise ValueError(
+                    "staging/production ortamında site adresi ve izinli kökenler HTTPS olmalı: "
+                    + ", ".join(insecure)
+                )
             url = urlparse(self.database_url.get_secret_value())
             sslmode = parse_qs(url.query).get("sslmode", [""])[0]
             if sslmode not in ("verify-full", "verify-ca"):

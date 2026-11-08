@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "İletişim", description: "Destek, l
 export default function ContactPage() {
   return (
     <>
-      <PageHeader title="İletişim" lead="Sorularınız, destek talepleriniz ve geri bildirimleriniz için bize yazın. Yanıtımızı e-postayla iletiriz." />
+      <PageHeader eyebrow="Destek" title="İletişim" lead="Sorularınız, destek talepleriniz ve geri bildirimleriniz için bize yazın. Yanıtımızı e-postayla iletiriz." />
       <Container className="py-12">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <Card>

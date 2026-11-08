@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
@@ -42,13 +44,50 @@ async def test_ready_reports_pending_migrations(empty_dsn: str) -> None:
     assert response.json()["status"] == "migrations_pending"
 
 
+SITE = {"public_web_url": "https://canarslan.net.tr", "web_origins": ["https://canarslan.net.tr"]}
+
+
 def test_production_requires_verified_tls() -> None:
     with pytest.raises(ValidationError, match="TLS"):
-        CloudSettings(environment="production", database_url=SecretStr("postgresql://u@db/x"))
+        CloudSettings(
+            environment="production", database_url=SecretStr("postgresql://u@db/x"), **SITE
+        )
     with pytest.raises(ValidationError, match="TLS"):
         CloudSettings(
-            environment="production", database_url=SecretStr("postgresql://u@db/x?sslmode=require")
+            environment="production",
+            database_url=SecretStr("postgresql://u@db/x?sslmode=require"),
+            **SITE,
         )
     CloudSettings(
-        environment="production", database_url=SecretStr("postgresql://u@db/x?sslmode=verify-full")
+        environment="production",
+        database_url=SecretStr("postgresql://u@db/x?sslmode=verify-full"),
+        **SITE,
     )
+
+
+def test_production_requires_https_site_and_origins() -> None:
+    dsn = SecretStr("postgresql://u@db/x?sslmode=verify-full")
+    with pytest.raises(ValidationError, match="HTTPS"):
+        CloudSettings(environment="production", database_url=dsn)  # varsayılan: localhost http
+    with pytest.raises(ValidationError, match="http://canarslan"):
+        CloudSettings(
+            environment="staging",
+            database_url=dsn,
+            public_web_url="https://canarslan.net.tr",
+            web_origins=["https://canarslan.net.tr", "http://canarslan.net.tr"],
+        )
+
+
+def test_production_example_settings_are_valid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """deploy/cloud.env.example üretimde geçerli bir yapılandırmadır."""
+    example = Path(__file__).resolve().parents[2] / "deploy" / "cloud.env.example"
+    for line in example.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#"):
+            key, _, value = line.partition("=")
+            monkeypatch.setenv(key, value)
+    monkeypatch.setenv("ATI_DATABASE_URL", "postgresql://u@db/x?sslmode=verify-full")
+    cfg = CloudSettings()
+    assert cfg.environment == "production"
+    assert cfg.web_origins == ["https://canarslan.net.tr"]
+    assert cfg.trusted_proxies == ["10.0.0.0/8"]
+    assert cfg.session_cookie_secure is True

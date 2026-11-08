@@ -69,6 +69,13 @@ test("istemci tarafı gezinme ve mobil menü çalışır", async ({ page }) => {
   await page.getByRole("navigation", { name: "Mobil menü" }).getByRole("link", { name: "SSS" }).click();
   await expect(page).toHaveURL(/\/sss$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sık sorulan sorular");
+  // Sayfa değişince menü kapanır; içerik örtülmez. Escape ile de kapanır.
+  await expect(page.getByRole("navigation", { name: "Mobil menü" })).toBeHidden();
+  await page.getByText("Menü", { exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Mobil menü" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Mobil menü" }).getByRole("link", { name: "SSS" })).toHaveAttribute("aria-current", "page");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("navigation", { name: "Mobil menü" })).toBeHidden();
   await page.getByText("Yazılım kazanç sağlar mı?").click();
   await expect(page.getByText("Hayır, böyle bir vaadimiz yok.", { exact: false })).toBeVisible();
   expect(await axe(page)).toEqual([]);

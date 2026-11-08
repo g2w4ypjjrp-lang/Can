@@ -1,4 +1,17 @@
+import {
+  BrainCircuit,
+  ChartCandlestick,
+  FlaskConical,
+  Gauge,
+  Monitor,
+  Radar,
+  Smartphone,
+  TestTubeDiagonal,
+  type LucideIcon,
+} from "lucide-react";
 import type { Metadata } from "next";
+
+import { IconBox } from "@/components/IconBox";
 
 import { RiskNotice } from "@/components/RiskNotice";
 import { Card, Container, LinkButton, Notice, PageHeader } from "@/components/ui";
@@ -11,6 +24,7 @@ export const metadata: Metadata = {
 
 interface Section {
   id: string;
+  icon: LucideIcon;
   title: string;
   lead: string;
   points: string[];
@@ -19,6 +33,7 @@ interface Section {
 const SECTIONS: Section[] = [
   {
     id: "veri",
+    icon: ChartCandlestick,
     title: "Canlı piyasa verisi ve tarama",
     lead: "Binance spot ve vadeli (sürekli kontrat) piyasalarından gerçek zamanlı veri.",
     points: [
@@ -29,6 +44,7 @@ const SECTIONS: Section[] = [
   },
   {
     id: "balina",
+    icon: Radar,
     title: "Balina radarı",
     lead: "Büyük oyuncuların piyasadaki izlerini tek ekranda toplar.",
     points: [
@@ -40,6 +56,7 @@ const SECTIONS: Section[] = [
   },
   {
     id: "analiz",
+    icon: BrainCircuit,
     title: "Yapay zekâ destekli analiz",
     lead: "Model bilgisayarınızda, sizin verinizle eğitilir; analiz gerekçesiyle birlikte gösterilir.",
     points: [
@@ -50,6 +67,7 @@ const SECTIONS: Section[] = [
   },
   {
     id: "strateji",
+    icon: FlaskConical,
     title: "Strateji kütüphanesi ve backtest",
     lead: "14 hazır strateji ve gerçekçi maliyetlerle geçmiş veri testi.",
     points: [
@@ -60,6 +78,7 @@ const SECTIONS: Section[] = [
   },
   {
     id: "sanal",
+    icon: TestTubeDiagonal,
     title: "Sanal işlem (paper trading) ve test ağı",
     lead: "Gerçek para riske atmadan, canlı piyasada deneyin.",
     points: [
@@ -70,6 +89,7 @@ const SECTIONS: Section[] = [
   },
   {
     id: "risk",
+    icon: Gauge,
     title: "Risk yönetimi",
     lead: "Her emir, gönderilmeden önce risk kontrolünden geçer.",
     points: [
@@ -81,6 +101,7 @@ const SECTIONS: Section[] = [
   },
   {
     id: "masaustu",
+    icon: Monitor,
     title: "Windows uygulaması",
     lead: "Kiralık sunucu (VDS) gerekmez; motor kendi bilgisayarınızda çalışır.",
     points: [
@@ -91,6 +112,7 @@ const SECTIONS: Section[] = [
   },
   {
     id: "iphone",
+    icon: Smartphone,
     title: "iPhone ile uzaktan kontrol",
     lead: "Bilgisayarınızdaki motoru telefondan güvenle izleyin.",
     points: [
@@ -106,6 +128,7 @@ export default function FeaturesPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Ürün"
         title="Özellikler"
         lead="Veriden karara, testten uygulamaya: piyasayı izlemek, stratejinizi ölçmek ve riskinizi kontrol altında tutmak için gereken araçlar."
       />
@@ -116,7 +139,7 @@ export default function FeaturesPage() {
               <li key={section.id}>
                 <a
                   href={`#${section.id}`}
-                  className="inline-block rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-fg hover:bg-surface-2"
+                  className="inline-block rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-fg transition-colors hover:bg-surface-2"
                 >
                   {section.title}
                 </a>
@@ -126,10 +149,13 @@ export default function FeaturesPage() {
         </nav>
         <div className="grid gap-6 lg:grid-cols-2">
           {SECTIONS.map((section) => (
-            <Card as="section" key={section.id}>
-              <h2 id={section.id} className="scroll-mt-24 text-xl font-semibold text-fg">
-                {section.title}
-              </h2>
+            <Card as="section" key={section.id} className="card-lift">
+              <div className="flex items-center gap-3">
+                <IconBox icon={section.icon} />
+                <h2 id={section.id} className="scroll-mt-24 text-xl font-semibold text-fg">
+                  {section.title}
+                </h2>
+              </div>
               <p className="mt-2 text-muted">{section.lead}</p>
               <ul className="mt-4 space-y-2.5">
                 {section.points.map((point) => (

@@ -17,7 +17,7 @@ işlem platformu.
 | Paylaşılan protokol | [`shared/protocol/`](shared/protocol/) | JSON Schema | ✅ |
 | Windows masaüstü uygulaması | [`desktop/`](desktop/) | Tauri 2, React, TypeScript | ✅ 10 ekran, motor gözetmeni, NSIS kurulum paketi (imzasız; kod imzalama G6 onayı bekliyor) (Aşama 12) |
 | iOS uygulaması | [`ios/`](ios/) | Swift, SwiftUI | ✅ Eşleştirme, özet, acil durdurma, bot, pozisyonlar (Face ID), sinyaller, bildirimler; uçtan uca imzalı komutlar (Aşama 13). Cihaza kurulum Apple hesabı (G6) bekliyor |
-| Web sitesi ve paneller | [`web/`](web/) | Next.js, TypeScript, Tailwind | ✅ Tanıtım sayfaları, paketler, hesap (kayıt/giriş/parola sıfırlama), müşteri paneli, SSS, iletişim, yasal taslaklar; axe 0 ihlal, Lighthouse 96-100 (Aşama 14). Admin paneli Aşama 16 |
+| Web sitesi ve paneller | [`web/`](web/) | Next.js, TypeScript, Tailwind | ✅ Tanıtım sayfaları, paketler, hesap (kayıt/giriş/parola sıfırlama), müşteri paneli, SSS, iletişim, yasal taslaklar; axe 0 ihlal, Lighthouse 93-100 (Aşama 14). Alan adı: canarslan.net.tr ([`deploy/`](deploy/)). Admin paneli Aşama 16 |
 
 ## Belgeler
 

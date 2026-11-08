@@ -2,11 +2,11 @@ import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors " +
+  "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60";
 const variants = {
-  primary: "bg-accent text-accent-fg hover:bg-accent-strong",
-  secondary: "border border-border bg-surface text-fg hover:bg-surface-2",
+  primary: "bg-accent text-accent-fg shadow-sm hover:bg-accent-strong",
+  secondary: "border border-border-strong/40 bg-surface text-fg hover:bg-surface-2",
   ghost: "text-fg hover:bg-surface-2",
 };
 
@@ -28,19 +28,42 @@ export function Container({ children, className = "" }: { children: ReactNode; c
   return <div className={`mx-auto w-full max-w-6xl px-4 sm:px-6 ${className}`}>{children}</div>;
 }
 
-export function PageHeader({ title, lead }: { title: string; lead?: ReactNode }) {
+export function PageHeader({ title, lead, eyebrow }: { title: string; lead?: ReactNode; eyebrow?: string }) {
   return (
-    <header className="border-b border-border bg-surface">
-      <Container className="py-10 sm:py-14">
-        <h1 className="text-3xl font-bold tracking-tight text-fg sm:text-4xl">{title}</h1>
-        {lead ? <p className="mt-3 max-w-3xl text-lg text-muted">{lead}</p> : null}
+    <header className="relative overflow-hidden border-b border-border">
+      <div aria-hidden="true" className="glow absolute inset-0" />
+      <div aria-hidden="true" className="bg-grid absolute inset-0" />
+      <Container className="relative py-12 sm:py-16">
+        {eyebrow ? <p className="text-sm font-semibold text-accent-text">{eyebrow}</p> : null}
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-fg sm:text-5xl">{title}</h1>
+        {lead ? <p className="mt-4 max-w-3xl text-lg text-muted">{lead}</p> : null}
       </Container>
     </header>
   );
 }
 
+export function Badge({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-fg ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+export function SectionTitle({ id, eyebrow, title, lead }: { id: string; eyebrow?: string; title: string; lead?: ReactNode }) {
+  return (
+    <div className="max-w-2xl">
+      {eyebrow ? <p className="text-sm font-semibold text-accent-text">{eyebrow}</p> : null}
+      <h2 id={id} className="mt-1 text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
+        {title}
+      </h2>
+      {lead ? <p className="mt-4 text-lg text-muted">{lead}</p> : null}
+    </div>
+  );
+}
+
 export function Card({ children, className = "", as: Tag = "div" }: { children: ReactNode; className?: string; as?: "div" | "article" | "section" | "li" }) {
-  return <Tag className={`rounded-xl border border-border bg-surface p-6 ${className}`}>{children}</Tag>;
+  return <Tag className={`rounded-2xl border border-border bg-surface p-6 ${className}`}>{children}</Tag>;
 }
 
 type Tone = "info" | "warning" | "success" | "danger";
@@ -90,7 +113,7 @@ export function Field({
         id={id}
         aria-describedby={describedBy}
         aria-invalid={error ? true : undefined}
-        className="mt-1.5 block w-full rounded-lg border border-border-strong bg-bg px-3 py-2.5 text-fg placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+        className="mt-1.5 block w-full rounded-xl border border-border-strong bg-bg px-3.5 py-2.5 text-fg placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
         {...input}
       />
       {hint ? (
@@ -109,13 +132,17 @@ export function Field({
 
 export function FormCard({ title, children, footer }: { title: string; children: ReactNode; footer?: ReactNode }) {
   return (
-    <Container className="py-12 sm:py-16">
+    <div className="relative overflow-hidden">
+    <div aria-hidden="true" className="glow absolute inset-0" />
+    <div aria-hidden="true" className="bg-grid absolute inset-0" />
+    <Container className="relative py-12 sm:py-20">
       <div className="mx-auto max-w-md">
-        <h1 className="text-2xl font-bold tracking-tight text-fg">{title}</h1>
-        <div className="mt-6 rounded-xl border border-border bg-surface p-6 sm:p-8">{children}</div>
+        <h1 className="text-3xl font-semibold tracking-tight text-fg">{title}</h1>
+        <div className="mt-6 rounded-2xl border border-border bg-surface p-6 shadow-soft sm:p-8">{children}</div>
         {footer ? <div className="mt-6 text-center text-sm text-muted">{footer}</div> : null}
       </div>
     </Container>
+    </div>
   );
 }
 

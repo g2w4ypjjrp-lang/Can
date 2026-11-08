@@ -12,7 +12,7 @@ testler (CI'da yeşil), güncellenmiş belge. Bir aşama kabul kriterleri sağla
 | **G2** | **Gerçek para ile** ilk emir (LIVE modunun etkinleştirilmesi) | Aşama 10-11 sonrası |
 | **G3** | Ödeme sağlayıcısı seçimi ve **canlı ödeme** alma | Aşama 17 |
 | **G4** | Ücretli veri sağlayıcıları (zincir üstü balina verisi vb.) | Aşama 4 |
-| **G5** | Bulut sağlayıcısı, bölge, alan adı ve üretim dağıtımı | Aşama 14-15 |
+| **G5** | Bulut sağlayıcısı, bölge ve üretim dağıtımı (alan adı belirlendi: `canarslan.net.tr`, bkz. [`deploy/`](../deploy/)) | Aşama 14-15 |
 | **G6** | Kod imzalama sertifikası, Apple Developer hesabı, mağaza başvurusu | Aşama 12-13 |
 
 Kodda karşılığı: `TradingModeController` LIVE geçişinde yapılandırma onayı + çalışma anı
@@ -693,8 +693,13 @@ görebilir; hassas veri gönderilmez. Uçtan uca şifreleme Aşama 18'de.
     `nosniff`, `Referrer-Policy`, `Permissions-Policy`, üretimde HSTS. Doğrulama ve sıfırlama
     belirteçleri adres çubuğundan silinir. Giriş sonrası yönlendirme yalnızca site içine.
   - İçerik kuralı: hiçbir sayfada kazanç vaadi yok (otomatik test). Her sayfada risk uyarısı.
-  - Açık/koyu tema, klavye ile tam kullanım, "içeriğe geç" bağlantısı, hareket azaltma
-    tercihi.
+  - Modern tasarım: Inter yazı tipi (siteyle birlikte sunulur, dış istek yok), ikonlar, ızgara
+    ve ışık efektli başlıklar, örnek arayüz görselleri (kazanç rakamı içermez, "örnek" olarak
+    etiketli), platform bölümü (Windows + iPhone).
+  - Açık/koyu tema, klavye ile tam kullanım, "içeriğe geç" bağlantısı, etkin sayfa işareti
+    (`aria-current`), sayfa değişince ve Escape ile kapanan mobil menü, hareket azaltma tercihi.
+  - Alan adı `canarslan.net.tr`; üretim adresleri ve ayar örnekleri [`deploy/`](../deploy/)
+    altında. Bulut servisi staging/üretimde HTTPS olmayan site adresini ve kökeni reddeder.
   - Yasal metinler "Taslak — hukukçu onayı bekliyor" olarak işaretli; şirket bilgileri köşeli
     parantezle bırakıldı.
 
@@ -702,11 +707,11 @@ görebilir; hassas veri gönderilmez. Uçtan uca şifreleme Aşama 18'de.
 
 | Kriter | Sonuç |
 |---|---|
-| Hesap API'si | ✅ 19 test (gerçek PostgreSQL): kayıt/doğrulama/giriş/panel/çıkış, yanlış parola ile bilinmeyen e-postanın aynı yanıtı, kayıtta hesap sızdırmama, zayıf parolalar, koşul onayı, yabancı kökenin reddi, giriş hız sınırı, parola sıfırlamanın oturumları kapatması, engelli müşteri, yalnızca satıştaki paketler, panelde lisans ve cihaz sayısı, iletişim formu (tuzak, sınır, köken), doğrulama bağlantısını yeniden gönderme. Bulut toplamı 82 test |
+| Hesap API'si | ✅ 19 test (gerçek PostgreSQL): kayıt/doğrulama/giriş/panel/çıkış, yanlış parola ile bilinmeyen e-postanın aynı yanıtı, kayıtta hesap sızdırmama, zayıf parolalar, koşul onayı, yabancı kökenin reddi, giriş hız sınırı, parola sıfırlamanın oturumları kapatması, engelli müşteri, yalnızca satıştaki paketler, panelde lisans ve cihaz sayısı, iletişim formu (tuzak, sınır, köken), doğrulama bağlantısını yeniden gönderme. Bulut toplamı 84 test |
 | Birim testleri | ✅ 29 test (vitest): açık yönlendirme koruması, fiyat/tarih biçimi, API hata çevirisi, CSP, içerik kuralı, paket gruplama, ayarlar |
 | Uçtan uca | ✅ 22 senaryo (Playwright, gerçek API + PostgreSQL + derlenmiş site): tüm herkese açık sayfalarda güvenlik başlıkları, CSP ihlali ve konsol hatası olmaması, tek `h1`, risk uyarısı, kazanç vaadi olmaması; kayıt → doğrulama bağlantısını yeniden isteme → doğrulama → giriş → panel → çıkış; panelde lisans; parola sıfırlama; açık yönlendirme denemesi; paketler ve kapalı ödeme; iletişim formu; çerezin `HttpOnly`/`SameSite=Strict` ve JavaScript'e kapalı olması |
 | Erişilebilirlik denetimi | ✅ axe (WCAG 2.1 AA + en iyi uygulamalar): 10 herkese açık sayfa açık ve koyu temada, mobil menü ve müşteri paneli — 0 ihlal |
-| Performans denetimi | ✅ Lighthouse (mobil öykünme): 10 sayfada performans 96-99, erişilebilirlik 100, en iyi uygulamalar 100, SEO 100 (CI eşikleri: 90 / 100 / 95 / 95; her sayfa 3 kez ölçülür, ortanca sonuç esas alınır) |
+| Performans denetimi | ✅ Lighthouse (mobil öykünme): 10 sayfada performans 93-96, erişilebilirlik 100, en iyi uygulamalar 100, SEO 100 (CI eşikleri: 90 / 100 / 95 / 95; her sayfa 3 kez ölçülür, ortanca sonuç esas alınır) |
 | Yasal metinlerin hukukçu onayı | ⏸️ Kullanım koşulları, gizlilik/KVKK ve risk bildirimi taslak; şirket bilgileri ve hukukçu onayı bekliyor. Mesafeli satış sözleşmesi ve ön bilgilendirme formu Aşama 17'de |
 | Yayına alma (alan adı, TLS, e-posta gönderimi) | ⏸️ G5 |
 
@@ -732,15 +737,18 @@ felaket kurtarma (veritabanı yedeği geri yükleme) tatbikatı.
 
 ## Açık kararlar (sizden bilgi gerekecek)
 
-1. **Fiyatlandırma:** 16 paketin fiyatları ve para birimi (şemada boş/pasif).
+1. **Fiyatlandırma:** ✅ Karar: paketler (fiyat, para birimi, satışa açma/kapama) ve ödeme
+   bilgileri **admin panelinden** yönetilecek (Aşama 16-17). Panel hazır olana kadar paketler
+   pasif ve fiyatsızdır; site "yakında" gösterir.
 2. **iOS cihaz politikası:** Şu an varsayılan: cihaz limiti (1/2/3) Windows motorları için,
    iOS eşlikçi cihazlar ayrıca 2 adet. iOS'un da limite sayılmasını isterseniz
    `companion_device_limit` ayarlanır.
-3. **Ödeme sağlayıcısı** (bkz. `02` — Paddle/Lemon Squeezy, Stripe, iyzico/PayTR).
+3. **Ödeme sağlayıcısı** (bkz. `02` — Paddle/Lemon Squeezy, Stripe, iyzico/PayTR). Sağlayıcı
+   anahtarları admin panelinden şifreli olarak girilecek; canlı moda geçiş G3 onayıyla.
 4. **Hedef pazarlar ve dil:** Türkçe + İngilizce önerilir.
 5. **Şirket ve faturalama:** e-Arşiv/e-Fatura entegratörü.
 6. **Bulut sağlayıcısı ve veri bölgesi** (KVKK kapsamında yurt dışına veri aktarımı
-   değerlendirilmeli).
+   değerlendirilmeli). Alan adı: ✅ `canarslan.net.tr`.
 
 ## Riskler ve dikkat edilmesi gerekenler
 

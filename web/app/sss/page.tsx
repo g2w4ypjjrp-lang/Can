@@ -73,7 +73,7 @@ const FAQ: { q: string; a: string[] }[] = [
 export default function FaqPage() {
   return (
     <>
-      <PageHeader title="Sık sorulan sorular" />
+      <PageHeader eyebrow="Destek" title="Sık sorulan sorular" />
       <Container className="py-12">
         <div className="max-w-3xl space-y-3">
           {FAQ.map((item) => (

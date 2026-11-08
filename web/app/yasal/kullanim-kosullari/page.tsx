@@ -10,7 +10,7 @@ export default function TermsPage() {
       <h2>1. Taraflar ve kapsam</h2>
       <p>
         Bu koşullar, [Şirket unvanı] (“Şirket”, adres: [Adres], MERSİS: [MERSİS no]) ile AI Trading Intelligence web
-        sitesini, masaüstü uygulamasını ve iPhone uygulamasını (birlikte “Hizmet”) kullanan kişi (“Kullanıcı”)
+        sitesini (canarslan.net.tr), masaüstü uygulamasını ve iPhone uygulamasını (birlikte “Hizmet”) kullanan kişi (“Kullanıcı”)
         arasındaki ilişkiyi düzenler. Hesap oluşturan veya Hizmet'i kullanan Kullanıcı bu koşulları kabul etmiş sayılır.
       </p>
 

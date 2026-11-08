@@ -74,6 +74,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │
 ├── shared/protocol/                   ✅ engine-local-api.schema.json (CI ile koddan senkron),
 │                                            remote-v1.md + test-vectors (uzaktan kontrol protokolü)
+├── deploy/                            ✅ Üretim yapısı (canarslan.net.tr) ve gizli bilgi içermeyen ayar örnekleri
 ├── desktop/                           ✅ 12 Windows uygulaması
 │   ├── src/                           ✅ React + TypeScript: 10 ekran, API istemcisi, olay akışı,
 │   │                                        şemadan üretilen tipler (api/types.gen.ts)

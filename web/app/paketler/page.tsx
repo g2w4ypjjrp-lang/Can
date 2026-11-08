@@ -20,6 +20,7 @@ export default async function PlansPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Fiyatlandırma"
         title="Paketler"
         lead="Lisanslar süreye ve aynı anda kullanılabilecek bilgisayar sayısına göre ayrılır. Her pakette tüm özellikler ve iPhone uygulaması bulunur."
       />
