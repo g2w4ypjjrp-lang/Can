@@ -131,9 +131,17 @@ jobs:
           workspaces: desktop/src-tauri
       - name: Kurulum paketini derle (NSIS, imzasız — kod imzalama G6 onayı bekliyor)
         working-directory: desktop
+        # Tauri, NSIS araçlarını GitHub sürümlerinden indirir; geçici ağ hatalarında (ör. HTTP 504)
+        # yeniden denenir. Derleme önbellekte olduğu için tekrar deneme yalnızca paketlemeyi yineler.
         run: |
           npm ci
-          npx tauri build --bundles nsis
+          for ($i = 1; $i -le 3; $i++) {
+            npx tauri build --bundles nsis
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($i -eq 3) { throw "Kurulum paketi 3 denemede derlenemedi" }
+            Write-Host "Deneme $i başarısız; 20 sn sonra yeniden denenecek"
+            Start-Sleep -Seconds 20
+          }
       - name: Temiz kurulum, açılış ve kaldırma testi
         run: |
           $installer = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
