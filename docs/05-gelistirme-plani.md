@@ -35,8 +35,8 @@ kısıtı).
 | 9 | Paper Trading | ✅ **Tamamlandı** |
 | 10 | Otomatik işlem motoru | ✅ **Tamamlandı** (test ağı; gerçek hesap G1/G2 ile) |
 | 11 | Risk yönetimi | ✅ **Tamamlandı** |
-| 12 | Windows EXE | ⏭️ Sıradaki |
-| 13 | iOS uygulaması | |
+| 12 | Windows EXE | ✅ **Tamamlandı** (imzasız; G6 bekliyor) |
+| 13 | iOS uygulaması | ⏭️ Sıradaki |
 | 14 | Web sitesi | |
 | 15 | Lisans sistemi | |
 | 16 | Admin paneli | |
@@ -566,11 +566,53 @@ Tüm adresler ayarlardan değiştirilebilir. Not: test ağında BTCUSDT en düş
 **Not:** Risk kapısı kayıpları **sınırlar**, kârı garanti etmez. Test ağı sonuçları gerçek
 piyasa sonuçlarını göstermez (likidite ve fiyatlar farklıdır).
 
-### Aşama 12 — Windows EXE
-Tauri 2 + React; ekranlar: canlı piyasa, tüm coinler, en iyi fırsatlar, balina radarı, AI
-analiz, spot/futures, açık pozisyonlar, kâr/zarar, işlem geçmişi, risk, strateji
-performansları, bot başlat/durdur. Kurulum paketi (MSI/NSIS), otomatik güncelleme, kod
-imzalama (**G6**). **Kabul:** E2E arayüz testleri; temiz Windows makinesinde kurulum testi.
+### Aşama 12 — Windows EXE ✅ (imzasız; kod imzalama G6, otomatik güncelleme G5 bekliyor)
+
+**Çıktılar (uygulandı):**
+
+- **Arayüz (`desktop/src`, React + TypeScript).** 10 ekran:
+  - **Genel bakış:** motor durumu, acil durdurma, bot başlat/durdur, hazırlık koşulları, en iyi
+    fırsatlar, balina uyarıları.
+  - **Piyasa:** tüm coinler; arama, sıralama, fonlama oranı; anormal hareketler; tarayıcı
+    sinyalleri.
+  - **Fırsatlar:** puan bileşenleri, cezalar, maliyet.
+  - **Balina radarı:** net akış, büyük işlemler, uyarılar, büyük hesapların konumlanması.
+  - **Grafik ve AI analiz:** TradingView Lightweight Charts mum grafiği; destek/direnç ve trend
+    çizgileri; model tahmini; göstergeler.
+  - **Spot/Futures işlemler:** test ağı pozisyonları, borsadaki emirler, zorunlu stoplu işlem
+    formu, kapatma, tümünü kapatma.
+  - **Kâr/zarar ve geçmiş:** strateji yarışması, sanal pozisyonlar, işlem geçmişi, test ağı
+    emirleri.
+  - **Risk:** sınırlar, karar günlüğü (neden açıldı / açılmadı), risk olayları.
+  - **Strateji performansı.**
+  - **Ayarlar:** işlem modu, test ağı anahtarı, denetim kaydı.
+
+  Canlı uyarılar olay akışından bildirim olarak gelir. Tipler paylaşılan protokol şemasından
+  üretilir; CI şemanın güncel olduğunu denetler.
+- **Kabuk (`desktop/src-tauri`, Rust).**
+  - Motoru başlatır ve oturum belirtecini üretir (diske yazılmaz).
+  - Sağlık denetimini bekler; motor çökerse yeniden başlatır.
+  - Kapanışta düzgün kapatma ister.
+  - Windows iş nesnesiyle sahipsiz motor kalmaz.
+  - Tek örnek çalışır. CSP yalnızca 127.0.0.1'e izin verir.
+- **Motor paketleme (`engine/packaging`).** PyInstaller, tek klasör. Açılış ~2 sn.
+- **Kurulum paketi:** NSIS, kullanıcı başına, yönetici yetkisi istemez, Türkçe.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| E2E arayüz testleri | ✅ 8 Playwright senaryosu, gerçek motor + sahte Binance (piyasa verisi ve test ağı borsası). Kapsam: tüm ekranlar açılıyor; canlı fiyat listesi ve arama; acil durdurma ve onay ifadesiyle kaldırma; gerçek hesap düğmesi kilitli; yanlış anahtar saklanmıyor, doğru anahtar doğrulanıp bağlanıyor, gizli anahtar ekranda kalmıyor; stopsuz işlem risk kapısınca reddediliyor; korumalı işlem açılıp 3 koruma emriyle görünüyor ve kapatılıyor; karar günlüğü; bot aç/kapa. Ayrıca 13 birim testi (biçimlendirme, bağlantı güvenliği, API istemcisi) ve 3 Rust testi |
+| Temiz Windows makinesinde kurulum testi | CI Windows işi şunları yapar: motoru paketler ve duman testinden geçirir, kurulum paketini derler, sessiz kurulum yapar, uygulamayı açıp motorun yanıt verdiğini doğrular, kabuk zorla kapatılınca motorun da kapandığını doğrular, sessiz kaldırır. Kurulum paketi CI çıktısı olarak indirilebilir |
+| Kod imzalama | ⏸️ G6 onayı bekleniyor (sertifika). Paket imzasız |
+| Otomatik güncelleme | ⏸️ Güncelleme sunucusu (G5) ile birlikte |
+
+**Uçtan uca testte bulunan ve düzeltilen gerçek hata:** form işlemleri ilk çizimdeki değerleri
+gönderiyordu. Bu yüzden anahtar formu boş alanla gidiyordu; motor bunu doğru biçimde reddetti.
+Düzeltildi ve testle doğrulandı.
+
+**Not:** Paketlenmiş motor ~320 MB'tır (DuckDB, SciPy, ONNX Runtime, NumPy, LightGBM); kurulum
+paketi sıkıştırılmıştır.
 
 ### Aşama 13 — iOS uygulaması
 SwiftUI; giriş, lisans aktivasyonu, canlı özet, balina bildirimleri, AI analizleri, sinyaller,

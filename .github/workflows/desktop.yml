@@ -1,0 +1,175 @@
+name: Masaüstü
+
+on:
+  push:
+    paths:
+      - "desktop/**"
+      - "engine/**"
+      - "shared/**"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ui:
+    name: Arayüz (birim + uçtan uca)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+      - name: Motor bağımlılıkları (uçtan uca arka uç)
+        working-directory: engine
+        run: uv sync --locked
+      - working-directory: desktop
+        run: npm ci
+      - name: Protokol tipleri güncel mi
+        working-directory: desktop
+        run: npm run check:types
+      - working-directory: desktop
+        run: npm run typecheck
+      - working-directory: desktop
+        run: npm test
+      - working-directory: desktop
+        run: npm run build
+      - working-directory: desktop
+        run: npx playwright install --with-deps chromium
+      - name: Uçtan uca arayüz testleri (gerçek motor + sahte Binance)
+        working-directory: desktop
+        run: npx playwright test --trace off
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: desktop/playwright-report
+          retention-days: 7
+
+  shell:
+    name: Kabuk (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: WebView bağımlılıkları
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Arayüz derlemesi (kabuk içine gömülür)
+        working-directory: desktop
+        run: npm ci && npm run build
+      - working-directory: desktop/src-tauri
+        run: |
+          mkdir -p resources/engine
+          echo yer-tutucu > resources/engine/README.txt
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
+  windows:
+    name: Windows kurulum paketi
+    runs-on: windows-latest
+    needs: [ui, shell]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Motoru paketle (PyInstaller)
+        working-directory: engine
+        run: |
+          uv sync --locked --group packaging
+          uv run --group packaging pyinstaller packaging/ati-engine.spec --noconfirm --distpath build/dist --workpath build/work
+      - name: Paketlenmiş motor duman testi
+        working-directory: engine/build/dist/ati-engine
+        run: |
+          ./ati-engine.exe version
+          $env:ATI_LOCAL_API_TOKEN = "ci-belirtec"
+          $env:ATI_MARKET_DATA__ENABLED = "false"
+          $data = Join-Path $env:RUNNER_TEMP "ati-data"
+          $p = Start-Process -FilePath ./ati-engine.exe -ArgumentList "run","--port","47990","--data-dir",$data -PassThru -NoNewWindow
+          $ok = $false
+          for ($i = 0; $i -lt 120; $i++) {
+            try { $r = Invoke-RestMethod http://127.0.0.1:47990/v1/health; if ($r.status -eq "ok") { $ok = $true; break } } catch {}
+            Start-Sleep -Milliseconds 500
+          }
+          if (-not $ok) { throw "Paketlenmiş motor hazır olmadı" }
+          $s = Invoke-RestMethod http://127.0.0.1:47990/v1/status -Headers @{ Authorization = "Bearer ci-belirtec" }
+          Write-Host "Motor durumu: $($s.engine_state) sürüm $($s.version)"
+          Invoke-RestMethod -Method Post http://127.0.0.1:47990/v1/engine/shutdown -Headers @{ Authorization = "Bearer ci-belirtec" } | Out-Null
+          if (-not $p.WaitForExit(30000)) { throw "Motor düzgün kapanmadı" }
+      - name: Motoru kurulum kaynaklarına kopyala
+        run: |
+          New-Item -ItemType Directory -Force desktop/src-tauri/resources/engine | Out-Null
+          Copy-Item -Recurse -Force engine/build/dist/ati-engine/* desktop/src-tauri/resources/engine/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Kurulum paketini derle (NSIS, imzasız — kod imzalama G6 onayı bekliyor)
+        working-directory: desktop
+        run: |
+          npm ci
+          npx tauri build --bundles nsis
+      - name: Temiz kurulum, açılış ve kaldırma testi
+        run: |
+          $installer = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          Write-Host "Kurulum paketi: $($installer.Name) ($([math]::Round($installer.Length / 1MB, 1)) MB)"
+          Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait
+          $dir = Join-Path $env:LOCALAPPDATA "AI Trading Intelligence"
+          if (-not (Test-Path (Join-Path $dir "engine/ati-engine.exe"))) { throw "Motor kurulmamış: $dir" }
+          $app = Get-ChildItem $dir -Filter *.exe | Where-Object { $_.Name -notlike "uninstall*" } | Select-Object -First 1
+          Write-Host "Uygulama: $($app.FullName)"
+          $env:ATI_MARKET_DATA__ENABLED = "false"
+          $proc = Start-Process -FilePath $app.FullName -PassThru
+          $port = $null
+          for ($i = 0; $i -lt 120 -and -not $port; $i++) {
+            Start-Sleep -Milliseconds 500
+            $engine = Get-CimInstance Win32_Process -Filter "Name = 'ati-engine.exe'" | Select-Object -First 1
+            if ($engine -and $engine.CommandLine -match "--port (\d+)") { $port = $Matches[1] }
+          }
+          if (-not $port) { throw "Uygulama motoru başlatmadı" }
+          $ok = $false
+          for ($i = 0; $i -lt 120; $i++) {
+            try { $r = Invoke-RestMethod "http://127.0.0.1:$port/v1/health"; if ($r.status -eq "ok") { $ok = $true; break } } catch {}
+            Start-Sleep -Milliseconds 500
+          }
+          if (-not $ok) { throw "Kurulan uygulamanın motoru hazır olmadı" }
+          Write-Host "Kurulan uygulama motoru başlattı (port $port)"
+          # Kabuk zorla kapatılırsa iş nesnesi motoru da kapatmalı (sahipsiz motor kalmamalı).
+          Stop-Process -Id $proc.Id -Force
+          Start-Sleep -Seconds 5
+          if (Get-Process -Name ati-engine -ErrorAction SilentlyContinue) { throw "Kabuk kapandıktan sonra motor açık kaldı" }
+          Write-Host "Kabuk kapanınca motor da kapandı"
+          Start-Process -FilePath (Join-Path $dir "uninstall.exe") -ArgumentList "/S" -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path (Join-Path $dir "engine/ati-engine.exe")) { throw "Kaldırma tamamlanmadı" }
+          Write-Host "Kaldırma tamam"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ati-windows-installer-unsigned
+          path: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          retention-days: 14

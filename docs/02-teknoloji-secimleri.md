@@ -45,8 +45,10 @@ tutuldu.
 * **Rust ne zaman:** Profil ölçümü gösterirse yalnızca sıcak yollar (emir defteri bakımı,
   gösterge hesapları) PyO3 modülüne taşınır. Baştan Rust ile yazmak geliştirme hızını
   düşürür, kazancı belirsizdir.
-* **Paketleme:** Nuitka (C'ye derleme, tersine mühendisliği zorlaştırır) veya PyInstaller ile
-  tek klasörlük sidecar; Authenticode ile kod imzalama (onay kapısı G6).
+* **Paketleme (Aşama 12'de uygulandı):** PyInstaller ile tek klasörlük paket. Kabuk motoru bu
+  klasörden başlatır. Tek dosya seçilmedi: tek dosyada her açılışta geçici dizine açma olur ve
+  virüs tarayıcıları daha sık yanlış alarm verir. Nuitka (C'ye derleme) lisans koruması aşamasında
+  (15) yeniden değerlendirilecek. Authenticode kod imzalama onay kapısı G6'ya bağlı.
 
 ### Yapay zekâ: PyTorch + LightGBM, çıkarım ONNX Runtime
 

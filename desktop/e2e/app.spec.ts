@@ -1,0 +1,140 @@
+import { expect, type Page, test } from "@playwright/test";
+import { ENGINE_PORT, ENGINE_TOKEN } from "../playwright.config";
+
+// e2e_backend.py içindeki sahte test ağı hesabının anahtarı (gerçek değil).
+const API_KEY = "E2eTestAnahtar0123456789abcdef";
+const SECRET = "E2eTestGizli0123456789abcdefXYZ";
+
+const HASH = `#engine=http://127.0.0.1:${ENGINE_PORT}&token=${ENGINE_TOKEN}`;
+const errors: string[] = [];
+
+async function open(page: Page, nav?: string) {
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(`/${HASH}`);
+  await expect(page.getByTestId("top-state")).toBeVisible();
+  if (nav) await page.getByTestId(`nav-${nav}`).click();
+}
+
+test.describe.configure({ mode: "serial" });
+
+test.afterAll(() => {
+  expect(errors, "arayüzde yakalanmamış hata olmamalı").toEqual([]);
+});
+
+test("genel bakış motor durumunu ve hazırlık koşullarını gösterir", async ({ page }) => {
+  await open(page);
+  await expect(page.getByTestId("engine-state")).toHaveText("Çalışıyor");
+  await expect(page.getByTestId("trading-mode")).toHaveText("Sanal işlem");
+  await expect(page.getByTestId("conditions")).toContainText("market_data.usdm_futures");
+  await expect(page.getByTestId("conditions")).toContainText("risk.daily_loss");
+});
+
+test("bütün ekranlar açılır", async ({ page }) => {
+  await open(page);
+  for (const key of [
+    "markets",
+    "opportunities",
+    "whales",
+    "analysis",
+    "trading",
+    "performance",
+    "risk",
+    "strategies",
+    "settings",
+    "dashboard",
+  ]) {
+    await page.getByTestId(`nav-${key}`).click();
+    await expect(page.getByTestId(`page-${key}`)).toBeVisible();
+  }
+});
+
+test("piyasa ekranı canlı fiyatları listeler ve arar", async ({ page }) => {
+  await open(page, "markets");
+  const table = page.getByTestId("tickers");
+  await expect(table).toContainText("BTCUSDT");
+  await expect(table).toContainText("SOLUSDT");
+  await page.getByTestId("market-search").fill("eth");
+  await expect(table).toContainText("ETHUSDT");
+  await expect(table).not.toContainText("BTCUSDT");
+});
+
+test("acil durdurma devreye girer; kaldırmak için onay ifadesi gerekir", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("kill-engage").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Durdur" }).click();
+  await expect(page.getByTestId("top-state")).toHaveText("Acil durdurma");
+  await page.getByTestId("kill-release").click();
+  const dialog = page.getByRole("dialog");
+  const confirm = dialog.getByRole("button", { name: "Kaldır" });
+  await expect(confirm).toBeDisabled();
+  await dialog.getByRole("textbox").fill("SERBEST BIRAK");
+  await confirm.click();
+  await expect(page.getByTestId("top-state")).toHaveText("Çalışıyor");
+});
+
+test("gerçek hesap kilitli; test ağı anahtarı doğrulanmadan saklanmaz", async ({ page }) => {
+  await open(page, "settings");
+  await expect(page.getByTestId("mode-live")).toBeDisabled();
+  const form = page.getByTestId("key-usdm_futures");
+  await form.getByTestId("key-usdm_futures-api").fill(API_KEY);
+  await form.getByTestId("key-usdm_futures-secret").fill("YanlisGizli0123456789abcdef");
+  await form.getByTestId("key-usdm_futures-save").click();
+  await expect(form.getByTestId("key-usdm_futures-result")).toContainText("geçersiz");
+  await expect(form.getByTestId("key-usdm_futures-state")).toHaveText("Anahtar yok");
+
+  await form.getByTestId("key-usdm_futures-api").fill(API_KEY);
+  await form.getByTestId("key-usdm_futures-secret").fill(SECRET);
+  await form.getByTestId("key-usdm_futures-save").click();
+  await expect(form.getByTestId("key-usdm_futures-result")).toContainText("Anahtar doğrulandı");
+  await expect(form.getByTestId("key-usdm_futures-state")).toContainText("Bağlı …cdef");
+  await expect(form.getByTestId("key-usdm_futures-secret")).toHaveValue(""); // gizli anahtar ekranda kalmaz
+
+  await page.getByTestId("mode-testnet").click();
+  await expect(page.getByTestId("settings-mode")).toHaveText("Test ağı");
+});
+
+test("test ağında işlem: risk kapısı stopsuz işlemi reddeder, korumalı işlemi açar ve kapatır", async ({ page }) => {
+  await open(page, "trading");
+  await expect(page.getByTestId("exec-usdm_futures")).toContainText("Bağlı");
+  const form = page.getByTestId("trade-form");
+  await form.getByTestId("trade-qty").fill("2");
+  await form.getByTestId("trade-ref").fill("100");
+  await form.getByTestId("trade-submit").click();
+  await expect(form.getByRole("alert")).toContainText("Zarar durdur zorunludur");
+
+  await form.getByTestId("trade-stop").fill("95");
+  await form.getByTestId("trade-tp1").fill("110");
+  await form.getByTestId("trade-tp2").fill("120");
+  await form.getByTestId("trade-submit").click();
+  await expect(form.getByTestId("trade-result")).toContainText("open");
+  await expect(form.getByTestId("trade-result")).toContainText("3 koruma emri");
+
+  const positions = page.getByTestId("positions");
+  await expect(positions).toContainText("BTCUSDT");
+  await expect(positions).toContainText("Stop var");
+  await expect(page.getByTestId("orders").locator("tbody tr")).toHaveCount(3);
+
+  await page.getByTestId("close-BTCUSDT").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Piyasa fiyatından kapat" }).click();
+  await expect(page.getByText("Açık pozisyon yok")).toBeVisible();
+  await expect(page.getByText("Açık emir yok")).toBeVisible();
+});
+
+test("risk ekranı kararları ve gerekçeleri gösterir", async ({ page }) => {
+  await open(page, "risk");
+  const decisions = page.getByTestId("decisions");
+  await expect(decisions).toContainText("Onaylandı");
+  await expect(decisions).toContainText("Reddedildi");
+  await expect(decisions).toContainText("Zarar durdur zorunludur");
+  await expect(page.getByTestId("risk-events")).toContainText("gate.stop_required");
+  await expect(page.getByTestId("risk-limits")).toContainText("%0.5");
+});
+
+test("bot (otomatik işlem) başlatılıp durdurulur", async ({ page }) => {
+  await open(page);
+  await expect(page.getByTestId("auto-state")).toHaveText("Kapalı");
+  await page.getByTestId("auto-toggle").click();
+  await expect(page.getByTestId("auto-state")).toHaveText("Açık");
+  await page.getByTestId("auto-toggle").click();
+  await expect(page.getByTestId("auto-state")).toHaveText("Kapalı");
+});

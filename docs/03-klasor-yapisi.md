@@ -53,6 +53,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
 │   │   └── remote/                    🔜 13 aktarma istemcisi, imzalı komut doğrulama
 │   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
+│   ├── packaging/                     ✅ 12 PyInstaller tanımı (tek klasör motor paketi)
 │   └── tests/                         ✅ 450 test (birim, gerçek mesaj fikstürleri, sahte Binance
 │                                          sunucusuyla uçtan uca, alt süreç duman testi)
 │
@@ -72,7 +73,13 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   └── tests/                         ✅ 53 test (gerçek PostgreSQL üzerinde)
 │
 ├── shared/protocol/                   ✅ engine-local-api.schema.json (CI ile koddan senkron)
-├── desktop/                           🔜 12 Tauri 2 + React + Lightweight Charts
+├── desktop/                           ✅ 12 Windows uygulaması
+│   ├── src/                           ✅ React + TypeScript: 10 ekran, API istemcisi, olay akışı,
+│   │                                        şemadan üretilen tipler (api/types.gen.ts)
+│   ├── src-tauri/                     ✅ Rust kabuk: motor gözetmeni (belirteç, sağlık, yeniden
+│   │                                        başlatma, düzgün kapatma, iş nesnesi), NSIS paketi
+│   ├── e2e/                           ✅ Playwright uçtan uca testleri (8 senaryo)
+│   └── scripts/gen-types.mjs          ✅ protokol şemasından TypeScript tipleri
 ├── ios/                               🔜 13 SwiftUI uygulaması
 └── web/                               🔜 14 Next.js web sitesi, müşteri paneli, admin paneli
 ```

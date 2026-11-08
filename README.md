@@ -15,7 +15,7 @@ işlem platformu.
 | İşlem motoru (kullanıcının Windows bilgisayarında) | [`engine/`](engine/) | Python 3.12+, asyncio | ✅ Çekirdek, Binance veri motoru, coin tarayıcı, balina radarı, tarihsel veri, grafik analizi, göstergeler, model, 14 strateji, fırsat puanı, backtest, sanal işlem yarışması, test ağı emir yürütme, risk kapısı ve risk bekçisi, test ağında otomatik işlem; gerçek hesap G1/G2 onayına kadar kilitli (Aşama 1-11) |
 | Bulut servisi: lisans, hesap, ödeme, aktarma | [`cloud/`](cloud/) | FastAPI, PostgreSQL 16 | ✅ Şema + iskelet (Aşama 1) |
 | Paylaşılan protokol | [`shared/protocol/`](shared/protocol/) | JSON Schema | ✅ |
-| Windows masaüstü uygulaması | [`desktop/`](desktop/) | Tauri 2, React, TypeScript | 🔜 Aşama 12 |
+| Windows masaüstü uygulaması | [`desktop/`](desktop/) | Tauri 2, React, TypeScript | ✅ 10 ekran, motor gözetmeni, NSIS kurulum paketi (imzasız; kod imzalama G6 onayı bekliyor) (Aşama 12) |
 | iOS uygulaması | [`ios/`](ios/) | Swift, SwiftUI | 🔜 Aşama 13 |
 | Web sitesi ve paneller | [`web/`](web/) | Next.js, TypeScript | 🔜 Aşama 14 |
 
