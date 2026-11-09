@@ -485,3 +485,17 @@ tr.clickable:hover td {
   background: #fff;
   border-radius: 6px;
 }
+
+/* Anahtar-değer listesi (lisans ayrıntıları) */
+dl.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+dl.kv dt {
+  color: var(--muted);
+}
+dl.kv dd {
+  margin: 0;
+}

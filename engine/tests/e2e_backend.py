@@ -27,11 +27,13 @@ from ati_engine.config import (
     BinanceEndpoints,
     EngineSettings,
     HistorySettings,
+    LicenseSettings,
     LocalApiSettings,
     MarketDataSettings,
 )
 from fake_binance import FakeBinance
 from fake_exchange import FakeExchange
+from fake_license import FakeLicenseServer
 
 E2E_API_KEY = "E2eTestAnahtar0123456789abcdef"
 E2E_SECRET = "E2eTestGizli0123456789abcdefXYZ"
@@ -42,6 +44,7 @@ async def main(args: argparse.Namespace) -> int:
     market = await FakeBinance(interval_s=0.2).start()
     exchange = await FakeExchange(api_key=E2E_API_KEY, secret=E2E_SECRET).start()
     exchange.prices.update({"BTCUSDT": Decimal(100), "ETHUSDT": Decimal(50)})
+    licensing = await FakeLicenseServer().start()
     with tempfile.TemporaryDirectory(prefix="ati-e2e-") as tmp:
         settings = EngineSettings(
             data_dir=Path(tmp) / "data",
@@ -61,6 +64,12 @@ async def main(args: argparse.Namespace) -> int:
                 depth_snapshot_limit=100,
             ),
             history=HistorySettings(enabled=False),
+            # Lisans ekranı sahte lisans sunucusuyla; zorunlu değil (işlem testleri etkilenmez).
+            license=LicenseSettings(
+                server_url=licensing.url,
+                trusted_keys={licensing.kid: licensing.public_key},
+                fingerprint_override="e2e-bilgisayar",
+            ),
         )
         engine = Engine(settings)
         task = asyncio.create_task(engine.run())
@@ -80,6 +89,7 @@ async def main(args: argparse.Namespace) -> int:
             await asyncio.wait_for(task, timeout=15)
     await exchange.stop()
     await market.stop()
+    await licensing.stop()
     return 0
 
 

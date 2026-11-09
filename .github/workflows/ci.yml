@@ -68,3 +68,37 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run pytest
+
+  license-e2e:
+    name: Lisans uçtan uca (motor + bulut API + PostgreSQL 16)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ati_test
+          POSTGRES_PASSWORD: ati_test
+          POSTGRES_DB: ati_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ati_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ATI_TEST_DATABASE_URL: postgresql://ati_test:ati_test@127.0.0.1:5432/ati_test
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: Bulut bağımlılıkları
+        working-directory: cloud
+        run: uv sync --locked
+      - name: Gerçek bulut lisans API'si ile motor (etkinleştirme, kapı, dondurma, cihaz limiti)
+        run: uv run pytest tests/test_license_e2e.py -v

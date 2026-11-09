@@ -3,6 +3,7 @@ import { useAction, usePoll } from "../api/hooks";
 import type { AuditEntry, Market, StatusResponse, TestnetKeyResponse, TradingModeResponse } from "../api/types.gen";
 import { Badge, Card, DataTable, ErrorBox, Field } from "../components/ui";
 import { MARKET_LABELS, MODE_LABELS, time } from "../lib/format";
+import { LicenseSection } from "./License";
 import { PhoneSection } from "./Phone";
 
 interface ExecutionStatus {
@@ -29,6 +30,8 @@ export function Settings() {
   const current = status.data?.trading_mode;
   return (
     <div className="page" data-testid="page-settings">
+      <LicenseSection />
+
       <Card title="İşlem modu">
         <div className="row">
           <span>Şu an:</span>

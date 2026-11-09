@@ -138,3 +138,29 @@ test("bot (otomatik işlem) başlatılıp durdurulur", async ({ page }) => {
   await page.getByTestId("auto-toggle").click();
   await expect(page.getByTestId("auto-state")).toHaveText("Kapalı");
 });
+
+test("lisans: yazım hatası yakalanır, geçerli anahtar etkinleşir, bilgisayar lisanstan çıkarılır", async ({ page }) => {
+  await open(page, "settings");
+  const license = page.getByTestId("license");
+  await expect(license.getByTestId("license-state")).toHaveText("Etkin değil");
+  const input = license.getByTestId("license-key");
+  // Yazarken biçimlendirilir; son karakter (kontrol) yanlış: motor sunucuya gitmeden reddeder.
+  await input.fill("ati7xk9pq82mn45zr60");
+  await expect(input).toHaveValue("ATI-7XK9-PQ82-MN45-ZR60");
+  await license.getByRole("button", { name: "Etkinleştir" }).click();
+  await expect(license).toContainText("yazım hatası");
+  // Biçimi doğru ama satılmamış anahtar: sunucu reddeder.
+  await input.fill("ATI-0000-0000-0000-0000");
+  await license.getByRole("button", { name: "Etkinleştir" }).click();
+  await expect(license).toContainText("Lisans anahtarı geçersiz");
+
+  await input.fill("ATI-7XK9-PQ82-MN45-ZR61");
+  await license.getByRole("button", { name: "Etkinleştir" }).click();
+  await expect(license.getByTestId("license-state")).toHaveText("Etkin");
+  await expect(license.getByTestId("license-details")).toContainText("30 Gün - 1 Cihaz");
+  await expect(license.getByTestId("license-details")).toContainText("ATI-****-****-****-ZR61");
+
+  await license.getByTestId("license-release").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Lisanstan çıkar" }).click();
+  await expect(license.getByTestId("license-state")).toHaveText("Etkin değil");
+});
