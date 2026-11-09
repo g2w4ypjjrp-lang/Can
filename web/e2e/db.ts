@@ -54,3 +54,20 @@ export async function grantLicense(email: string): Promise<string> {
   await sql("INSERT INTO license_activations (license_id, device_id) VALUES ($1, $2)", [issued.license_id, device!.id]);
   return issued.key;
 }
+
+/** Bulut CLI'si ile yönetici daveti; davet bağlantısının yolunu döner. */
+export function inviteAdmin(email: string, name: string, role = "super_admin"): string {
+  const cloud = fileURLToPath(new URL("../../cloud", import.meta.url));
+  const result = spawnSync(
+    "uv",
+    ["run", "--project", cloud, "ati-cloud-admin", "invite", "--email", email, "--name", name, "--role", role],
+    {
+      cwd: cloud,
+      encoding: "utf8",
+      env: { ...process.env, ATI_ENVIRONMENT: "test", ATI_DATABASE_URL: e2eDsn, ATI_ADMIN_PUBLIC_URL: "http://127.0.0.1:3100", ...LICENSE_ENV },
+    },
+  );
+  if (result.status !== 0) throw new Error(result.stderr);
+  const url = new URL(result.stdout.trim().split("\n").pop() ?? "");
+  return `${url.pathname}${url.search}`;
+}

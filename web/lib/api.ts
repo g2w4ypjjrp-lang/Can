@@ -42,7 +42,7 @@ export const NETWORK_ERROR = "Sunucuya ulaşılamadı. İnternet bağlantınız�
 export async function apiRequest<T>(
   base: string,
   path: string,
-  init: { method?: "GET" | "POST"; body?: unknown; fetcher?: typeof fetch } = {},
+  init: { method?: "GET" | "POST" | "PUT" | "PATCH"; body?: unknown; fetcher?: typeof fetch } = {},
 ): Promise<T> {
   const fetcher = init.fetcher ?? fetch;
   let response: Response;

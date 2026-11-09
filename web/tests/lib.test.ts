@@ -4,6 +4,7 @@ import { ApiError, apiRequest, errorMessage, NETWORK_ERROR } from "@/lib/api";
 import { runtimeConfig } from "@/lib/config";
 import { findForbiddenClaims } from "@/lib/content-policy";
 import { buildCsp, newNonce, originOf } from "@/lib/csp";
+import { formatMinor, parseMoney, toCsv } from "@/lib/admin";
 import { durationLabel, formatDate, formatPrice, licenseStatusLabel, safeNext } from "@/lib/format";
 import { groupPlans, type Plan } from "@/lib/plans";
 
@@ -164,5 +165,22 @@ describe("çalışma anı ayarları", () => {
       serverApiUrl: "http://cloud:8000",
       production: true,
     });
+  });
+});
+
+describe("yönetim paneli yardımcıları", () => {
+  it("fiyat girişi kuruşa çevrilir", () => {
+    expect(parseMoney("1.499,90")).toBe(149990);
+    expect(parseMoney("29")).toBe(2900);
+    expect(parseMoney("0,5")).toBe(50);
+    expect(parseMoney("abc")).toBeNull();
+    expect(parseMoney("1,999")).toBeNull();
+    expect(formatMinor(149990)).toBe("1.499,90");
+    expect(formatMinor(null)).toBe("");
+  });
+
+  it("CSV kaçışlı yazılır", () => {
+    expect(toCsv([{ id: "1", key: "ATI-AAAA" }, { id: "2", key: 'a,"b"' }])).toBe('id,key\n1,ATI-AAAA\n2,"a,""b"""');
+    expect(toCsv([])).toBe("");
   });
 });

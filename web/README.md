@@ -1,7 +1,7 @@
 # web — Web Sitesi ve Müşteri Paneli (Aşama 14)
 
-Next.js 16 (App Router) + TypeScript + Tailwind CSS 4. Admin paneli Aşama 16'da **ayrı alt alan
-adında** (`admin.`), ayrı oturum ve zorunlu 2FA ile eklenecek.
+Next.js 16 (App Router) + TypeScript + Tailwind CSS 4. Herkese açık sayfalar `app/(site)`,
+yönetim paneli `app/yonetim` altındadır (Aşama 16).
 
 ## Sayfalar
 
@@ -15,6 +15,24 @@ adında** (`admin.`), ayrı oturum ve zorunlu 2FA ile eklenecek.
 | `/panel` | Müşteri paneli: lisanslar, cihaz kullanımı, hesap |
 | `/sss`, `/iletisim` | Sık sorulan sorular, iletişim formu |
 | `/yasal/kullanim-kosullari`, `/yasal/gizlilik`, `/yasal/risk-bildirimi` | Yasal metinler (**taslak, hukukçu onayı bekliyor**) |
+
+## Yönetim paneli (`/yonetim`)
+
+Üretimde yalnızca `ATI_ADMIN_HOST` alan adında (`admin.canarslan.net.tr`) açılır; herkese açık
+sitede `/yonetim` 404 döner. Oturum, bulut API'sinin ayrı yönetici çerezindedir (`Path=/admin`,
+zorunlu TOTP). Menü role göre süzülür; yetki yalnızca sunucuda denetlenir.
+
+| Yol | İçerik |
+|---|---|
+| `/yonetim/davet` | Davet: doğrulama uygulaması (QR), parola, kurtarma kodları |
+| `/yonetim/giris` | Parola → TOTP veya kurtarma kodu |
+| `/yonetim` | Özet |
+| `/yonetim/paketler` | Fiyat, para birimi, satışa açma |
+| `/yonetim/lisanslar` | Arama, üretim (tekil / toplu CSV), dondurma, iptal, uzatma, tam anahtar (TOTP) |
+| `/yonetim/musteriler` | Engelleme, cihaz kaldırma |
+| `/yonetim/mesajlar`, `/yonetim/raporlar`, `/yonetim/denetim` | İletişim mesajları, raporlar, denetim kaydı ve zincir doğrulama |
+| `/yonetim/yoneticiler` | Davet, engelleme, 2FA sıfırlama |
+| `/yonetim/ayarlar` | Ödeme sağlayıcısı ve anahtarları (canlı mod G3 ile), şirket bilgileri, kurtarma kodları |
 
 ## Mimari ve güvenlik
 
@@ -38,6 +56,7 @@ adında** (`admin.`), ayrı oturum ve zorunlu 2FA ile eklenecek.
 | `ATI_PUBLIC_WEB_URL` | `http://localhost:3000` | Kanonik site adresi (site haritası, meta veriler) |
 | `ATI_PLANS_REVALIDATE_S` | `300` | Paket listesi önbellek süresi; `0` önbelleksiz |
 | `ATI_ENVIRONMENT` | — | `production` iken HSTS başlığı eklenir |
+| `ATI_ADMIN_HOST` | — | Yönetim paneli alan adı; tanımlıysa `/yonetim` yalnızca orada açılır |
 
 ## Geliştirme ve testler
 

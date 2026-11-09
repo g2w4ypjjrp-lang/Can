@@ -12,7 +12,7 @@ onayı** ile yapılacaktır; bu klasör o güne kadar hedef yapıyı ve gizli bi
 | `https://www.canarslan.net.tr` | Kalıcı yönlendirme (301) → `https://canarslan.net.tr` | yük dengeleyici |
 | `https://api.canarslan.net.tr` | Hesap, lisans ve (Aşama 17) ödeme API'si | `cloud/` (`ati-cloud-api`) |
 | `wss://relay.canarslan.net.tr` | iPhone ↔ masaüstü aktarma servisi | `cloud/` (`ati-cloud-relay`) |
-| `https://admin.canarslan.net.tr` | Admin paneli (Aşama 16): paketler, fiyatlar, ödeme ayarları, lisanslar | `web/` (ayrı dağıtım) |
+| `https://admin.canarslan.net.tr` | Admin paneli (Aşama 16): paketler, fiyatlar, ödeme ayarları, lisanslar | `web/` (`/yonetim`, `ATI_ADMIN_HOST`) |
 
 E-posta (sağlayıcı seçilince): gönderen `bildirim@canarslan.net.tr`, destek `destek@canarslan.net.tr`.
 
@@ -24,6 +24,18 @@ E-posta (sağlayıcı seçilince): gönderen `bildirim@canarslan.net.tr`, destek
 * Admin paneli ayrı alt alan adında, ayrı oturum tablosu ve zorunlu 2FA ile çalışır; müşteri
   oturumu admin paneline erişemez.
 * Aktarma servisi ayrı süreçtir ve anahtar tutmaz; ele geçirilse bile komut üretemez.
+
+## İlk yönetici
+
+Yayına almadan sonra ilk süper yönetici sunucudan davet edilir; bağlantıyı açan kişi parolasını
+ve doğrulama uygulamasını (TOTP) kurar, 10 kurtarma kodunu kaydeder:
+
+```bash
+uv run ati-cloud-admin invite --email <yönetici e-postası> --name "<Ad Soyad>"
+```
+
+Diğer yöneticiler panelden (Yöneticiler) davet edilir. Gizli değer `ATI_ADMIN_SECRET_KEK`
+(TOTP sırları ve ödeme anahtarları) gizli bilgi deposundan verilir.
 
 ## DNS ve TLS kontrol listesi (G5 sırasında)
 

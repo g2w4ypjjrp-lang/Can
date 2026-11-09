@@ -61,6 +61,20 @@ Gizli değerler: `ATI_LICENSE_PEPPER`, `ATI_LICENSE_KEK` (+ `ATI_LICENSE_KEK_ID`
 
 Test vektörleri `scripts/gen_license_vectors.py` ile üretilir; motor bunlarla doğrular.
 
+## Yönetici API'si (Aşama 16)
+
+`/admin/v1` — müşteri hesaplarından ayrı giriş (davet → parola + TOTP, kurtarma kodları), ayrı
+çerez (`ati_admin`, `Path=/admin`), rol bazlı yetki (her uç nokta tek yetki; `tests/test_admin_rbac.py`
+tüm rotaları her rolle dener). İlk süper yönetici:
+
+```bash
+uv run ati-cloud-admin invite --email yonetici@canarslan.net.tr --name "Ad Soyad"
+```
+
+Ayarlar: `ATI_ADMIN_ORIGINS`, `ATI_ADMIN_PUBLIC_URL` (davet bağlantıları), `ATI_ADMIN_SESSION_HOURS`
+(en fazla 12), `ATI_ADMIN_SECRET_KEK` (gizli; TOTP sırları ve ödeme anahtarları),
+`ATI_PAYMENTS_LIVE_ALLOWED` (canlı ödeme; yalnızca G3 onayıyla `true`).
+
 ## Geçişler (migrations)
 
 ```bash

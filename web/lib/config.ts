@@ -11,6 +11,8 @@ export interface RuntimeConfig {
   /** Paket listesinin önbellek süresi (sn). */
   plansRevalidateS: number;
   production: boolean;
+  /** Yönetim paneli alan adı (ör. admin.canarslan.net.tr). Tanımlıysa /yonetim yalnızca orada açılır. */
+  adminHost: string | null;
 }
 
 function trimSlash(url: string): string {
@@ -26,5 +28,6 @@ export function runtimeConfig(env: Record<string, string | undefined> = process.
     siteUrl: trimSlash(env.ATI_PUBLIC_WEB_URL ?? "http://localhost:3000"),
     plansRevalidateS: Number.isFinite(revalidate) && revalidate >= 0 ? revalidate : 300,
     production: env.ATI_ENVIRONMENT === "production",
+    adminHost: env.ATI_ADMIN_HOST?.trim().toLowerCase() || null,
   };
 }

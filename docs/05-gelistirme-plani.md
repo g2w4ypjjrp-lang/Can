@@ -39,8 +39,8 @@ kısıtı).
 | 13 | iOS uygulaması | ✅ **Tamamlandı** (kod + testler; cihaz/App Store G6, bulut G5) |
 | 14 | Web sitesi | ✅ **Tamamlandı** (kod + testler; yasal metinler hukukçu onayı, yayın G5) |
 | 15 | Lisans sistemi | ✅ **Tamamlandı** (kod + testler; zorunluluk G5 ile) |
-| 16 | Admin paneli | ⏭️ Sıradaki (paket/fiyat ve ödeme ayarları dâhil) |
-| 17 | Ödeme sistemi | |
+| 16 | Admin paneli | ✅ **Tamamlandı** (kod + testler; yayın G5, canlı ödeme G3) |
+| 17 | Ödeme sistemi | ⏭️ Sıradaki |
 | 18 | Güvenlik ve performans testleri | |
 
 ### Aşama 1 — Sistem mimarisi ✅
@@ -761,10 +761,54 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
 | Testler | Bulut 105 (19 lisans), motor 494 (20 lisans + telefon sınırı + uçtan uca), Swift 25 |
 | Lisans zorunluluğu | ⏸️ Kapalı: lisans sunucusu (api.canarslan.net.tr) yayına alınınca (G5) üretim kira anahtarı motor sürümüne gömülür ve `license.enforce` açılır. Aksi hâlde kurulu motorlar işlem açamazdı. |
 
-### Aşama 16 — Admin paneli
-Ayrı giriş + TOTP 2FA + kurtarma kodları; RBAC; lisans üret/toplu üret/iptal/dondur/uzat,
-müşteri engelleme, cihaz yönetimi, satış/ödeme raporları, aktif kullanıcı ve lisans
-istatistikleri, denetim kaydı görüntüleme. **Kabul:** her uç nokta için yetki testleri.
+### Aşama 16 — Admin paneli ✅ (kod ve testler; yayın G5, canlı ödeme G3)
+
+**Çıktılar (uygulandı):**
+
+- **API (`cloud/src/ati_cloud/admin/`, `/admin/v1`).** Müşteri hesaplarından tamamen ayrıdır.
+  - **Giriş:**
+    - Davet bağlantısı (72 saat, tek kullanımlık) → parola + TOTP kurulumu → 10 kurtarma kodu.
+    - Giriş iki adımlıdır: parola, ardından TOTP veya kurtarma kodu.
+    - Aynı TOTP kodu ikinci kez kabul edilmez. 5 hatada 15 dakika kilit.
+    - Ayrı çerez (`ati_admin`, `Path=/admin`, 8 saat).
+    - TOTP sırları AES-256-GCM ile şifrelidir.
+    - İlk süper yönetici `ati-cloud-admin invite` ile davet edilir.
+  - **Yetki (yalnızca sunucuda):**
+    - Her uç nokta tek yetkiye bağlıdır (5 rol, 22 yetki).
+    - Durum değiştiren isteklerde köken denetlenir.
+    - Hassas işlemler güncel TOTP kodu ister: tam lisans anahtarı, ödeme anahtarları, canlı ödeme.
+  - **Paketler ve fiyatlar** (kullanıcı kararı): fiyat, para birimi, satışa açma. Fiyatsız paket
+    açılamaz. Satıştaki paket sitede hemen görünür.
+  - **Ödeme ayarları** (kullanıcı kararı):
+    - Sağlayıcı seçimi: iyzico, PayTR, Stripe, Paddle, Lemon Squeezy.
+    - Anahtarlar şifreli saklanır ve API'den geri okunamaz (yalnızca son 4 karakter).
+    - **Canlı mod iki kilitli:**
+      1. dağıtım ayarı `ATI_PAYMENTS_LIVE_ALLOWED` (G3 onayıyla açılır);
+      2. panelde TOTP kodu, `CANLI ÖDEMEYİ AÇ` onay ifadesi ve tüm anahtarların girilmiş olması.
+    - Şirket ve fatura bilgileri.
+  - **Lisanslar:** tekil ve toplu (CSV) üretim, arama (tam anahtar, seri no, e-posta),
+    dondurma/çözme, iptal, süre uzatma, tam anahtar. Lisans olaylarında aktör yöneticidir.
+  - **Müşteriler ve cihazlar:** engelleme (oturumlar kapanır), cihaz kaldırma.
+  - **Diğer:** sipariş/ödeme listeleri, satış/ödeme/kullanım raporları, panel özeti, iletişim
+    mesajları, denetim kaydı ve hash zinciri doğrulama.
+  - **Yönetici hesapları:** davet, rol, engelleme, 2FA sıfırlama. Kendini kilitleme ve son süper
+    yönetici korumaları vardır.
+- **Arayüz (`web/app/yonetim`).**
+  - Üretimde yalnızca `admin.canarslan.net.tr` alan adında açılır (`ATI_ADMIN_HOST`). Herkese
+    açık sitede `/yonetim` 404 döner. `noindex` ve `no-store` başlıkları gönderilir.
+  - Sayfalar: davet (QR + kurtarma kodları), giriş, özet, paketler, lisanslar, müşteriler,
+    mesajlar, raporlar, denetim kaydı, yöneticiler, ayarlar.
+  - Menü role göre süzülür (kolaylık içindir; güvenlik sunucudadır).
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| **Her uç nokta için yetki testi** | ✅ Uygulamadaki tüm `/admin/v1` rotaları otomatik taranır. Her rotada tam olarak bir yetki denetimi vardır (eklenip unutulan yetki testi düşürür). Her rota × 5 rol × rolsüz yönetici için: yetkisizse 403, yetkiliyse 401/403 dışı yanıt. Oturumsuz istek 401, yabancı köken 403. Tanımlı her yetkinin bir uç noktası vardır (`payment.refund` Aşama 17). |
+| Giriş güvenliği | ✅ RFC 6238 TOTP test vektörleri; davet akışı; parola tek başına yetmez; kod tekrarı reddi; kurtarma kodu tek kullanımlık; 5 hatada kilit; tek tip hata yanıtı; müşteri oturumu yönetici API'sine erişemez; çıkışta oturum kapanır |
+| İşlevsel | ✅ 15 API testi (paket, lisans yaşam döngüsü, müşteri/cihaz, yönetici hesapları ve kendini kilitleme korumaları, ödeme anahtarlarının geri okunamaması, canlı ödeme kilitleri, şirket bilgileri, raporlar, mesajlar, denetim zinciri). Bulut toplamı 128 test. Testler iki gerçek hatayı yakaladı ve düzeltildi. |
+| Uçtan uca | ✅ 6 senaryo (gerçek API + PostgreSQL, CLI daveti, testte üretilen TOTP): davet ve kurtarma kodları → fiyat girilir → sitede görünür; lisans üret, dondur, tam anahtar (TOTP); mesaj durumu; denetim zinciri; yönetici daveti; ödeme ayarları (canlı mod kapalı); çıkış ve parola + TOTP ile giriş; destek rolü paket yönetimini göremez ve sunucu reddeder. axe 0 ihlal. Web toplamı 28 uçtan uca + 35 birim test. |
+| Canlı ödeme | ⏸️ G3: dağıtım ayarı kapalı; panelde "Canlı" seçeneği devre dışı ve açıklamalı |
 
 ### Aşama 17 — Ödeme sistemi
 Sağlayıcı soyutlaması, webhook imza doğrulama, idempotent teslim (bkz. `04` §1.4), e-posta

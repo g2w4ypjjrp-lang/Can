@@ -67,7 +67,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── db/migrations/0002_*.sql   ✅ Roller/yetkiler ve 16 lisans paketi
 │   │   ├── auth/                      🔜 15 müşteri kimlik doğrulama
 │   │   ├── licensing/                 ✅ 15 anahtar üretimi, saklama, aktivasyon, kira imzalama, CLI
-│   │   ├── admin/                     🔜 16 ayrı yönetici API'si (2FA + RBAC)
+│   │   ├── admin/                     ✅ 16 yönetici API'si: davet + TOTP, rol bazlı yetki, paket/lisans/müşteri/ayar yönetimi, CLI
 │   │   ├── payments/                  🔜 17 sağlayıcı soyutlaması, webhook, teslim
 │   │   └── relay/                     🔜 13 iOS ↔ motor aktarma servisi
 │   └── tests/                         ✅ 53 test (gerçek PostgreSQL üzerinde)
@@ -88,8 +88,9 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   ├── App/                           ✅ SwiftUI ekranları, Secure Enclave anahtarları, WebSocket
 │   ├── AppUITests/                    ✅ XCUITest senaryoları
 │   └── project.yml                    ✅ XcodeGen proje tanımı
-└── web/                               ✅ 14 Next.js web sitesi ve müşteri paneli (admin paneli 16)
-    ├── app/                           ✅ sayfalar (App Router): tanıtım, paketler, hesap, panel, yasal
+└── web/                               ✅ 14 Next.js web sitesi, müşteri paneli; 16 yönetim paneli
+    ├── app/(site)/                    ✅ herkese açık sayfalar: tanıtım, paketler, hesap, panel, yasal
+    ├── app/yonetim/                   ✅ 16 yönetim paneli (admin. alan adı, TOTP, rol bazlı menü)
     ├── components/                    ✅ arayüz bileşenleri, hesap formları
     ├── lib/                           ✅ API istemcisi, CSP, biçimlendirme, içerik kuralı
     ├── proxy.ts                       ✅ istek başına nonce'lu CSP ve HSTS

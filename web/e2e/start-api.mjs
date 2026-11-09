@@ -22,6 +22,8 @@ const env = {
   ATI_SESSION_COOKIE_SECURE: "false",
   ATI_WEB_ORIGINS: JSON.stringify([WEB_ORIGIN]),
   ATI_PUBLIC_WEB_URL: WEB_ORIGIN,
+  ATI_ADMIN_ORIGINS: JSON.stringify([WEB_ORIGIN]),
+  ATI_ADMIN_PUBLIC_URL: WEB_ORIGIN,
   ...LICENSE_ENV,
 };
 const migrate = spawnSync("uv", ["run", "--project", cloudDir, "ati-cloud-migrate"], { env, stdio: "inherit" });

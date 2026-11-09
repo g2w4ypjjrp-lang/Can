@@ -13,4 +13,11 @@ export const PUBLIC_PAGES = [
   "/yasal/risk-bildirimi",
 ] as const;
 
-export const PRIVATE_PATHS = ["/panel", "/satin-al", "/eposta-dogrula", "/sifre-sifirla", "/sifremi-unuttum"] as const;
+export const PRIVATE_PATHS = [
+  "/panel",
+  "/satin-al",
+  "/eposta-dogrula",
+  "/sifre-sifirla",
+  "/sifremi-unuttum",
+  "/yonetim",
+] as const;

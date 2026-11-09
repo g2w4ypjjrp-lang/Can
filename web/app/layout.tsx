@@ -3,8 +3,6 @@ import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
 import { ApiProvider } from "@/components/ApiContext";
-import { SiteFooter } from "@/components/SiteFooter";
-import { SiteHeader } from "@/components/SiteHeader";
 import { runtimeConfig } from "@/lib/config";
 
 import "./globals.css";
@@ -42,13 +40,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         >
           İçeriğe geç
         </a>
-        <ApiProvider baseUrl={publicApiUrl}>
-          <SiteHeader />
-          <main id="icerik" className="flex-1">
-            {children}
-          </main>
-          <SiteFooter />
-        </ApiProvider>
+        <ApiProvider baseUrl={publicApiUrl}>{children}</ApiProvider>
       </body>
     </html>
   );
