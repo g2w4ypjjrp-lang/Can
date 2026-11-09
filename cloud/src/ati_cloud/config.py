@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Literal, Self
 from urllib.parse import parse_qs, urlparse
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,6 +38,16 @@ class CloudSettings(BaseSettings):
     device_resets_per_30d: int = 3  # müşterinin panelden kaldırabileceği cihaz sayısı (30 gün)
     max_request_skew_s: int = 300  # motor isteklerinde izin verilen saat farkı
 
+    # Yönetici paneli (Aşama 16): ayrı alt alan adı, ayrı oturum, zorunlu 2FA.
+    admin_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    admin_public_url: str = "http://localhost:3000"  # davet bağlantıları (üretim: admin. alt alanı)
+    admin_session_hours: int = Field(default=8, ge=1, le=12)
+    admin_secret_kek: SecretStr | None = (
+        None  # TOTP sırları ve ödeme anahtarları (AES-256), 32 bayt
+    )
+    # Canlı ödeme yalnızca bu dağıtım ayarı açıkken (G3 onayı) ve panelde açık onayla açılabilir.
+    payments_live_allowed: bool = False
+
     @property
     def licensing_configured(self) -> bool:
         return all((self.license_pepper, self.license_kek, self.lease_signing_key))
@@ -55,6 +65,18 @@ class CloudSettings(BaseSettings):
                     "staging/production ortamında site adresi ve izinli kökenler HTTPS olmalı: "
                     + ", ".join(insecure)
                 )
+            admin_insecure = [
+                u
+                for u in [self.admin_public_url, *self.admin_origins]
+                if not u.startswith("https://")
+            ]
+            if admin_insecure:
+                raise ValueError(
+                    "staging/production ortamında yönetici adresleri HTTPS olmalı: "
+                    + ", ".join(admin_insecure)
+                )
+            if self.admin_secret_kek is None:
+                raise ValueError("staging/production ortamında ATI_ADMIN_SECRET_KEK zorunludur")
             if not self.licensing_configured:
                 raise ValueError(
                     "staging/production ortamında lisans gizli değerleri zorunludur "

@@ -1,8 +1,8 @@
 """Bulut servisi uygulama iskeleti.
 
-Sağlık uç noktaları (Aşama 1), müşteri hesapları ve iletişim formu (Aşama 14). Lisans,
-ödeme ve yönetici API'leri sırasıyla Aşama 15-17'de eklenecektir. Yönetici API'si ayrı bir
-yönlendirici (``/admin``), ayrı oturum tablosu ve zorunlu 2FA ile çalışacaktır.
+Sağlık uç noktaları (Aşama 1), müşteri hesapları ve iletişim formu (Aşama 14), lisans
+(Aşama 15) ve yönetici API'si (Aşama 16, ``/admin/v1``: ayrı oturum, zorunlu 2FA, rol bazlı
+yetki). Ödeme Aşama 17'de eklenecektir.
 """
 
 from __future__ import annotations
@@ -19,6 +19,11 @@ from fastapi.responses import JSONResponse
 
 from ati_cloud import __version__
 from ati_cloud.accounts import Database, create_accounts_router
+from ati_cloud.admin.admins import create_admin_users_router
+from ati_cloud.admin.auth import create_admin_auth_router
+from ati_cloud.admin.context import AdminContext
+from ati_cloud.admin.manage import create_admin_manage_router
+from ati_cloud.admin.settings_api import create_admin_settings_router
 from ati_cloud.config import CloudSettings
 from ati_cloud.contact import create_contact_router
 from ati_cloud.db.migrate import load_migrations, pending
@@ -63,15 +68,21 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
     # Web sitesi müşteri paneli: yalnızca kendi kökenimizden, çerezle (SameSite=Strict).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cfg.web_origins,
+        allow_origins=list(dict.fromkeys([*cfg.web_origins, *cfg.admin_origins])),
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT", "PATCH"],
         allow_headers=["Content-Type"],
     )
     app.include_router(create_accounts_router(cfg, db))
     app.include_router(create_contact_router(cfg, db))
     app.state.licensing = Licensing.from_settings(cfg)
     app.include_router(create_license_router(cfg, db, app.state.licensing))
+    admin = AdminContext.build(cfg, db, app.state.licensing)
+    app.state.admin = admin
+    app.include_router(create_admin_auth_router(admin))
+    app.include_router(create_admin_manage_router(admin))
+    app.include_router(create_admin_users_router(admin))
+    app.include_router(create_admin_settings_router(admin))
 
     @app.get("/health")
     async def health() -> dict[str, str]:

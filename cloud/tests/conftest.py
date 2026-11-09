@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import secrets
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse, urlunparse
@@ -18,6 +18,9 @@ from urllib.parse import urlparse, urlunparse
 import psycopg
 import pytest
 
+from admin_support import Clock, admin_settings
+from ati_cloud.admin import security as admin_security
+from ati_cloud.app import create_app
 from ati_cloud.db.migrate import apply_migrations
 
 BASE_URL = os.environ.get("ATI_TEST_DATABASE_URL")
@@ -170,3 +173,21 @@ def scalar(conn: psycopg.Connection) -> Callable[..., Any]:
         return None if row is None else row[0]
 
     return _scalar
+
+
+# --- Yönetici paneli testleri (Aşama 16) --------------------------------------------------------
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
+    """TOTP için kontrollü saat (bkz. admin_support.Clock)."""
+    fake = Clock()
+    monkeypatch.setattr(admin_security.time, "time", fake)
+    return fake
+
+
+@pytest.fixture
+async def app(dsn: str) -> AsyncIterator[Any]:
+    application = create_app(admin_settings(dsn))
+    yield application
+    await application.state.db.close()

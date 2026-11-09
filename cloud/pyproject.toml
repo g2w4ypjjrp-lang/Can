@@ -19,6 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
+ati-cloud-admin = "ati_cloud.admin.cli:main"
 ati-cloud-api = "ati_cloud.server:main"
 ati-cloud-license = "ati_cloud.licensing.cli:main"
 ati-cloud-migrate = "ati_cloud.db.migrate:main"
@@ -42,6 +43,7 @@ packages = ["src/ati_cloud"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"

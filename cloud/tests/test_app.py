@@ -49,10 +49,13 @@ LICENSE_SECRETS = {
     "license_pepper": SecretStr(base64.b64encode(b"p" * 32).decode()),
     "license_kek": SecretStr(base64.b64encode(b"k" * 32).decode()),
     "lease_signing_key": SecretStr(base64.b64encode(b"s" * 32).decode()),
+    "admin_secret_kek": SecretStr(base64.b64encode(b"a" * 32).decode()),
 }
 SITE = {
     "public_web_url": "https://canarslan.net.tr",
     "web_origins": ["https://canarslan.net.tr"],
+    "admin_public_url": "https://admin.canarslan.net.tr",
+    "admin_origins": ["https://admin.canarslan.net.tr"],
     **LICENSE_SECRETS,
 }
 
@@ -75,6 +78,19 @@ def test_production_requires_verified_tls() -> None:
     )
 
 
+def test_production_requires_admin_kek_and_https_admin() -> None:
+    dsn = SecretStr("postgresql://u@db/x?sslmode=verify-full")
+    without_kek = {k: v for k, v in SITE.items() if k != "admin_secret_kek"}
+    with pytest.raises(ValidationError, match="ATI_ADMIN_SECRET_KEK"):
+        CloudSettings(environment="production", database_url=dsn, **without_kek)
+    with pytest.raises(ValidationError, match="yönetici adresleri"):
+        CloudSettings(
+            environment="production",
+            database_url=dsn,
+            **{**SITE, "admin_origins": ["http://admin.canarslan.net.tr"]},
+        )
+
+
 def test_production_requires_license_secrets() -> None:
     dsn = SecretStr("postgresql://u@db/x?sslmode=verify-full")
     site = {k: v for k, v in SITE.items() if k != "lease_signing_key"}
@@ -92,6 +108,8 @@ def test_production_requires_https_site_and_origins() -> None:
             database_url=dsn,
             public_web_url="https://canarslan.net.tr",
             web_origins=["https://canarslan.net.tr", "http://canarslan.net.tr"],
+            admin_public_url="https://admin.canarslan.net.tr",
+            admin_origins=["https://admin.canarslan.net.tr"],
             **LICENSE_SECRETS,
         )
 
@@ -111,3 +129,5 @@ def test_production_example_settings_are_valid(monkeypatch: pytest.MonkeyPatch) 
     assert cfg.web_origins == ["https://canarslan.net.tr"]
     assert cfg.trusted_proxies == ["10.0.0.0/8"]
     assert cfg.session_cookie_secure is True
+    assert cfg.admin_origins == ["https://admin.canarslan.net.tr"]
+    assert cfg.payments_live_allowed is False  # canlı ödeme G3 onayına kadar kapalı
