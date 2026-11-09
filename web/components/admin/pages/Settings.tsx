@@ -19,11 +19,9 @@ interface PaymentView {
 
 const PROVIDER_LABELS: Record<string, string> = {
   none: "Seçilmedi",
-  iyzico: "iyzico",
   paytr: "PayTR",
-  stripe: "Stripe",
-  paddle: "Paddle",
-  lemon_squeezy: "Lemon Squeezy",
+  iyzico: "iyzico",
+  simulator: "Test simülatörü (gerçek tahsilat yok)",
 };
 const COMPANY_FIELDS: [string, string][] = [
   ["legal_name", "Ticaret unvanı"],

@@ -25,16 +25,16 @@ from ati_cloud.admin.security import SecretBox
 
 LIVE_PHRASE = "CANLI ÖDEMEYİ AÇ"
 
-# Sağlayıcı başına alanlar: açık (gizli olmayan) ve gizli (şifreli, geri okunamaz).
+# Sağlayıcı başına alanlar: açık (gizli olmayan) ve gizli (şifreli, geri okunamaz). Yalnızca
+# uyarlayıcısı yazılmış sağlayıcılar (``ati_cloud.payments.providers``). ``simulator`` yalnızca
+# geliştirme/test ortamında seçilebilir; gerçek tahsilat yapmaz.
 PROVIDERS: dict[str, dict[str, list[str]]] = {
     "none": {"public": [], "secrets": []},
-    "iyzico": {"public": [], "secrets": ["api_key", "secret_key"]},
     "paytr": {"public": ["merchant_id"], "secrets": ["merchant_key", "merchant_salt"]},
-    "stripe": {"public": ["publishable_key"], "secrets": ["secret_key", "webhook_secret"]},
-    "paddle": {"public": ["vendor_id", "client_token"], "secrets": ["api_key", "webhook_secret"]},
-    "lemon_squeezy": {"public": ["store_id"], "secrets": ["api_key", "webhook_secret"]},
+    "iyzico": {"public": [], "secrets": ["api_key", "secret_key"]},
+    "simulator": {"public": [], "secrets": []},
 }
-Provider = Literal["none", "iyzico", "paytr", "stripe", "paddle", "lemon_squeezy"]
+Provider = Literal["none", "paytr", "iyzico", "simulator"]
 
 
 class PaymentUpdate(BaseModel):
@@ -77,7 +77,15 @@ async def _store(conn: Conn, key: str, value: dict[str, Any], admin_id: Any) -> 
     )
 
 
-def _public_view(stored: dict[str, Any] | None, live_allowed: bool) -> dict[str, Any]:
+def _providers_for(environment: str) -> dict[str, dict[str, list[str]]]:
+    if environment in ("staging", "production"):
+        return {k: v for k, v in PROVIDERS.items() if k != "simulator"}
+    return PROVIDERS
+
+
+def _public_view(
+    stored: dict[str, Any] | None, live_allowed: bool, environment: str
+) -> dict[str, Any]:
     stored = stored or {"provider": "none", "mode": "test", "public": {}, "secrets": {}}
     provider = stored.get("provider", "none")
     spec = PROVIDERS.get(provider, PROVIDERS["none"])
@@ -95,7 +103,7 @@ def _public_view(stored: dict[str, Any] | None, live_allowed: bool) -> dict[str,
             for name in spec["secrets"]
         },
         "live_allowed": live_allowed,
-        "providers": PROVIDERS,
+        "providers": _providers_for(environment),
     }
 
 
@@ -123,7 +131,7 @@ def create_admin_settings_router(ctx: AdminContext) -> APIRouter:
     async def get_payment(admin: Admin = manage) -> dict[str, Any]:
         async with ctx.db.connection() as conn:
             stored = await _load(conn, "payment")
-        return _public_view(stored, ctx.settings.payments_live_allowed)
+        return _public_view(stored, ctx.settings.payments_live_allowed, ctx.settings.environment)
 
     @router.put("/payment")
     async def put_payment(
@@ -137,6 +145,14 @@ def create_admin_settings_router(ctx: AdminContext) -> APIRouter:
             raise HTTPException(
                 status_code=422,
                 detail=f"Bu sağlayıcı için geçersiz alan: {', '.join(sorted(unknown))}",
+            )
+        if body.provider == "simulator" and (
+            ctx.settings.environment in ("staging", "production") or body.mode == "live"
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Test ödeme simülatörü yalnızca geliştirme/test ortamında ve test modunda "
+                "kullanılabilir",
             )
         box = ctx.secret_box()
         async with ctx.db.connection() as conn, conn.transaction():
@@ -196,7 +212,7 @@ def create_admin_settings_router(ctx: AdminContext) -> APIRouter:
                     "secrets_set": sorted(body.secrets), "secrets_cleared": sorted(body.clear),
                 },
             )  # fmt: skip
-        return _public_view(value, ctx.settings.payments_live_allowed)
+        return _public_view(value, ctx.settings.payments_live_allowed, ctx.settings.environment)
 
     @router.get("/company")
     async def get_company(admin: Admin = manage) -> dict[str, Any]:

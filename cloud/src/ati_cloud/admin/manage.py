@@ -631,19 +631,41 @@ def create_admin_manage_router(ctx: AdminContext) -> APIRouter:
             )  # fmt: skip
         return {"revoked": True, "released_activations": released}
 
-    # --- Siparişler ve ödemeler (Aşama 17'de dolar) --------------------------------------------
+    # --- Siparişler ve ödemeler (ayrıntı, iade, mutabakat: ati_cloud.payments.api) ---------------
 
     @router.get("/orders")
     async def orders(
-        admin: Admin = need["order.read"], limit: Limit = 50, offset: Offset = 0
+        admin: Admin = need["order.read"],
+        limit: Limit = 50,
+        offset: Offset = 0,
+        status: Annotated[str | None, Query(pattern=r"^[a-z_]{3,20}$")] = None,
+        review: bool = False,
+        q: Annotated[str | None, Query(max_length=120)] = None,
     ) -> list[dict[str, Any]]:
+        where: list[str] = ["true"]
+        params: list[Any] = []
+        if status:
+            where.append("o.status::text = %s")
+            params.append(status)
+        if review:
+            where.append("o.review_reason IS NOT NULL")
+        if q:
+            if q.isdigit():
+                where.append("o.order_no = %s")
+                params.append(int(q))
+            else:
+                where.append("c.email ILIKE %s")
+                params.append(f"%{q.strip()}%")
         async with ctx.db.connection() as conn:
             cur = await conn.execute(
-                "SELECT o.id::text, o.order_no, o.status::text, o.currency, o.total_minor, "
-                "o.payment_provider, o.created_at, o.paid_at, c.email AS customer_email "
-                "FROM orders o JOIN customers c ON c.id = o.customer_id "
+                "SELECT o.id::text, o.order_no, o.status::text, o.currency, "  # noqa: S608
+                "o.total_minor, o.payment_provider, o.review_reason, o.created_at, o.paid_at, "
+                "c.email AS customer_email, (SELECT p.name FROM order_items i "
+                "JOIN license_plans p ON p.code = i.plan_code WHERE i.order_id = o.id LIMIT 1) "
+                "AS plan_name FROM orders o JOIN customers c ON c.id = o.customer_id "
+                f"WHERE {' AND '.join(where)} "  # koşullar yalnızca sabit ifadeler
                 "ORDER BY o.created_at DESC LIMIT %s OFFSET %s",
-                (limit, offset),
+                (*params, limit, offset),
             )
             return await cur.fetchall()
 

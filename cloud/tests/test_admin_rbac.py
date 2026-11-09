@@ -72,6 +72,7 @@ def concrete(path: str) -> str:
         .replace("{customer_id}", str(uuid.uuid4()))
         .replace("{device_id}", str(uuid.uuid4()))
         .replace("{admin_id}", str(uuid.uuid4()))
+        .replace("{order_id}", str(uuid.uuid4()))
     )
 
 
@@ -85,11 +86,10 @@ def test_every_admin_route_declares_a_permission(app: Any) -> None:
     routes = admin_routes(app)
     assert len(routes) >= 30
     permissions = {perm for _, _, perm in routes}
-    # Sistemdeki her yetki en az bir uç noktada kullanılır (ölü yetki yok); payment.refund Aşama 17.
+    # Sistemdeki her yetki en az bir uç noktada kullanılır (ölü yetki yok).
     with psycopg.connect(app.state.settings.database_url.get_secret_value()) as conn:
         all_perms = {r[0] for r in conn.execute("SELECT code FROM admin_permissions").fetchall()}
-    assert all_perms - permissions == {"payment.refund"}
-    assert permissions <= all_perms
+    assert all_perms == permissions
 
 
 async def test_rbac_matrix_for_every_admin_route(app: Any, clock: Clock, dsn: str) -> None:

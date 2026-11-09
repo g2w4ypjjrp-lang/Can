@@ -47,6 +47,8 @@ class CloudSettings(BaseSettings):
     )
     # Canlı ödeme yalnızca bu dağıtım ayarı açıkken (G3 onayı) ve panelde açık onayla açılabilir.
     payments_live_allowed: bool = False
+    # Ödeme (Aşama 17): sağlayıcının tarayıcıyı geri gönderdiği ve bildirim yolladığı API adresi.
+    public_api_url: str = "http://localhost:8080"
 
     @property
     def licensing_configured(self) -> bool:
@@ -67,12 +69,12 @@ class CloudSettings(BaseSettings):
                 )
             admin_insecure = [
                 u
-                for u in [self.admin_public_url, *self.admin_origins]
+                for u in [self.admin_public_url, *self.admin_origins, self.public_api_url]
                 if not u.startswith("https://")
             ]
             if admin_insecure:
                 raise ValueError(
-                    "staging/production ortamında yönetici adresleri HTTPS olmalı: "
+                    "staging/production ortamında yönetici ve API adresleri HTTPS olmalı: "
                     + ", ".join(admin_insecure)
                 )
             if self.admin_secret_kek is None:

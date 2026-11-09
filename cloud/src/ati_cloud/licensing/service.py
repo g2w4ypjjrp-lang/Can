@@ -119,12 +119,17 @@ class Licensing:
         plan_code: str,
         customer_id: Any | None = None,
         batch_id: Any | None = None,
+        order_item: tuple[Any, int] | None = None,
     ) -> tuple[str, str]:
         """Yeni lisans üretir; anahtarın kendisi yalnızca burada, bir kez döner.
 
         Müşteri verilirse lisans doğrudan ``sold`` (elle satış / teslim), verilmezse satış
-        havuzuna (``ready_for_sale``) girer.
+        havuzuna (``ready_for_sale``) girer. ``order_item`` (kalem, birim) satın alma teslimidir;
+        ``UNIQUE (order_item_id, order_item_unit)`` aynı birime ikinci lisansı engeller.
         """
+        if order_item is not None and customer_id is None:
+            raise ValueError("Sipariş teslimi müşteri gerektirir")
+        item_id, unit = order_item if order_item is not None else (None, None)
         for _ in range(3):  # 2^75 uzayda çakışma pratikte yok; yine de tekil kısıt yakalar
             key = generate_key()
             digest = self.hasher.digest(key)
@@ -132,10 +137,10 @@ class Licensing:
                 async with conn.transaction():
                     cur = await conn.execute(
                         "INSERT INTO licenses (key_hash, key_ciphertext, key_hint, plan_code, "
-                        "batch_id, status, customer_id, sold_at, duration_days, device_limit, "
-                        "companion_device_limit) "
+                        "batch_id, status, customer_id, sold_at, order_item_id, order_item_unit, "
+                        "duration_days, device_limit, companion_device_limit) "
                         "SELECT %s, %s, %s, code, %s, %s, %s, "
-                        "CASE WHEN %s::uuid IS NULL THEN NULL ELSE now() END, "
+                        "CASE WHEN %s::uuid IS NULL THEN NULL ELSE now() END, %s, %s, "
                         "duration_days, device_limit, companion_device_limit "
                         "FROM license_plans WHERE code = %s RETURNING id::text",
                         (
@@ -146,11 +151,15 @@ class Licensing:
                             "sold" if customer_id else "ready_for_sale",
                             customer_id,
                             customer_id,
+                            item_id,
+                            unit,
                             plan_code,
                         ),
                     )
                     row = await cur.fetchone()
-            except pg_errors.UniqueViolation:
+            except pg_errors.UniqueViolation as exc:
+                if exc.diag.constraint_name != "licenses_key_hash_key":
+                    raise  # ör. aynı sipariş birimine ikinci lisans: tekrar denenmez
                 continue
             if row is None:
                 raise LicenseError(404, "unknown_plan", f"Paket bulunamadı: {plan_code}")

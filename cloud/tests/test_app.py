@@ -56,6 +56,7 @@ SITE = {
     "web_origins": ["https://canarslan.net.tr"],
     "admin_public_url": "https://admin.canarslan.net.tr",
     "admin_origins": ["https://admin.canarslan.net.tr"],
+    "public_api_url": "https://api.canarslan.net.tr",
     **LICENSE_SECRETS,
 }
 
@@ -83,11 +84,18 @@ def test_production_requires_admin_kek_and_https_admin() -> None:
     without_kek = {k: v for k, v in SITE.items() if k != "admin_secret_kek"}
     with pytest.raises(ValidationError, match="ATI_ADMIN_SECRET_KEK"):
         CloudSettings(environment="production", database_url=dsn, **without_kek)
-    with pytest.raises(ValidationError, match="yönetici adresleri"):
+    with pytest.raises(ValidationError, match="yönetici ve API adresleri"):
         CloudSettings(
             environment="production",
             database_url=dsn,
             **{**SITE, "admin_origins": ["http://admin.canarslan.net.tr"]},
+        )
+    # Ödeme sağlayıcısı tarayıcıyı ve bildirimleri API adresine gönderir: HTTPS zorunlu.
+    with pytest.raises(ValidationError, match=r"http://api\.canarslan"):
+        CloudSettings(
+            environment="production",
+            database_url=dsn,
+            **{**SITE, "public_api_url": "http://api.canarslan.net.tr"},
         )
 
 
@@ -110,6 +118,7 @@ def test_production_requires_https_site_and_origins() -> None:
             web_origins=["https://canarslan.net.tr", "http://canarslan.net.tr"],
             admin_public_url="https://admin.canarslan.net.tr",
             admin_origins=["https://admin.canarslan.net.tr"],
+            public_api_url="https://api.canarslan.net.tr",
             **LICENSE_SECRETS,
         )
 

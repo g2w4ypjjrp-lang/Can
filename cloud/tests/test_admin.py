@@ -533,29 +533,32 @@ async def test_live_payments_need_deployment_flag_phrase_and_keys(dsn: str, cloc
         http = root.http
         no_phrase = await http.put(
             "/admin/v1/settings/payment",
-            json={"provider": "stripe", "mode": "live", "code": clock.code(root.secret)},
+            json={"provider": "paytr", "mode": "live", "code": clock.code(root.secret)},
         )
         assert no_phrase.status_code == 400
         missing = await http.put(
             "/admin/v1/settings/payment",
             json={
-                "provider": "stripe",
+                "provider": "paytr",
                 "mode": "live",
                 "code": clock.code(root.secret),
                 "confirm": "CANLI ÖDEMEYİ AÇ",
-                "secrets": {"secret_key": "sk_live_xxxxxxxx"},
+                "secrets": {"merchant_key": "live-key-xxxxxxxx"},
             },
         )
-        assert missing.status_code == 409 and "webhook_secret" in missing.json()["detail"]
+        assert missing.status_code == 409 and "merchant_salt" in missing.json()["detail"]
         live = await http.put(
             "/admin/v1/settings/payment",
             json={
-                "provider": "stripe",
+                "provider": "paytr",
                 "mode": "live",
                 "code": clock.code(root.secret),
                 "confirm": "CANLI ÖDEMEYİ AÇ",
-                "public": {"publishable_key": "pk_live_x"},
-                "secrets": {"secret_key": "sk_live_xxxxxxxx", "webhook_secret": "whsec_xxxxxxxx"},
+                "public": {"merchant_id": "123456"},
+                "secrets": {
+                    "merchant_key": "live-key-xxxxxxxx",
+                    "merchant_salt": "live-salt-xxxxxxx",
+                },
             },
         )
         assert live.status_code == 200 and live.json()["mode"] == "live"

@@ -1,8 +1,8 @@
 """Bulut servisi uygulama iskeleti.
 
 Sağlık uç noktaları (Aşama 1), müşteri hesapları ve iletişim formu (Aşama 14), lisans
-(Aşama 15) ve yönetici API'si (Aşama 16, ``/admin/v1``: ayrı oturum, zorunlu 2FA, rol bazlı
-yetki). Ödeme Aşama 17'de eklenecektir.
+(Aşama 15), yönetici API'si (Aşama 16, ``/admin/v1``: ayrı oturum, zorunlu 2FA, rol bazlı
+yetki) ve ödeme/teslim (Aşama 17).
 """
 
 from __future__ import annotations
@@ -29,6 +29,8 @@ from ati_cloud.contact import create_contact_router
 from ati_cloud.db.migrate import load_migrations, pending
 from ati_cloud.licensing.api import create_license_router
 from ati_cloud.licensing.service import Licensing
+from ati_cloud.payments.api import create_admin_payments_router, create_payments_router
+from ati_cloud.payments.service import Payments
 
 
 def _check_database(dsn: str) -> list[int]:
@@ -83,6 +85,10 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
     app.include_router(create_admin_manage_router(admin))
     app.include_router(create_admin_users_router(admin))
     app.include_router(create_admin_settings_router(admin))
+    payments = Payments.build(cfg, db, app.state.licensing, admin.box)
+    app.state.payments = payments
+    app.include_router(create_payments_router(payments))
+    app.include_router(create_admin_payments_router(admin, payments))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
