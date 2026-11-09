@@ -42,6 +42,26 @@ export function licenseStatusLabel(status: string): string {
   return LICENSE_STATUS[status] ?? status;
 }
 
+const ORDER_STATUS: Record<string, string> = {
+  pending: "Ödeme bekleniyor",
+  paid: "Ödeme alındı, lisans hazırlanıyor",
+  fulfilled: "Tamamlandı",
+  failed: "Ödeme başarısız",
+  cancelled: "İptal edildi",
+  refunded: "İade edildi",
+  partially_refunded: "Kısmen iade edildi",
+};
+
+export function orderStatusLabel(status: string, underReview = false): string {
+  if (underReview && status === "paid") return "Ödeme inceleniyor";
+  return ORDER_STATUS[status] ?? status;
+}
+
+/** Sonuç sayfası bu durumlarda yoklamayı bırakır. */
+export function isOrderSettled(status: string, underReview = false): boolean {
+  return underReview || !["pending", "paid"].includes(status);
+}
+
 /**
  * Giriş sonrası dönüş adresi. Yalnızca site içi göreli yol kabul edilir; "//kotu.site",
  * "/\\kotu.site", "https://…" gibi açık yönlendirme denemeleri panele düşer.

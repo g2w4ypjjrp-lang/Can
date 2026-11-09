@@ -143,25 +143,35 @@ Anahtarlar **ihtiyaç anında** üretilir:
 parçalar halinde üretir (`COPY`) → yalnızca `license.bulk_generate` yetkili yönetici, 2FA
 ile, denetim kaydına yazılarak.
 
-### 1.4 Ödeme → lisans teslimi (idempotent akış, Aşama 17)
+### 1.4 Ödeme → lisans teslimi (idempotent akış, Aşama 17 — uygulandı)
 
 ```text
-1. Webhook gelir → imza doğrulanır (doğrulanamazsa signature_valid=false, işlenmez)
-2. INSERT payment_webhook_events ... ON CONFLICT DO NOTHING   → zaten varsa dur
+1. Bildirim gelir → imza doğrulanır. Doğrulanamazsa 'invalid:<gövde özeti>' kimliğiyle
+   signature_valid=false kaydedilir, denetime yazılır, hiçbir şey değişmez (400).
+   iyzico: tarayıcı dönüşündeki belirteçle sonuç imzalı sunucu isteğiyle sorgulanır.
+2. INSERT payment_webhook_events ... ON CONFLICT (provider, provider_event_id)
+     DO UPDATE SET attempts = attempts + 1 RETURNING processed_at   → işlenmişse dur
 3. BEGIN
+     SELECT ... FROM orders WHERE <sipariş> FOR UPDATE      → eşzamanlı aynı olay sıraya girer
+     teslim edilmişse dur
      payments upsert (provider_payment_id tekil; sipariş başına tek başarılı ödeme)
      orders.status = 'paid'
+     tutar/para birimi uyuşmazlığı, ikinci tahsilat, sağlayıcı uyuşmazlığı
+        → orders.review_reason, denetim kaydı, teslim YOK (yönetici incelemesi)
      her order_item için unit = 1..quantity:
-        lisans = havuzdan al (SKIP LOCKED) veya üret
+        lisans = havuzdan al (SKIP LOCKED; paket koşulları satış anında güncellenir) veya üret
         UPDATE licenses SET status='sold', customer_id, order_item_id, order_item_unit
           → UNIQUE(order_item_id, order_item_unit) ikinci teslimi imkânsız kılar
      email_outbox (dedupe_key = 'license-delivery:' || order_id) → yalnızca license_id
+     invoices (order_id tekil; kayıt no ATI<yıl><sipariş no>; e-Arşiv entegratörü G5)
      audit_log + orders.status = 'fulfilled'
-   COMMIT
-4. Webhook olayı processed_at = now()
+     payment_webhook_events.processed_at = now()
+   COMMIT   (hata olursa hiçbiri yazılmaz; last_error kaydedilir, sağlayıcı yeniden dener)
 ```
 
-İade: `refunds.license_action` = `cancel` (varsayılan) / `keep` / `manual_review`; lisans
+İade (`payment.refund` + güncel TOTP): bekleyen iade tutarı ayrılarak `refunds` satırı açılır
+(eşzamanlı iki iade fazla iade edemez) → sağlayıcıya iade isteği → `succeeded`/`failed`.
+`refunds.license_action` = `cancel` (varsayılan) / `keep` / `manual_review`; `cancel`'da lisans
 `cancelled` olur, aktif cihazlar bir sonraki kira yenilemesinde reddedilir.
 
 ## 2. Yerel şema (SQLite)

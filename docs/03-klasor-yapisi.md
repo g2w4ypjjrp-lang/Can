@@ -68,7 +68,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── auth/                      🔜 15 müşteri kimlik doğrulama
 │   │   ├── licensing/                 ✅ 15 anahtar üretimi, saklama, aktivasyon, kira imzalama, CLI
 │   │   ├── admin/                     ✅ 16 yönetici API'si: davet + TOTP, rol bazlı yetki, paket/lisans/müşteri/ayar yönetimi, CLI
-│   │   ├── payments/                  🔜 17 sağlayıcı soyutlaması, webhook, teslim
+│   │   ├── payments/                  ✅ 17 PayTR, iyzico, simülatör; bildirim, teslim, iade
 │   │   └── relay/                     🔜 13 iOS ↔ motor aktarma servisi
 │   └── tests/                         ✅ 53 test (gerçek PostgreSQL üzerinde)
 │

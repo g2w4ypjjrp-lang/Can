@@ -40,8 +40,8 @@ kısıtı).
 | 14 | Web sitesi | ✅ **Tamamlandı** (kod + testler; yasal metinler hukukçu onayı, yayın G5) |
 | 15 | Lisans sistemi | ✅ **Tamamlandı** (kod + testler; zorunluluk G5 ile) |
 | 16 | Admin paneli | ✅ **Tamamlandı** (kod + testler; yayın G5, canlı ödeme G3) |
-| 17 | Ödeme sistemi | ⏭️ Sıradaki |
-| 18 | Güvenlik ve performans testleri | |
+| 17 | Ödeme sistemi | ✅ **Tamamlandı** (kod + testler; sağlayıcı test ortamı denemesi test hesabı bilgileriyle, canlı ödeme G3) |
+| 18 | Güvenlik ve performans testleri | ⏭️ Sıradaki |
 
 ### Aşama 1 — Sistem mimarisi ✅
 
@@ -712,7 +712,7 @@ görebilir; hassas veri gönderilmez. Uçtan uca şifreleme Aşama 18'de.
 | Uçtan uca | ✅ 22 senaryo (Playwright, gerçek API + PostgreSQL + derlenmiş site): tüm herkese açık sayfalarda güvenlik başlıkları, CSP ihlali ve konsol hatası olmaması, tek `h1`, risk uyarısı, kazanç vaadi olmaması; kayıt → doğrulama bağlantısını yeniden isteme → doğrulama → giriş → panel → çıkış; panelde lisans; parola sıfırlama; açık yönlendirme denemesi; paketler ve kapalı ödeme; iletişim formu; çerezin `HttpOnly`/`SameSite=Strict` ve JavaScript'e kapalı olması |
 | Erişilebilirlik denetimi | ✅ axe (WCAG 2.1 AA + en iyi uygulamalar): 10 herkese açık sayfa açık ve koyu temada, mobil menü ve müşteri paneli — 0 ihlal |
 | Performans denetimi | ✅ Lighthouse (mobil öykünme): 10 sayfada performans 97-99, erişilebilirlik 100, en iyi uygulamalar 100, SEO 100 (CI eşikleri: 90 / 100 / 95 / 95; her sayfa 3 kez ölçülür, ortanca sonuç esas alınır) |
-| Yasal metinlerin hukukçu onayı | ⏸️ Kullanım koşulları, gizlilik/KVKK ve risk bildirimi taslak; şirket bilgileri ve hukukçu onayı bekliyor. Mesafeli satış sözleşmesi ve ön bilgilendirme formu Aşama 17'de |
+| Yasal metinlerin hukukçu onayı | ⏸️ Kullanım koşulları, gizlilik/KVKK ve risk bildirimi taslak; şirket bilgileri ve hukukçu onayı bekliyor. Mesafeli satış sözleşmesi, ön bilgilendirme formu ve cayma/iade metni Aşama 17'de taslak olarak eklendi |
 | Yayına alma (alan adı, TLS, e-posta gönderimi) | ⏸️ G5 |
 
 ### Aşama 15 — Lisans sistemi ✅ (kod ve testler; zorunluluk lisans sunucusu yayına alınınca, G5)
@@ -780,7 +780,8 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
   - **Paketler ve fiyatlar** (kullanıcı kararı): fiyat, para birimi, satışa açma. Fiyatsız paket
     açılamaz. Satıştaki paket sitede hemen görünür.
   - **Ödeme ayarları** (kullanıcı kararı):
-    - Sağlayıcı seçimi: iyzico, PayTR, Stripe, Paddle, Lemon Squeezy.
+    - Sağlayıcı seçimi: PayTR, iyzico (uyarlayıcıları Aşama 17'de yazıldı; uyarlayıcısı olmayan
+      sağlayıcılar listeden çıkarıldı). Geliştirme/test ortamında ayrıca test simülatörü.
     - Anahtarlar şifreli saklanır ve API'den geri okunamaz (yalnızca son 4 karakter).
     - **Canlı mod iki kilitli:**
       1. dağıtım ayarı `ATI_PAYMENTS_LIVE_ALLOWED` (G3 onayıyla açılır);
@@ -804,16 +805,67 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
 
 | Kriter | Sonuç |
 |---|---|
-| **Her uç nokta için yetki testi** | ✅ Uygulamadaki tüm `/admin/v1` rotaları otomatik taranır. Her rotada tam olarak bir yetki denetimi vardır (eklenip unutulan yetki testi düşürür). Her rota × 5 rol × rolsüz yönetici için: yetkisizse 403, yetkiliyse 401/403 dışı yanıt. Oturumsuz istek 401, yabancı köken 403. Tanımlı her yetkinin bir uç noktası vardır (`payment.refund` Aşama 17). |
+| **Her uç nokta için yetki testi** | ✅ Uygulamadaki tüm `/admin/v1` rotaları otomatik taranır. Her rotada tam olarak bir yetki denetimi vardır (eklenip unutulan yetki testi düşürür). Her rota × 5 rol × rolsüz yönetici için: yetkisizse 403, yetkiliyse 401/403 dışı yanıt. Oturumsuz istek 401, yabancı köken 403. Tanımlı her yetkinin bir uç noktası vardır (Aşama 17'den beri `payment.refund` dahil; ölü yetki yok). |
 | Giriş güvenliği | ✅ RFC 6238 TOTP test vektörleri; davet akışı; parola tek başına yetmez; kod tekrarı reddi; kurtarma kodu tek kullanımlık; 5 hatada kilit; tek tip hata yanıtı; müşteri oturumu yönetici API'sine erişemez; çıkışta oturum kapanır |
 | İşlevsel | ✅ 15 API testi (paket, lisans yaşam döngüsü, müşteri/cihaz, yönetici hesapları ve kendini kilitleme korumaları, ödeme anahtarlarının geri okunamaması, canlı ödeme kilitleri, şirket bilgileri, raporlar, mesajlar, denetim zinciri). Bulut toplamı 128 test. Testler iki gerçek hatayı yakaladı ve düzeltildi. |
 | Uçtan uca | ✅ 6 senaryo (gerçek API + PostgreSQL, CLI daveti, testte üretilen TOTP): davet ve kurtarma kodları → fiyat girilir → sitede görünür; lisans üret, dondur, tam anahtar (TOTP); mesaj durumu; denetim zinciri; yönetici daveti; ödeme ayarları (canlı mod kapalı); çıkış ve parola + TOTP ile giriş; destek rolü paket yönetimini göremez ve sunucu reddeder. axe 0 ihlal. Web toplamı 28 uçtan uca + 35 birim test. |
 | Canlı ödeme | ⏸️ G3: dağıtım ayarı kapalı; panelde "Canlı" seçeneği devre dışı ve açıklamalı |
 
-### Aşama 17 — Ödeme sistemi
-Sağlayıcı soyutlaması, webhook imza doğrulama, idempotent teslim (bkz. `04` §1.4), e-posta
-teslimi, fatura, iade politikası. **Kabul:** tekrar gönderilen/sahte webhook testleri;
-sağlayıcının test ortamında uçtan uca satın alma. **Canlı ödeme G3 onayıyla.**
+### Aşama 17 — Ödeme sistemi ✅ (kod ve testler; sağlayıcı test ortamı denemesi test hesabıyla, canlı ödeme G3)
+
+**Çıktılar (uygulandı):**
+
+- **Sağlayıcılar (`cloud/src/ati_cloud/payments/providers.py`).** Admin panelinden seçilir;
+  anahtarlar şifreli saklanır.
+  - **PayTR (iFrame API):** `paytr_token` ve bildirim `hash` alanı HMAC-SHA256; bildirime `OK`
+    yanıtı (PayTR yanıt alana kadar yeniden dener); iade API'si.
+  - **iyzico (Ödeme Formu):** `IYZWSv2` imzalı istekler. Tarayıcı dönüşündeki belirteçle sonuç,
+    imzalı sunucu isteğiyle sağlayıcıdan sorgulanır (tarayıcının söylediğine güvenilmez); iade.
+  - **Test simülatörü (yalnızca geliştirme/test):** HMAC imzalı bildirim; gerçek bildirim
+    hattından geçer. Üretimde uç noktaları 404, panelde seçilemez.
+- **Satın alma (`POST /v1/checkout`):** doğrulanmış e-posta, satıştaki paket, fatura bilgileri ve
+  üç onay (ön bilgilendirme formu, mesafeli satış sözleşmesi, anında teslim → cayma hakkı
+  istisnası). Onaylar metin sürümü, zaman ve IP ile siparişte saklanır.
+- **Teslim (docs/04 §1.4):** imza → `(sağlayıcı, olay kimliği)` tekil kayıt → sipariş satırı
+  kilidi → ödeme kaydı → lisans (havuzdan `FOR UPDATE SKIP LOCKED`, yoksa üret;
+  `UNIQUE(kalem, birim)`) → e-posta kuyruğu (yalnızca lisans kimliği; anahtar yok) → fatura kaydı
+  → `fulfilled`. Tamamı tek işlemdedir; yarıda kalırsa hiçbiri yazılmaz.
+- **İnceleme:** tutar/para birimi uyuşmazlığı, aynı siparişe ikinci tahsilat veya sağlayıcı
+  uyuşmazlığında otomatik teslim yapılmaz; sipariş yönetici incelemesine düşer.
+- **İade (yönetici, `payment.refund` + güncel TOTP):** tutar önce ayrılır (eşzamanlı iki iade
+  fazla iade edemez) → sağlayıcı → kayıt. Kısmi/tam iade; lisansı iptal et / koru / elle incele.
+- **Deneme paketi:** ücretsizse sağlayıcısız teslim; hesap başına bir kez.
+- **Mutabakat:** yönetici panelinde "Sağlayıcıdan sorgula" ve zamanlanmış
+  `ati-cloud-payments maintain` (tarayıcısı dönmeyen iyzico ödemelerinin sorgusu, eski bekleyen
+  siparişlerin iptali; geç gelen başarılı ödeme yine işlenir).
+- **Kilitler:** canlı ödeme = dağıtım ayarı `ATI_PAYMENTS_LIVE_ALLOWED` (G3) + paneldeki canlı mod.
+  Üretimde test modunda satış açılmaz (test kartıyla gerçek lisans alınamasın diye).
+- **Web:** satın alma formu (fatura bilgileri, onaylar, test modu uyarısı), test ödeme sayfası,
+  sonuç sayfası (bildirim gelene kadar yoklar), panelde "Siparişlerim", yönetim panelinde
+  "Siparişler" (süzme, ayrıntı, iade, sağlayıcı sorgusu).
+- **Yasal taslaklar:** ön bilgilendirme formu, mesafeli satış sözleşmesi, cayma/iptal/iade.
+  Satıcı bilgileri panelin "Şirket bilgileri"nden gelir. Hukukçu onayı bekliyor.
+- **Ek düzeltme (motor):** Windows CI'da görülen takılma, `TradingEngine.settle()` içindeki bir
+  hatadan kaynaklanıyordu. Python 3.12+ `asyncio.gather`, bitmiş görevlerde olay döngüsüne
+  dönmeden tamamlanır. Bu yüzden döngü sonsuza dek dönebiliyor ve olay döngüsünü (acil durdurma
+  dahil) kilitleyebiliyordu. `settle()` mutabakatta üretimde de çağrılır. Düzeltildi; gerileme
+  testi eklendi. Testlere ve CI işlerine zaman aşımı eklendi.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Sahte webhook | ✅ İmzasız, yanlış imzalı ve gövdesi değiştirilmiş bildirim 400 alır; sipariş, ödeme ve lisans değişmez; `signature_valid=false` olarak kaydedilir ve denetime yazılır. Yapılandırılmamış sağlayıcının bildirimi doğrulanamaz. |
+| Tekrar gönderilen webhook | ✅ Aynı olay 3 kez ve 6 kez eşzamanlı gönderildiğinde tek lisans, tek e-posta, tek fatura kaydı oluşur. |
+| Eşzamanlılık | ✅ 5 eşzamanlı teslimde 3 havuz lisansı ve 2 yeni lisans dağıtılır; hiçbir lisans iki kez satılmaz. |
+| Tutar uyuşmazlığı | ✅ Eksik tutar ve yanlış para birimi teslim edilmez, incelemeye düşer; ikinci tahsilat işaretlenir. |
+| İade | ✅ Yetkisiz rol 403 alır, TOTP'siz istek reddedilir. Kısmi iadede lisans korunur. Tam iadede lisans iptal olur ve aktör yönetici olarak kaydedilir. Fazla iade reddedilir. |
+| Sağlayıcı imzaları | ✅ PayTR token/bildirim hash'i ve iyzico `IYZWSv2` imzası bağımsız hesaplamayla doğrulanır. Ödeme oturumu, bildirim/dönüş ve sağlayıcı hataları sahte HTTP katmanıyla uçtan uca sınanır. |
+| Kilitler | ✅ Üretimde simülatör ve test modu kapalı; canlı mod G3 dağıtım ayarı olmadan açılmaz. |
+| Uçtan uca (web) | ✅ 4 senaryo (gerçek API + PostgreSQL): yasal metinlerde satıcı bilgisi; giriş → fatura bilgileri ve onaylar → test ödemesi → sonuç sayfası → panelde lisans ve sipariş; başarısız ödeme; yönetici siparişi bulur ve TOTP ile iade eder, lisans iptal olur. axe 0 ihlal. Web toplamı 35 uçtan uca + 39 birim test. |
+| Bulut testleri | ✅ 19 yeni test; bulut toplamı 147. |
+| Sağlayıcının test ortamında uçtan uca satın alma | ⏸️ PayTR test mağazası veya iyzico sandbox bilgileri girildiğinde yapılacak. Bilgiler admin panelinden test modunda girilir; kod değişikliği gerekmez. |
+| Canlı ödeme | ⏸️ G3 |
 
 ### Aşama 18 — Güvenlik ve performans testleri
 Tehdit modeli gözden geçirme, bağımlılık taraması (SCA), statik analiz, sızma testi,
@@ -828,8 +880,10 @@ felaket kurtarma (veritabanı yedeği geri yükleme) tatbikatı.
 2. **iOS cihaz politikası:** Şu an varsayılan: cihaz limiti (1/2/3) Windows motorları için,
    iOS eşlikçi cihazlar ayrıca 2 adet. iOS'un da limite sayılmasını isterseniz
    `companion_device_limit` ayarlanır.
-3. **Ödeme sağlayıcısı** (bkz. `02` — Paddle/Lemon Squeezy, Stripe, iyzico/PayTR). Sağlayıcı
-   anahtarları admin panelinden şifreli olarak girilecek; canlı moda geçiş G3 onayıyla.
+3. **Ödeme sağlayıcısı:** PayTR ve iyzico uyarlayıcıları hazır (Aşama 17). Seçim ve sağlayıcının
+   test hesabı bilgileri sizden; anahtarlar admin panelinden şifreli girilir. Canlı moda geçiş
+   G3 onayıyla. PayTR panelinde bildirim adresi:
+   `https://api.canarslan.net.tr/v1/payments/webhooks/paytr`.
 4. **Hedef pazarlar ve dil:** Türkçe + İngilizce önerilir.
 5. **Şirket ve faturalama:** e-Arşiv/e-Fatura entegratörü.
 6. **Bulut sağlayıcısı ve veri bölgesi** (KVKK kapsamında yurt dışına veri aktarımı

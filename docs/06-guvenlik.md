@@ -14,7 +14,7 @@
 | Müşteri parolaları | Veritabanı sızıntısı | Yalnızca Argon2id (şemada zorunlu) | ✅ şema / 🔜 Aşama 15 |
 | Lisans anahtarları | Sızıntı, tahmin, ikinci satış | HMAC-SHA256 + pepper ile arama özeti; KMS zarf şifreleme; 75 bit rastgelelik; hız sınırlama; durum makinesi ve tek seferlik tahsis veritabanında zorunlu; cihaza bağlı Ed25519 kira, imzalı motor istekleri, tekrar oynatma koruması | ✅ Aşama 15 |
 | Yönetici paneli | Hesap ele geçirme, yetki aşımı | Ayrı tablo/oturum; 2FA olmadan aktif olamaz (şema kısıtı); oturum ≤ 12 saat; RBAC (`admin_effective_permissions`); hassas işlemler (anahtar görme, iade) ayrı yetki; tüm işlemler denetim kaydında | ✅ şema / 🔜 Aşama 16 |
-| Ödemeler | Sahte veya tekrar gönderilen webhook | İmza doğrulanmadan işlenemez (şema kısıtı); olay kimliği tekil; sipariş başına tek başarılı ödeme; birim başına tek lisans | ✅ şema / 🔜 Aşama 17 |
+| Ödemeler | Sahte veya tekrar gönderilen webhook | İmza doğrulanmadan işlenemez (şema kısıtı); olay kimliği tekil; sipariş satırı kilitlenir; sipariş başına tek başarılı ödeme; birim başına tek lisans; tutar uyuşmazlığında teslim yok; iyzico sonucu imzalı sunucu isteğiyle sorgulanır; üretimde test modu ve simülatör kapalı | ✅ Aşama 17 |
 | iOS uzaktan komutları | Bulutun veya ağın ele geçirilmesi, tekrar oynatma | Secure Enclave anahtarıyla imza; motorda doğrulama; zaman damgası + sayaç; komut izin listesi; hassas komutlarda Face ID | 🔜 Aşama 13 |
 | Bulut veritabanı bağlantısı | Ortadaki adam saldırısı | Staging/production'da `sslmode=verify-full` zorunlu (ayar doğrulaması) | ✅ |
 | Tedarik zinciri | Kötü niyetli bağımlılık | Kilit dosyaları (`uv.lock`), CI'da `--locked`, bağımlılık taraması (Aşama 18), kod imzalama | ✅ kısmen |

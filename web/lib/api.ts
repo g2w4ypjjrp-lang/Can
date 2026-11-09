@@ -5,10 +5,18 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly code: string | null = null,
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+/** Lisans ve ödeme uç noktalarının makine okunur hata kodu: {"detail": {"code": "..."}}. */
+export function errorCode(body: unknown): string | null {
+  const detail = (body as { detail?: unknown } | null)?.detail;
+  const code = (detail as { code?: unknown } | null | undefined)?.code;
+  return typeof code === "string" ? code : null;
 }
 
 const FIELD_MESSAGES: Record<string, string> = {
@@ -18,6 +26,12 @@ const FIELD_MESSAGES: Record<string, string> = {
   message: "Mesajınız en az 10 karakter olmalı",
   topic: "Bir konu seçin",
   token: "Bağlantı geçersiz veya eksik",
+  full_name: "Ad soyad en az 3 karakter olmalı",
+  phone: "Geçerli bir telefon numarası girin (ör. +90 532 000 00 00)",
+  address: "Adres en az 10 karakter olmalı",
+  city: "Şehir girin",
+  country: "Ülke girin",
+  tax_id: "T.C. kimlik no 11, vergi no 10 haneli olmalı",
 };
 
 /** FastAPI hata gövdesini kullanıcıya gösterilecek Türkçe metne çevirir. */
@@ -58,7 +72,7 @@ export async function apiRequest<T>(
     throw new ApiError(0, NETWORK_ERROR);
   }
   const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw new ApiError(response.status, errorMessage(response.status, body));
+  if (!response.ok) throw new ApiError(response.status, errorMessage(response.status, body), errorCode(body));
   return body as T;
 }
 
@@ -98,4 +112,31 @@ export interface Me {
   locale: string;
   created_at: string;
   licenses: License[];
+}
+
+export interface PaymentStatus {
+  open: boolean;
+  test_mode: boolean;
+  provider: string | null;
+  legal_version: string;
+}
+
+export interface Order {
+  order_no: number;
+  status: string;
+  total_minor: number;
+  currency: string;
+  created_at: string;
+  paid_at: string | null;
+  fulfilled_at: string | null;
+  under_review: boolean;
+  checkout_url: string | null;
+  plan_name: string | null;
+  licenses: string[];
+  invoice_no: string | null;
+}
+
+export interface CheckoutResult {
+  order_no: number;
+  redirect_url: string;
 }

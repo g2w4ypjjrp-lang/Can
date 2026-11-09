@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiError, apiRequest, errorMessage, NETWORK_ERROR } from "@/lib/api";
+import { ApiError, apiRequest, errorCode, errorMessage, NETWORK_ERROR } from "@/lib/api";
 import { runtimeConfig } from "@/lib/config";
 import { findForbiddenClaims } from "@/lib/content-policy";
 import { buildCsp, newNonce, originOf } from "@/lib/csp";
 import { formatMinor, parseMoney, toCsv } from "@/lib/admin";
-import { durationLabel, formatDate, formatPrice, licenseStatusLabel, safeNext } from "@/lib/format";
+import { durationLabel, formatDate, formatPrice, isOrderSettled, licenseStatusLabel, orderStatusLabel, safeNext } from "@/lib/format";
 import { groupPlans, type Plan } from "@/lib/plans";
+import { SELLER_PLACEHOLDERS, withPlaceholders } from "@/lib/seller";
 
 describe("safeNext (açık yönlendirme koruması)", () => {
   it.each([
@@ -182,5 +183,34 @@ describe("yönetim paneli yardımcıları", () => {
   it("CSV kaçışlı yazılır", () => {
     expect(toCsv([{ id: "1", key: "ATI-AAAA" }, { id: "2", key: 'a,"b"' }])).toBe('id,key\n1,ATI-AAAA\n2,"a,""b"""');
     expect(toCsv([])).toBe("");
+  });
+});
+
+describe("ödeme yardımcıları", () => {
+  it("sipariş durumlarını Türkçe gösterir; incelemedeki ödeme ayrı belirtilir", () => {
+    expect(orderStatusLabel("fulfilled")).toBe("Tamamlandı");
+    expect(orderStatusLabel("paid")).toBe("Ödeme alındı, lisans hazırlanıyor");
+    expect(orderStatusLabel("paid", true)).toBe("Ödeme inceleniyor");
+    expect(orderStatusLabel("bilinmeyen")).toBe("bilinmeyen");
+  });
+
+  it("sonuç sayfası yalnızca bekleyen veya ödenmiş (teslim edilmemiş) siparişte yoklar", () => {
+    expect(isOrderSettled("pending")).toBe(false);
+    expect(isOrderSettled("paid")).toBe(false);
+    expect(isOrderSettled("paid", true)).toBe(true);
+    for (const status of ["fulfilled", "failed", "cancelled", "refunded"]) expect(isOrderSettled(status)).toBe(true);
+  });
+
+  it("API hata kodunu okur", () => {
+    expect(errorCode({ detail: { code: "trial_used", message: "x" } })).toBe("trial_used");
+    expect(errorCode({ detail: "metin" })).toBeNull();
+    expect(errorCode(null)).toBeNull();
+  });
+
+  it("satıcı bilgisinin boş alanları yer tutucuyla doldurulur", () => {
+    const seller = withPlaceholders({ legal_name: " Örnek Yazılım A.Ş. ", mersis: "" });
+    expect(seller.legal_name).toBe("Örnek Yazılım A.Ş.");
+    expect(seller.mersis).toBe("[MERSİS no]");
+    expect(withPlaceholders(null)).toEqual(SELLER_PLACEHOLDERS);
   });
 });

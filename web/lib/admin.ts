@@ -21,6 +21,7 @@ export const ADMIN_NAV: NavEntry[] = [
   { href: "/yonetim/paketler", label: "Paketler ve fiyatlar", permission: "plan.manage" },
   { href: "/yonetim/lisanslar", label: "Lisanslar", permission: "license.read" },
   { href: "/yonetim/musteriler", label: "Müşteriler", permission: "customer.read" },
+  { href: "/yonetim/siparisler", label: "Siparişler", permission: "order.read" },
   { href: "/yonetim/mesajlar", label: "Mesajlar", permission: "customer.read" },
   { href: "/yonetim/raporlar", label: "Raporlar", permission: "report.sales" },
   { href: "/yonetim/denetim", label: "Denetim kaydı", permission: "audit.read" },

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import pg from "pg";
 
-import { API_PORT, E2E_DB, LICENSE_ENV, WEB_ORIGIN, adminDsn, e2eDsn } from "./env.mjs";
+import { API_ORIGIN, API_PORT, E2E_DB, LICENSE_ENV, WEB_ORIGIN, adminDsn, e2eDsn } from "./env.mjs";
 
 const cloudDir = fileURLToPath(new URL("../../cloud", import.meta.url));
 
@@ -24,6 +24,7 @@ const env = {
   ATI_PUBLIC_WEB_URL: WEB_ORIGIN,
   ATI_ADMIN_ORIGINS: JSON.stringify([WEB_ORIGIN]),
   ATI_ADMIN_PUBLIC_URL: WEB_ORIGIN,
+  ATI_PUBLIC_API_URL: API_ORIGIN,
   ...LICENSE_ENV,
 };
 const migrate = spawnSync("uv", ["run", "--project", cloudDir, "ati-cloud-migrate"], { env, stdio: "inherit" });

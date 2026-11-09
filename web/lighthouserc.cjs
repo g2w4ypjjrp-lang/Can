@@ -12,6 +12,9 @@ const PAGES = [
   "/yasal/kullanim-kosullari",
   "/yasal/gizlilik",
   "/yasal/risk-bildirimi",
+  "/yasal/on-bilgilendirme",
+  "/yasal/mesafeli-satis-sozlesmesi",
+  "/yasal/iptal-ve-iade",
 ];
 const PORT = 3200;
 

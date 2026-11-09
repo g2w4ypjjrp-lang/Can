@@ -1,4 +1,4 @@
-// Paketler (API'den, fiyat girilmeden "yakında"), satın alma (ödeme kapalı) ve iletişim formu.
+// Paketler (API'den, fiyat girilmeden "yakında"), satın alma sayfası (oturumsuz) ve iletişim formu.
 import { expect, test } from "@playwright/test";
 
 import { sql } from "./db";
@@ -12,7 +12,7 @@ test("fiyat girilmemişse paketler yakında olarak gösterilir", async ({ page }
   await expect(page.getByRole("heading", { name: "Planlanan seçenekler" })).toBeVisible();
 });
 
-test("satıştaki paketler fiyatıyla listelenir, ödeme kapalıdır", async ({ page }) => {
+test("satıştaki paketler fiyatıyla listelenir; satın alma girişe yönlendirir", async ({ page }) => {
   await sql("UPDATE license_plans SET price_minor = $1, currency = 'TRY', is_active = true WHERE code = $2", [149900, "d30_1dev"]);
   await sql("UPDATE license_plans SET price_minor = $1, currency = 'TRY', is_active = true WHERE code = $2", [249900, "d30_2dev"]);
   try {
@@ -23,9 +23,15 @@ test("satıştaki paketler fiyatıyla listelenir, ödeme kapalıdır", async ({ 
     await expect(card).toContainText("₺2.499,00");
     await card.getByRole("link", { name: "30 Gün - 2 Cihaz paketini seç" }).click();
     await expect(page).toHaveURL(/\/satin-al\?paket=d30_2dev$/);
-    await expect(page.getByRole("heading", { name: "30 Gün - 2 Cihaz" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Ödemeye geç" })).toBeDisabled();
-    await expect(page.getByRole("status")).toContainText("Çevrim içi ödeme henüz açılmadı");
+    await expect(page.getByRole("heading", { name: "Sipariş özeti" })).toBeVisible();
+    await expect(page.getByText("30 Gün - 2 Cihaz")).toBeVisible();
+    await expect(page.getByTestId("order-total")).toHaveText("₺2.499,00");
+    // Oturum yoksa ödeme formu yerine giriş istenir; girişten sonra aynı pakete dönülür.
+    await expect(page.getByRole("status")).toContainText("Satın almak için giriş yapın");
+    await expect(page.getByRole("main").getByRole("link", { name: "Giriş yap" })).toHaveAttribute(
+      "href",
+      "/giris?sonra=%2Fsatin-al%3Fpaket%3Dd30_2dev",
+    );
 
     await page.goto("/satin-al?paket=yok_boyle");
     await expect(page.getByRole("status")).toContainText("Paket bulunamadı");

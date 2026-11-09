@@ -55,7 +55,16 @@ Diğer yöneticiler panelden (Yöneticiler) davet edilir. Gizli değer `ATI_ADMI
 
 Gizli değerler (veritabanı parolası, lisans imza anahtarı, ödeme sağlayıcı anahtarları) bu
 dosyalara **yazılmaz**; bulut sağlayıcısının gizli bilgi deposundan ortam değişkeni olarak verilir.
-Ödeme sağlayıcı anahtarları Aşama 17'de admin panelinden şifreli olarak da girilebilecek.
+Ödeme sağlayıcı anahtarları admin panelinden (Ayarlar → Ödeme) şifreli olarak girilir.
+
+**Ödeme (Aşama 17):**
+
+* PayTR mağaza panelinde bildirim adresi: `https://api.canarslan.net.tr/v1/payments/webhooks/paytr`.
+* iyzico ödeme formu dönüş adresi otomatik verilir: `https://api.canarslan.net.tr/v1/payments/return/iyzico`.
+* Zamanlanmış görev (ör. 10 dakikada bir): `ati-cloud-payments maintain` — tarayıcısı geri
+  dönmeyen iyzico ödemelerini sorgular, 24 saati geçen ödenmemiş siparişleri iptal eder.
+* Üretimde test modunda satış açılmaz; canlı ödeme `ATI_PAYMENTS_LIVE_ALLOWED=true` (G3) ve
+  panelde canlı mod gerektirir.
 
 ## Masaüstü ve iPhone
 

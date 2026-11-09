@@ -10,7 +10,10 @@ yönetim paneli `app/yonetim` altındadır (Aşama 16).
 | `/` | Ana sayfa |
 | `/ozellikler` | Özellikler ve sistem gereksinimleri |
 | `/paketler` | Satıştaki paketler (`/v1/plans`); fiyat girilmemişse "yakında" |
-| `/satin-al?paket=…` | Paket özeti; ödeme Aşama 17'ye (G3) kadar kapalı |
+| `/satin-al?paket=…` | Sipariş özeti, fatura bilgileri, yasal onaylar → sağlayıcının ödeme sayfası (Aşama 17) |
+| `/odeme/sonuc?siparis=…` | Ödeme sonucu; bildirim gelene kadar yoklar, lisansı gösterir |
+| `/odeme/test?oturum=…` | Test ödeme simülatörü (yalnızca geliştirme/test; üretimde API 404) |
+| `/yasal/on-bilgilendirme`, `/yasal/mesafeli-satis-sozlesmesi`, `/yasal/iptal-ve-iade` | Satış metinleri (taslak); satıcı bilgileri admin panelinden |
 | `/kayit`, `/giris`, `/eposta-dogrula`, `/sifremi-unuttum`, `/sifre-sifirla` | Hesap akışları |
 | `/panel` | Müşteri paneli: lisanslar, cihaz kullanımı, hesap |
 | `/sss`, `/iletisim` | Sık sorulan sorular, iletişim formu |

@@ -11,11 +11,15 @@ export const PUBLIC_PAGES = [
   "/yasal/kullanim-kosullari",
   "/yasal/gizlilik",
   "/yasal/risk-bildirimi",
+  "/yasal/on-bilgilendirme",
+  "/yasal/mesafeli-satis-sozlesmesi",
+  "/yasal/iptal-ve-iade",
 ] as const;
 
 export const PRIVATE_PATHS = [
   "/panel",
   "/satin-al",
+  "/odeme",
   "/eposta-dogrula",
   "/sifre-sifirla",
   "/sifremi-unuttum",

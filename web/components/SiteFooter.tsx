@@ -27,6 +27,8 @@ const GROUPS = [
       { href: "/yasal/kullanim-kosullari", label: "Kullanım koşulları" },
       { href: "/yasal/gizlilik", label: "Gizlilik ve KVKK" },
       { href: "/yasal/risk-bildirimi", label: "Risk bildirimi" },
+      { href: "/yasal/mesafeli-satis-sozlesmesi", label: "Mesafeli satış sözleşmesi" },
+      { href: "/yasal/iptal-ve-iade", label: "Cayma, iptal ve iade" },
       { href: "/iletisim", label: "İletişim" },
     ],
   },

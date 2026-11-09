@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useApi } from "@/components/ApiContext";
 import { LicenseCard } from "@/components/LicenseCard";
+import { OrdersSection } from "@/components/OrdersSection";
 import { Button, Card, Container, LinkButton, Notice } from "@/components/ui";
 import { ApiError, type Me } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -116,6 +117,8 @@ export function Panel() {
           kullanabilirsiniz.
         </p>
       </section>
+
+      <OrdersSection />
 
       <section aria-labelledby="hesap" className="mt-10">
         <h2 id="hesap" className="text-xl font-semibold text-fg">

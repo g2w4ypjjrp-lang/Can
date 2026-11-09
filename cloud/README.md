@@ -75,6 +75,30 @@ Ayarlar: `ATI_ADMIN_ORIGINS`, `ATI_ADMIN_PUBLIC_URL` (davet bağlantıları), `A
 (en fazla 12), `ATI_ADMIN_SECRET_KEK` (gizli; TOTP sırları ve ödeme anahtarları),
 `ATI_PAYMENTS_LIVE_ALLOWED` (canlı ödeme; yalnızca G3 onayıyla `true`).
 
+## Ödeme ve lisans teslimi (Aşama 17)
+
+Sağlayıcı (PayTR, iyzico; geliştirme/testte simülatör) ve anahtarları admin panelinden seçilir
+(Ayarlar → Ödeme). Akış ve güvenlik kuralları: [`docs/04`](../docs/04-veritabani-semasi.md) §1.4,
+`src/ati_cloud/payments/service.py`.
+
+| Uç nokta | Kimlik | Açıklama |
+|---|---|---|
+| `GET /v1/payments/status` | — | Satış açık mı, test modu mu |
+| `GET /v1/legal/seller` | — | Satıcı bilgileri (yasal metinler) |
+| `POST /v1/checkout` | Oturum + köken | Sipariş + sağlayıcının ödeme sayfası |
+| `GET /v1/me/orders`, `/v1/me/orders/{no}` | Oturum | Siparişler, sonuç sayfası |
+| `POST /v1/payments/webhooks/paytr` | İmza (HMAC) | PayTR bildirimi; yanıt `OK` |
+| `POST /v1/payments/return/iyzico` | Sağlayıcıya imzalı sorgu | Tarayıcı dönüşü → sonuç sayfası |
+| `GET/POST /v1/payments/simulator/*` | Oturum (yalnızca geliştirme/test) | Test ödemesi |
+| `GET /admin/v1/orders/{id}`, `POST …/refund`, `POST …/reconcile` | Yönetici (`order.read`, `payment.refund` + TOTP, `payment.read`) | Ayrıntı, iade, sağlayıcı sorgusu |
+
+```bash
+uv run ati-cloud-payments maintain --reconcile-minutes 10 --expire-hours 24   # zamanlanmış görev
+```
+
+Ayarlar: `ATI_PUBLIC_API_URL` (sağlayıcının dönüş/bildirim adresi; üretimde HTTPS). Üretimde test
+modunda satış açılmaz; canlı ödeme `ATI_PAYMENTS_LIVE_ALLOWED=true` (G3) ve panelde canlı mod ister.
+
 ## Geçişler (migrations)
 
 ```bash
