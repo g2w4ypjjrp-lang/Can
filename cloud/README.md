@@ -39,6 +39,28 @@ Ayarlar (`ATI_` önekli): `WEB_ORIGINS` (CSRF için izinli kökenler), `PUBLIC_W
 `SESSION_DAYS`, `TRUSTED_PROXIES` (`X-Forwarded-For`'a güvenilen vekiller). E-postalar
 `email_outbox` tablosuna yazılır; gönderim, e-posta sağlayıcısı seçilince (G5).
 
+## Lisans sistemi (Aşama 15)
+
+Protokol: [`../shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
+
+```bash
+uv run ati-cloud-license gen-secrets      # pepper, KEK ve kira imza anahtarı (gizli bilgi deposuna)
+uv run ati-cloud-license public-key       # motor sürümüne gömülecek kira açık anahtarı
+uv run ati-cloud-license issue --plan d30_1dev --email musteri@ornek.com   # elle satış
+```
+
+Gizli değerler: `ATI_LICENSE_PEPPER`, `ATI_LICENSE_KEK` (+ `ATI_LICENSE_KEK_ID`),
+`ATI_LEASE_SIGNING_KEY`; staging/üretimde zorunlu. Yoksa lisans uç noktaları 503 döner.
+
+| Uç nokta | Kimlik | Açıklama |
+|---|---|---|
+| `POST /v1/licenses/activate` / `renew` / `deactivate` | Cihazın imzalı isteği | Motor: etkinleştirme, kira yenileme, bilgisayarı bırakma |
+| `GET /v1/licenses/signing-key` | — | Kira imza açık anahtarı |
+| `POST /v1/me/licenses/{id}/devices/{device_id}/deactivate` | Oturum + köken | Müşteri: bilgisayar kaldırma (30 günde 3) |
+| `POST /v1/me/licenses/{id}/reveal` | Oturum + köken + parola | Müşteri: tam anahtar |
+
+Test vektörleri `scripts/gen_license_vectors.py` ile üretilir; motor bunlarla doğrular.
+
 ## Geçişler (migrations)
 
 ```bash

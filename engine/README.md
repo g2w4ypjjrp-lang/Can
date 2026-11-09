@@ -138,6 +138,36 @@ Eşik üstü fırsat sinyalleri riske göre boyutlanır ve sinyalin stop/hedef u
 fiyatına uygulanır. Hedef uzaksa yarısı 1R'de alınır. İşlem modu TESTNET olmalıdır.
 Sonuçlar garanti değildir; test ağı gerçek piyasayı birebir yansıtmaz.
 
+## Lisans (Aşama 15)
+
+Motor, lisansını buluttaki lisans servisinden aldığı **imzalı ve bu bilgisayara bağlı kira**
+ile doğrular ([protokol](../shared/protocol/license-v1.md)). Kira çevrim dışı doğrulanır.
+6 saatte bir yenilenir; sunucuya ulaşılamazsa 72 saate kadar geçerli kalır. Lisans anahtarı
+saklanmaz, yalnızca ipucu saklanır. Cihaz anahtarı şifreli kasadadır.
+
+```toml
+[license]
+server_url = "https://api.canarslan.net.tr"
+trusted_keys = { "<kid>" = "<base64 açık anahtar>" }  # ati-cloud-license public-key
+enforce = false   # true: geçerli kira yoksa yeni işlem açılmaz (açık pozisyonlar yönetilir)
+```
+
+Lisans sunucusu yayına alınana kadar (G5) bu sürümde güvenilir anahtar yoktur. Durum
+"yapılandırılmadı" görünür ve lisans işlemleri engellemez.
+
+Yerel API:
+
+- `GET /v1/license`
+- `POST /v1/license/activate` (`{"key": "ATI-…"}`)
+- `POST /v1/license/refresh`
+- `POST /v1/license/deactivate`
+
+Uçtan uca test (gerçek bulut API'si + PostgreSQL):
+
+```bash
+ATI_TEST_DATABASE_URL=postgresql://ati_test:ati_test@127.0.0.1:5432/ati_test uv run pytest tests/test_license_e2e.py
+```
+
 ## Sanal işlem yarışması (Aşama 9)
 
 Her strateji ve fırsat puanı, her piyasa için **ayrı bir sanal hesapla** (varsayılan 10.000

@@ -12,7 +12,7 @@
 | Yerel durum | Aynı hesapta iki motorun çift emir göndermesi | İşletim sistemi düzeyinde tek örnek kilidi | ✅ |
 | Denetim kaydı | Sessizce değiştirme/silme | Yerel: SQLite tetikleyicileri + SHA-256 hash zinciri (`verify-audit`). Bulut: tetikleyiciler + `audit_log_verify()`; süper kullanıcı tetikleyiciyi kapatsa bile değişiklik tespit edilir | ✅ |
 | Müşteri parolaları | Veritabanı sızıntısı | Yalnızca Argon2id (şemada zorunlu) | ✅ şema / 🔜 Aşama 15 |
-| Lisans anahtarları | Sızıntı, tahmin, ikinci satış | HMAC-SHA256 + pepper ile arama özeti; KMS zarf şifreleme; 75 bit rastgelelik; hız sınırlama; durum makinesi ve tek seferlik tahsis veritabanında zorunlu | ✅ şema / 🔜 Aşama 15 |
+| Lisans anahtarları | Sızıntı, tahmin, ikinci satış | HMAC-SHA256 + pepper ile arama özeti; KMS zarf şifreleme; 75 bit rastgelelik; hız sınırlama; durum makinesi ve tek seferlik tahsis veritabanında zorunlu; cihaza bağlı Ed25519 kira, imzalı motor istekleri, tekrar oynatma koruması | ✅ Aşama 15 |
 | Yönetici paneli | Hesap ele geçirme, yetki aşımı | Ayrı tablo/oturum; 2FA olmadan aktif olamaz (şema kısıtı); oturum ≤ 12 saat; RBAC (`admin_effective_permissions`); hassas işlemler (anahtar görme, iade) ayrı yetki; tüm işlemler denetim kaydında | ✅ şema / 🔜 Aşama 16 |
 | Ödemeler | Sahte veya tekrar gönderilen webhook | İmza doğrulanmadan işlenemez (şema kısıtı); olay kimliği tekil; sipariş başına tek başarılı ödeme; birim başına tek lisans | ✅ şema / 🔜 Aşama 17 |
 | iOS uzaktan komutları | Bulutun veya ağın ele geçirilmesi, tekrar oynatma | Secure Enclave anahtarıyla imza; motorda doğrulama; zaman damgası + sayaç; komut izin listesi; hassas komutlarda Face ID | 🔜 Aşama 13 |

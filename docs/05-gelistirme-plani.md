@@ -38,8 +38,8 @@ kısıtı).
 | 12 | Windows EXE | ✅ **Tamamlandı** (imzasız; G6 bekliyor) |
 | 13 | iOS uygulaması | ✅ **Tamamlandı** (kod + testler; cihaz/App Store G6, bulut G5) |
 | 14 | Web sitesi | ✅ **Tamamlandı** (kod + testler; yasal metinler hukukçu onayı, yayın G5) |
-| 15 | Lisans sistemi | ⏭️ Sıradaki |
-| 16 | Admin paneli | |
+| 15 | Lisans sistemi | ✅ **Tamamlandı** (kod + testler; zorunluluk G5 ile) |
+| 16 | Admin paneli | ⏭️ Sıradaki (paket/fiyat ve ödeme ayarları dâhil) |
 | 17 | Ödeme sistemi | |
 | 18 | Güvenlik ve performans testleri | |
 
@@ -715,10 +715,51 @@ görebilir; hassas veri gönderilmez. Uçtan uca şifreleme Aşama 18'de.
 | Yasal metinlerin hukukçu onayı | ⏸️ Kullanım koşulları, gizlilik/KVKK ve risk bildirimi taslak; şirket bilgileri ve hukukçu onayı bekliyor. Mesafeli satış sözleşmesi ve ön bilgilendirme formu Aşama 17'de |
 | Yayına alma (alan adı, TLS, e-posta gönderimi) | ⏸️ G5 |
 
-### Aşama 15 — Lisans sistemi
-Anahtar üretimi (CSPRNG + Luhn mod 32), HMAC özet + zarf şifreleme, aktivasyon, Ed25519
-lisans kirası, çevrim dışı tolerans, cihaz yönetimi. **Kabul:** kapasite ve çakışma testleri,
-hız sınırlama, sahte kira reddi.
+### Aşama 15 — Lisans sistemi ✅ (kod ve testler; zorunluluk lisans sunucusu yayına alınınca, G5)
+
+Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
+
+**Çıktılar (uygulandı):**
+
+- **Bulut (`cloud/src/ati_cloud/licensing/`).**
+  - Anahtar: `ATI-XXXX-XXXX-XXXX-XXXX`, 15 rastgele Crockford Base32 karakteri (2⁷⁵) ve Luhn
+    mod 32 kontrol karakteri.
+  - Saklama: `HMAC-SHA256(pepper)` arama özeti; AES-256-GCM zarf şifreleme (satıra bağlı AAD,
+    KEK sürümü). Anahtarın kendisi yalnızca üretimde bir kez döner.
+  - Uç noktalar: aktivasyon, yenileme, bırakma. Cihazın Ed25519 anahtarıyla imzalı istek;
+    saat farkı ve tekrar oynatma denetimi; imza sıradan önce denetlenir.
+  - Kira: Ed25519 imzalı, cihaza bağlı. 24 saat geçerli, 72 saat çevrim dışı tolerans, lisans
+    bitişine kırpılır.
+  - Süre ilk aktivasyonla başlar. Dondurma, iptal ve süre dolumunda yenileme reddedilir.
+  - Müşteri paneli API'si: bilgisayar listesi; 30 günde 3 bilgisayar kaldırma hakkı; tam
+    anahtarı parola ile gösterme (denetim kaydı, `no-store`).
+  - `ati-cloud-license`: gizli değer üretimi, açık anahtar, elle lisans üretimi.
+  - Üretimde lisans gizli değerleri zorunludur.
+- **Motor (`engine/src/ati_engine/licensing/`).**
+  - Cihaz parmak izi: makine kimliğinin özeti. Cihaz anahtarı şifreli kasada.
+  - Kira gömülü güvenilir anahtarla çevrim dışı doğrulanır. Başka bilgisayara kopyalanan
+    veritabanında geçersizdir.
+  - Sunucu saati farkı kullanılır; saat geri alma tespit edilir.
+  - Yenileme 6 saatte bir, sorun varken 5 dakikada bir.
+  - Zorunlu kipte `license.valid` hazırlık koşulu: geçerli kira yoksa **yeni işlem açılmaz**,
+    açık pozisyonlar yönetilir. Telefon sınırı kiradan alınır.
+  - Yerel API: `/v1/license`, `activate`, `refresh`, `deactivate`.
+- **Arayüzler.**
+  - Masaüstü: Ayarlar → Lisans (etkinleştirme, durum, bilgisayarı lisanstan çıkarma).
+  - Web paneli: lisans kartı, bilgisayar yönetimi, anahtarı gösterme.
+  - iPhone: imzalı özette lisans bilgisi; lisans geçersizse uyarı; telefon sınırı reddi.
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Kapasite | ✅ Anahtar uzayı 2⁷⁵; seri numarası dizisi 1…9.999.999.999 (Aşama 1 şema testleri). Tüm tek karakter yazım hataları kontrol karakteriyle yakalanır (testte 16×31 değişiklik). |
+| Çakışma | ✅ 2 bilgisayarlık lisansa 6 eşzamanlı aktivasyon: tam olarak 2 başarı (veritabanı kilidi + tetikleyici). Müşteri panelinden kaldırma hakkı eşzamanlı isteklerde aşılamaz (satır kilidi). |
+| Hız sınırlama | ✅ Aktivasyon IP başına dakikada 10 / saatte 30; yenileme dakikada 120; anahtar gösterme müşteri başına saatte 5 (testli) |
+| Sahte kira / istek reddi | ✅ Değiştirilmiş kira, tanınmayan anahtar, başka bilgisayarın kirası reddedilir (motor); başkasının anahtarıyla imzalı aktivasyon, eski istek, tekrar oynatılmış yenileme reddedilir; sahte imzalı istek sayacı ilerletemez (bulut) |
+| Uçtan uca | ✅ Gerçek bulut API'si (PostgreSQL) + gerçek motor: etkinleştirme, işlem kapısı, yenileme, sunucuda dondurma → ret ve kapı kapanır, ikinci bilgisayar sınırı, bilgisayar değişikliği; CI'da ayrı iş. Masaüstü arayüzü (9 senaryo) ve web paneli (22 senaryo, anahtarı gösterme ve bilgisayar kaldırma dâhil) uçtan uca testleri geçti. |
+| Testler | Bulut 105 (19 lisans), motor 494 (20 lisans + telefon sınırı + uçtan uca), Swift 25 |
+| Lisans zorunluluğu | ⏸️ Kapalı: lisans sunucusu (api.canarslan.net.tr) yayına alınınca (G5) üretim kira anahtarı motor sürümüne gömülür ve `license.enforce` açılır. Aksi hâlde kurulu motorlar işlem açamazdı. |
 
 ### Aşama 16 — Admin paneli
 Ayrı giriş + TOTP 2FA + kurtarma kodları; RBAC; lisans üret/toplu üret/iptal/dondur/uzat,

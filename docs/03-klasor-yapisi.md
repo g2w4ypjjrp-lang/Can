@@ -50,7 +50,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── paper/                     ✅ 9  sanal işlem yarışması: bağımsız hesaplar, terfi hattı
 │   │   ├── risk/                      ✅ 11 risk kapısı (imzalı tek kullanımlık onay), hesap izleyici,
 │   │   │                                    bağımsız risk bekçisi
-│   │   ├── licensing/                 🔜 15 lisans kirası doğrulama
+│   │   ├── licensing/                 ✅ 15 cihaz kimliği, kira doğrulama, yenileme, işlem kapısı
 │   │   └── remote/                    ✅ 13 eşleştirme, imzalı komut doğrulama, aktarma istemcisi
 │   ├── scripts/live_soak.py           ✅ Gerçek Binance verisiyle dayanıklılık testi (veri kaybı ölçümü)
 │   ├── packaging/                     ✅ 12 PyInstaller tanımı (tek klasör motor paketi)
@@ -66,7 +66,7 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 │   │   ├── db/migrations/0001_*.sql   ✅ Tam şema (lisans, cihaz, ödeme, admin, denetim)
 │   │   ├── db/migrations/0002_*.sql   ✅ Roller/yetkiler ve 16 lisans paketi
 │   │   ├── auth/                      🔜 15 müşteri kimlik doğrulama
-│   │   ├── licensing/                 🔜 15 anahtar üretimi, tahsis, aktivasyon, kira imzalama
+│   │   ├── licensing/                 ✅ 15 anahtar üretimi, saklama, aktivasyon, kira imzalama, CLI
 │   │   ├── admin/                     🔜 16 ayrı yönetici API'si (2FA + RBAC)
 │   │   ├── payments/                  🔜 17 sağlayıcı soyutlaması, webhook, teslim
 │   │   └── relay/                     🔜 13 iOS ↔ motor aktarma servisi

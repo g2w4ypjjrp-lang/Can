@@ -17,3 +17,10 @@ CI'da doğrular.
 WebSocket akışı: istemci `/v1/events` adresine bağlanır, 5 saniye içinde
 `{"type":"auth","token":"..."}` gönderir, `{"type":"auth_ok"}` alır; ardından her olay
 `type` alanıyla etiketlenmiş JSON nesnesi olarak gelir (`EngineEvent` birleşimi).
+
+## Diğer protokoller
+
+* [`remote-v1.md`](remote-v1.md) — iPhone ↔ aktarma servisi ↔ motor, uçtan uca imzalı komutlar (Aşama 13)
+* [`license-v1.md`](license-v1.md) — motor ↔ bulut lisans servisi, imzalı ve cihaza bağlı kira (Aşama 15)
+
+Test vektörleri [`test-vectors/`](test-vectors/) altındadır; diller arası uyumu doğrular.
