@@ -10,3 +10,11 @@ export const adminDsn =
 const url = new URL(adminDsn);
 url.pathname = `/${E2E_DB}`;
 export const e2eDsn = url.toString();
+
+// Yalnızca uçtan uca testler için sabit lisans gizli değerleri (üretimde gizli bilgi deposundan gelir).
+const b64 = (seed) => Buffer.alloc(32, seed).toString("base64");
+export const LICENSE_ENV = {
+  ATI_LICENSE_PEPPER: b64(1),
+  ATI_LICENSE_KEK: b64(2),
+  ATI_LEASE_SIGNING_KEY: b64(3),
+};

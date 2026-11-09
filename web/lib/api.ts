@@ -24,6 +24,9 @@ const FIELD_MESSAGES: Record<string, string> = {
 export function errorMessage(status: number, body: unknown): string {
   const detail = (body as { detail?: unknown } | null)?.detail;
   if (typeof detail === "string" && detail) return detail;
+  // Lisans uç noktaları: {"detail": {"code": "...", "message": "..."}}
+  const message = (detail as { message?: unknown } | null | undefined)?.message;
+  if (typeof message === "string" && message) return message;
   if (Array.isArray(detail) && detail.length > 0) {
     const loc = (detail[0] as { loc?: unknown[] }).loc;
     const field = Array.isArray(loc) ? String(loc[loc.length - 1]) : "";
@@ -64,6 +67,14 @@ export interface Message {
   message?: string;
 }
 
+export interface LicenseDevice {
+  id: string;
+  name: string;
+  platform: string;
+  activated_at: string;
+  last_seen_at: string;
+}
+
 export interface License {
   id: string;
   key_hint: string;
@@ -75,6 +86,8 @@ export interface License {
   activated_at: string | null;
   expires_at: string | null;
   active_devices: number;
+  devices: LicenseDevice[];
+  device_resets_left: number;
 }
 
 export interface Me {

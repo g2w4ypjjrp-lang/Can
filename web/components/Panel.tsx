@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useApi } from "@/components/ApiContext";
+import { LicenseCard } from "@/components/LicenseCard";
 import { Button, Card, Container, LinkButton, Notice } from "@/components/ui";
 import { ApiError, type Me } from "@/lib/api";
-import { formatDate, licenseStatusLabel } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 
 type State = { kind: "loading" } | { kind: "ready"; me: Me } | { kind: "error"; message: string };
 
@@ -16,25 +17,34 @@ export function Panel() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [leaving, setLeaving] = useState(false);
 
+  const load = useCallback(
+    (isCancelled: () => boolean = () => false) => {
+      api
+        .get<Me>("/v1/me")
+        .then((me) => {
+          if (!isCancelled()) setState({ kind: "ready", me });
+        })
+        .catch((err: unknown) => {
+          if (isCancelled()) return;
+          if (err instanceof ApiError && err.status === 401) {
+            router.replace("/giris?sonra=/panel");
+            return;
+          }
+          setState({ kind: "error", message: err instanceof Error ? err.message : "Bilgiler yüklenemedi" });
+        });
+    },
+    [api, router],
+  );
+
   useEffect(() => {
     let cancelled = false;
-    api
-      .get<Me>("/v1/me")
-      .then((me) => {
-        if (!cancelled) setState({ kind: "ready", me });
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) {
-          router.replace("/giris?sonra=/panel");
-          return;
-        }
-        setState({ kind: "error", message: err instanceof Error ? err.message : "Bilgiler yüklenemedi" });
-      });
+    load(() => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [api, router]);
+  }, [load]);
+
+  const reload = useCallback(() => load(), [load]);
 
   async function logout() {
     setLeaving(true);
@@ -94,38 +104,16 @@ export function Panel() {
             </LinkButton>
           </Card>
         ) : (
-          <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-surface">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <caption className="visually-hidden">Lisanslarınız</caption>
-              <thead className="bg-surface-2 text-fg">
-                <tr>
-                  <th scope="col" className="px-4 py-3 font-semibold">Paket</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Anahtar</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Durum</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Cihaz</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Bitiş</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {me.licenses.map((license) => (
-                  <tr key={license.id}>
-                    <td className="px-4 py-3 text-fg">{license.plan_name}</td>
-                    <td className="px-4 py-3 font-mono text-fg">{license.key_hint}</td>
-                    <td className="px-4 py-3 text-fg">{licenseStatusLabel(license.status)}</td>
-                    <td className="px-4 py-3 text-fg">
-                      {license.active_devices} / {license.device_limit}
-                    </td>
-                    <td className="px-4 py-3 text-fg">
-                      {license.expires_at ? formatDate(license.expires_at) : license.activated_at ? "Süresiz" : "Etkinleştirmeden başlar"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-4 space-y-4">
+            {me.licenses.map((license) => (
+              <LicenseCard key={license.id} license={license} onChanged={reload} />
+            ))}
           </div>
         )}
         <p className="mt-3 text-sm text-muted">
-          Güvenliğiniz için lisans anahtarının tamamı panelde gösterilmez; satın alma sonrasında e-postayla iletilir.
+          Lisans anahtarının tamamı yalnızca parolanızı yeniden girdiğinizde gösterilir. Bilgisayar değiştirirken eski
+          bilgisayarı buradan kaldırabilir veya uygulamada &quot;Bu bilgisayarı lisanstan çıkar&quot; seçeneğini
+          kullanabilirsiniz.
         </p>
       </section>
 

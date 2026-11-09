@@ -49,6 +49,9 @@ describe("API istemcisi", () => {
     expect(errorMessage(401, { detail: "E-posta veya parola hatalı" })).toBe("E-posta veya parola hatalı");
     expect(errorMessage(422, { detail: [{ loc: ["body", "email"], msg: "x" }] })).toBe("Geçerli bir e-posta adresi girin");
     expect(errorMessage(422, { detail: [{ loc: ["body", "baska"] }] })).toBe("Girdiğiniz bilgileri kontrol edin");
+    expect(errorMessage(409, { detail: { code: "device_limit", message: "Bilgisayar sınırına ulaşıldı" } })).toBe(
+      "Bilgisayar sınırına ulaşıldı",
+    );
     expect(errorMessage(429, null)).toContain("Çok fazla deneme");
     expect(errorMessage(503, null)).toContain("geçici");
   });

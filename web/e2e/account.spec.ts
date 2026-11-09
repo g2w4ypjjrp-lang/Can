@@ -68,17 +68,37 @@ test("kayıt, doğrulama, giriş, panel ve çıkış", async ({ page, context })
   await expect(page).toHaveURL(/\/giris\?sonra=%2Fpanel$|\/giris\?sonra=\/panel$/);
 });
 
-test("panel lisansları ve cihaz kullanımını gösterir, tam anahtarı göstermez", async ({ page }) => {
+test("panel: lisans, anahtarı parolayla gösterme ve bilgisayar kaldırma", async ({ page }) => {
   const email = uniqueEmail("lisans");
   await register(page, email);
   await verify(page, email);
-  await grantLicense(email);
+  const key = await grantLicense(email);
   await login(page, email);
   await expect(page).toHaveURL(/\/panel$/);
-  const row = page.getByRole("row", { name: /30 Gün - 1 Cihaz/ });
-  await expect(row).toContainText("ATI-****-****-****-E2E1");
-  await expect(row).toContainText("Etkinleştirilmeyi bekliyor");
-  await expect(row).toContainText("1 / 1");
+  const card = page.getByRole("article").filter({ hasText: "30 Gün - 1 Cihaz" });
+  await expect(card).toContainText("Etkinleştirilmeyi bekliyor");
+  await expect(card.getByTestId("device-usage")).toHaveText("1 / 1 bilgisayar");
+  // Tam anahtar varsayılan olarak gösterilmez; parola yeniden istenir.
+  await expect(card.getByTestId("license-key")).toHaveText(`ATI-****-****-****-${key.slice(-4)}`);
+  await card.getByRole("button", { name: "Anahtarı göster" }).click();
+  await card.getByLabel("Güvenliğiniz için parolanızı girin").fill("yanlis-parola-123");
+  await card.getByRole("button", { name: "Göster", exact: true }).click();
+  await expect(card.getByRole("alert").filter({ hasText: "Parola hatalı" })).toBeVisible();
+  await card.getByLabel("Güvenliğiniz için parolanızı girin").fill(PASSWORD);
+  await card.getByRole("button", { name: "Göster", exact: true }).click();
+  await expect(card.getByTestId("license-key")).toHaveText(key);
+  const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+  expect(axe.violations).toEqual([]);
+
+  // Bilgisayar kaldırma: onay ister, hakkı azaltır, yer açar.
+  await expect(card.getByTestId("resets-left")).toContainText("3");
+  await card.getByRole("button", { name: "Ofis PC bilgisayarını kaldır" }).click();
+  await card.getByRole("button", { name: "Evet, kaldır" }).click();
+  await expect(card.getByRole("status").filter({ hasText: "Bilgisayar kaldırıldı" })).toBeVisible();
+  await expect(page.getByRole("article").filter({ hasText: "30 Gün - 1 Cihaz" }).getByTestId("device-usage")).toHaveText(
+    "0 / 1 bilgisayar",
+  );
+  await expect(page.getByTestId("resets-left")).toContainText("2");
 });
 
 test("parola sıfırlama eski parolayı ve oturumları geçersiz kılar", async ({ page }) => {
