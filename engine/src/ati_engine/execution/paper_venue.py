@@ -300,7 +300,17 @@ class PaperVenue:
 
     async def _iter(self) -> AsyncIterator[VenueEvent]:
         while True:
-            yield await self._queue.get()
+            event = await self._queue.get()
+            try:
+                yield event
+            finally:
+                # Tüketici bir sonraki olayı istediğinde önceki olayın işlenmesi bitmiştir.
+                self._queue.task_done()
+
+    async def drained(self) -> None:
+        """Üretilen tüm olaylar tüketici tarafından işlenene kadar bekler (testler ve
+        deterministik geri test için; sabit uyku sürelerine bağlı kalmamak adına)."""
+        await self._queue.join()
 
     async def close(self) -> None:
         return None

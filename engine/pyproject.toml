@@ -34,6 +34,7 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "ta-lib>=0.6",
+    "pytest-timeout>=2.3",
 ]
 packaging = [
     "pyinstaller>=6.20",
@@ -51,6 +52,8 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
+# Takılan test CI'ı saatlerce bekletmesin: süre aşılınca yığın dökülür ve test başarısız olur.
+timeout = 180
 markers = [
     "slow: uzun süren testler (alt süreç başlatır)",
 ]

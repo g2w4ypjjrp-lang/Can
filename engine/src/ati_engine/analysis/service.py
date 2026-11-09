@@ -266,6 +266,8 @@ class AnalysisService:
         """Çalışan eğitimlerin bitmesini bekler (komut satırı kullanımı)."""
         while self._tasks:
             await asyncio.gather(*list(self._tasks), return_exceptions=True)
+            # Bitmiş görevler burada çıkarılır (bkz. TradingEngine.settle: gather dönmeyebilir).
+            self._tasks.difference_update([t for t in self._tasks if t.done()])
 
     async def close(self) -> None:
         for task in list(self._tasks):

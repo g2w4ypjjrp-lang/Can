@@ -96,11 +96,17 @@ async def make_engine(
 
 
 async def tick(engine: TradingEngine, venue: PaperVenue, symbol: str, price: str) -> None:
+    """Fiyatı uygular ve doğan tüm olaylar ile koruma işlemleri bitene kadar bekler. Sabit uyku
+    süreleri yavaş CI makinelerinde yetmeyebiliyordu (Windows'ta aralıklı hata)."""
     await venue.on_price(symbol, D(price))
-    await asyncio.sleep(0.02)  # olayların işlenmesi
-    await engine.settle()
-    await asyncio.sleep(0.02)
-    await engine.settle()
+    for _ in range(20):
+        await asyncio.wait_for(venue.drained(), timeout=10)
+        await engine.settle()
+        await asyncio.sleep(0)
+        if venue._queue.empty():
+            await asyncio.wait_for(venue.drained(), timeout=10)
+            return
+    raise AssertionError("Olaylar durulmadı")
 
 
 # --- İstemci kimliği ---------------------------------------------------------------------------
@@ -446,4 +452,24 @@ async def test_events_flow_into_order_manager(db: Database) -> None:
     await venue._queue.put(VenueEvent(kind="order", order=canceled))
     await asyncio.sleep(0.05)
     assert engine.orders.records[stop.client_id].status is OrderStatus.CANCELED
+    await engine.stop()
+
+
+async def test_settle_returns_when_background_task_already_finished(db: Database) -> None:
+    """Gerileme: görev bitmiş ama kümeden çıkaran geri çağrısı henüz çalışmamışken ``settle``
+    olay döngüsüne dönmeden sonsuza dek dönüyordu (Windows CI'da takılma)."""
+    engine, _venue = await make_engine(db)
+
+    async def quick() -> None:
+        return None
+
+    engine._spawn(quick())
+    task = next(iter(engine._background))
+    # Görevi bitir ama discard geri çağrısının çalışacağı döngü adımına geçme.
+    while not task.done():
+        await asyncio.sleep(0)
+    if task not in engine._background:  # geri çağrı yine de çalıştıysa pencereyi yeniden kur
+        engine._background.add(task)
+    await asyncio.wait_for(engine.settle(), timeout=5)
+    assert engine._background == set()
     await engine.stop()

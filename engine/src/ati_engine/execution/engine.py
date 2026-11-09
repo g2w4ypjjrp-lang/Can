@@ -132,6 +132,11 @@ class TradingEngine:
         """Arka plandaki koruma işlemlerinin (iptal/yeniden kurma) bitmesini bekler."""
         while self._background:
             await asyncio.gather(*list(self._background), return_exceptions=True)
+            # Görevlerin tamamı zaten bitmişse gather olay döngüsüne dönmeden tamamlanır
+            # (Python 3.12+) ve kümeden çıkaran ``discard`` geri çağrısı henüz çalışmamış
+            # olabilir; bitenler burada çıkarılır. Aksi halde döngü olay döngüsüne hiç dönmeden
+            # sonsuza dek döner ve motoru (acil durdurma dahil) kilitler.
+            self._background.difference_update([t for t in self._background if t.done()])
 
     # --- Yaşam döngüsü ------------------------------------------------------------------
 
