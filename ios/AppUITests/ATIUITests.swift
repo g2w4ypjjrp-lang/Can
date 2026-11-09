@@ -75,6 +75,12 @@ final class ATIUITests: XCTestCase {
         app.alerts.firstMatch.buttons["Başlat (Face ID)"].tap()
         XCTAssertTrue(state.waitForLabel("Açık", timeout: 10))
         app.tabBars.buttons["Ayarlar"].tap()
+        // Lisans özeti bilgisayardan (imzalı özet) gelir.
+        let plan = app.staticTexts["license-plan"]
+        app.scrollTo(plan)
+        XCTAssertTrue(plan.waitForExistence(timeout: 5))
+        XCTAssertEqual(plan.label, "30 Gün - 1 Cihaz")
+        XCTAssertEqual(app.staticTexts["license-state"].label, "Lisans etkin.")
         app.scrollTo(app.buttons["unpair"])
         app.buttons["unpair"].tap()
         app.alerts.firstMatch.buttons["Kaldır"].tap()

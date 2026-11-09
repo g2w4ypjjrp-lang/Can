@@ -57,6 +57,19 @@ public struct PaperSummary: Codable, Equatable, Sendable {
     public var net_pnl: Double
 }
 
+/// Bilgisayardaki lisansın özeti (Aşama 15). Anahtar veya cihaz kimliği içermez.
+public struct LicenseSummary: Codable, Equatable, Sendable {
+    public var state: String
+    public var valid: Bool
+    public var enforced: Bool
+    public var plan_name: String?
+    public var expires_at: Int64?
+    public var message: String
+
+    /// Lisans zorunlu ve geçersizse motor yeni işlem açmaz.
+    public var blocksTrading: Bool { enforced && !valid }
+}
+
 public struct SnapshotData: Codable, Equatable, Sendable {
     public var engine: EngineSummary
     public var risk: RiskSummary?
@@ -65,6 +78,7 @@ public struct SnapshotData: Codable, Equatable, Sendable {
     public var opportunities: [OpportunityItem]?
     public var whales: [WhaleItem]?
     public var paper: PaperSummary?
+    public var license: LicenseSummary?
 }
 
 public struct EventItem: Codable, Equatable, Sendable, Identifiable {
@@ -160,6 +174,8 @@ public enum ReasonText {
         case "unknown_device": return "Telefon eşleştirilmemiş"
         case "not_allowed": return "Bu işlem uzaktan yapılamaz"
         case "failed": return "Motor işlemi uygulayamadı"
+        case "device_limit":
+            return "Lisansınızın telefon sınırına ulaşıldı. Bilgisayarda kullanmadığınız bir telefonun eşleştirmesini kaldırın."
         default: return reason
         }
     }

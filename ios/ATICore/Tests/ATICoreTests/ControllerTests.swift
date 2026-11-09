@@ -110,6 +110,33 @@ final class ControllerTests: XCTestCase {
         XCTAssertEqual(rejections, ["replay"])
     }
 
+    func testLicenseSummaryArrivesAndUpdates() async throws {
+        let controller = makeController()
+        try await controller.pair(code: engine.pairingCode, deviceName: "Test iPhone")
+        try await eventually("lisans özeti") {
+            controller.session?.snapshot?.data.license?.plan_name == "30 Gün - 1 Cihaz"
+        }
+        XCTAssertEqual(controller.session?.snapshot?.data.license?.blocksTrading, false)
+        await engine.setLicense(valid: false, enforced: true)
+        try await eventually("lisans geçersiz") {
+            controller.session?.snapshot?.data.license?.blocksTrading == true
+        }
+        XCTAssertEqual(controller.session?.snapshot?.data.license?.message, "Lisans dondurulmuş.")
+    }
+
+    func testPairingRejectedWhenLicensePhoneLimitReached() async throws {
+        let controller = makeController()
+        await engine.setCompanionLimit(0)
+        do {
+            try await controller.pair(code: engine.pairingCode, deviceName: "Test iPhone")
+            XCTFail("reddedilmeliydi")
+        } catch let error as ControllerError {
+            XCTAssertEqual(error, .pairingRejected("device_limit"))
+            XCTAssertTrue(error.localizedDescription.contains("telefon sınırına"))
+        }
+        XCTAssertNil(controller.paired)
+    }
+
     func testPairingWithWrongCodeFails() async throws {
         let controller = makeController()
         let other = MockEngine()

@@ -27,6 +27,10 @@ public actor MockEngine: FrameTransport {
         PositionSummary(market: "usdm_futures", symbol: "ETHUSDT", quantity: "-2", entry_price: "3500", realized_pnl: "12.5", protected: true),
     ]
     public private(set) var rejections: [String] = []
+    /// Lisansın telefon sınırı (nil: sınırsız) ve özetteki lisans bilgisi (Aşama 15).
+    public private(set) var companionLimit: Int?
+    public private(set) var licenseValid = true
+    public private(set) var licenseEnforced = false
     public let relayURL = "ws://127.0.0.1:1"
     public nonisolated let engineID: String
     public nonisolated let pairingCode: String
@@ -137,6 +141,11 @@ public actor MockEngine: FrameTransport {
                 rejections.append("pair")
                 return
             }
+            if let limit = companionLimit, devices[device] == nil, devices.count >= limit {
+                // Kanıt ve imza doğrulandı: gerçek motor gibi nedeni telefona bildir.
+                sign(["type": "pair_result", "device_id": device, "ok": false, "reason": "device_limit"], to: device)
+                return
+            }
             devices[device] = (signing, guarded, payload["name"] as? String ?? "iPhone")
             sign(["type": "pair_result", "device_id": device, "ok": true, "reason": "ok", "name": "Test Bilgisayarı"], to: device)
             pushSnapshot(device)
@@ -215,6 +224,11 @@ public actor MockEngine: FrameTransport {
                 "opportunities": [["market": "usdm_futures", "symbol": "SOLUSDT", "direction": "long", "score": 78, "reward_risk": 2.1]],
                 "whales": [["ts_ms": MessageFactory.nowMs() - 60_000, "symbol": "BTCUSDT", "message": "BTCUSDT büyük alım: 2,5 Mn USDT"]],
                 "paper": ["accounts": 28, "open_positions": 5, "trades": 41, "net_pnl": 123.45],
+                "license": [
+                    "state": licenseValid ? "active" : "revoked", "valid": licenseValid, "enforced": licenseEnforced,
+                    "plan_name": "30 Gün - 1 Cihaz", "expires_at": MessageFactory.nowMs() + 30 * 86_400_000,
+                    "message": licenseValid ? "Lisans etkin." : "Lisans dondurulmuş.",
+                ] as [String: Any],
             ] as [String: Any],
             "events": [["ts_ms": MessageFactory.nowMs() - 30_000, "kind": "whale", "title": "Balina: BTCUSDT", "body": "Büyük alım"]],
         ]
@@ -222,6 +236,17 @@ public actor MockEngine: FrameTransport {
 
     private func pushSnapshot(_ device: String) {
         sign(snapshotPayload(device), to: device)
+    }
+
+    // MARK: Lisans benzetimi (testler)
+
+    public func setCompanionLimit(_ limit: Int?) { companionLimit = limit }
+
+    /// Lisans durumunu değiştirir ve eşleşmiş telefonlara yeni özet gönderir.
+    public func setLicense(valid: Bool, enforced: Bool) {
+        licenseValid = valid
+        licenseEnforced = enforced
+        for device in devices.keys { pushSnapshot(device) }
     }
 
     // MARK: Saldırı benzetimi (testler)

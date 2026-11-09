@@ -28,9 +28,20 @@ struct SettingsView: View {
                             .accessibilityIdentifier("inject-forgery")
                     }
                 }
-                Section("Hesap ve lisans") {
-                    Text("Lisans, bilgisayardaki masaüstü uygulamasında etkinleştirilir. Hesap girişi ve lisans durumu, bulut hesabı (Aşama 15) ile bu ekrana eklenecek.")
-                        .font(.footnote)
+                Section("Lisans") {
+                    if let license = controller.session?.snapshot?.data.license {
+                        ValueRow(title: "Paket", value: license.plan_name ?? "—", id: "license-plan")
+                        ValueRow(
+                            title: "Durum", value: license.message, id: "license-state",
+                            color: license.valid ? .primary : .orange)
+                        if let expires = license.expires_at {
+                            ValueRow(title: "Bitiş", value: Fmt.time(expires), id: "license-expiry")
+                        }
+                    } else {
+                        Text("Bilgisayardan lisans bilgisi bekleniyor…").foregroundStyle(.secondary)
+                    }
+                    Text("Lisans, bilgisayardaki masaüstü uygulamasında (Ayarlar → Lisans) etkinleştirilir; telefon bu bilgisayarın lisansıyla çalışır. Bilgisayarları canarslan.net.tr müşteri panelinden yönetebilirsiniz.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section {
                     Button("Eşleştirmeyi kaldır", role: .destructive) { confirmUnpair = true }

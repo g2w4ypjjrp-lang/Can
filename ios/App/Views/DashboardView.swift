@@ -21,6 +21,15 @@ struct DashboardView: View {
                     }
                 }
                 if let data = controller.session?.snapshot?.data {
+                    if let license = data.license, license.blocksTrading {
+                        Section {
+                            Label(license.message, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .accessibilityIdentifier("license-warning")
+                            Text("Lisans geçersizken yeni işlem açılmaz; açık pozisyonlar yönetilmeye devam eder.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
                     engineSection(data)
                     killSection(data.engine)
                     botSection(data.autotrade)

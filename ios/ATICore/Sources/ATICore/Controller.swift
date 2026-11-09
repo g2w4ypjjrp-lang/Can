@@ -60,7 +60,7 @@ public enum ControllerError: Error, Equatable, LocalizedError {
         switch self {
         case .notPaired: return "Telefon bir bilgisayarla eşleştirilmemiş"
         case .timeout(let what): return "Zaman aşımı: \(what)"
-        case .pairingRejected(let reason): return "Eşleştirme reddedildi: \(reason)"
+        case .pairingRejected(let reason): return "Eşleştirme reddedildi: \(ReasonText.text(reason))"
         }
     }
 }
