@@ -167,6 +167,20 @@ belirtilmelidir (hukukçu onayı).
 
 `yonet.ps1` engellenirse başına `powershell -ExecutionPolicy Bypass -File` ekleyin.
 
+## Otomatik güncelleme (bir kez kurulum)
+
+1. Sunucuda bir kez çalıştırın (güncelleme imza anahtarı üretilir, açık anahtar ekrana yazılır):
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 guncelleme-anahtari
+   ```
+
+2. Ekranda "AÇIK ANAHTAR" altında yazan satırı Claude'a gönderin (gizli değildir); uygulamaya
+   gömülür. Gizli anahtar `C:\ATI\ayarlar\guncelleme.key` dosyasıdır: `bulut.env` gibi yedekleyin.
+   Kaybolursa kurulu uygulamalar yeni sürüme kendiliğinden geçemez (elle kurulum gerekir).
+3. Açık anahtarın gömüldüğü sürümden itibaren her yeni sürüm, kurulu uygulamalarda "Yeni sürüm
+   hazır" şeridiyle görünür; müşteri onaylayınca imza doğrulanıp kurulur.
+
 ## İndirme dosyaları
 
 Kurulum dosyasını GitHub derler (ücretsiz kotadan ~25 dakika harcar, bu yüzden elle başlatılır):
@@ -177,7 +191,15 @@ Kurulum dosyasını GitHub derler (ücretsiz kotadan ~25 dakika harcar, bu yüzd
    SHA-256 yazar. Sayfanın altındaki **Artifacts** → `ati-windows-installer-unsigned` ZIP'ini
    indirip açın.
 
-Windows kurulum dosyasını `C:\ATI\indir\` klasörüne **sürüm numaralı, değişmeyen bir adla**
+Kolay yol (dosyayı indirme klasörüne koyar, imzalar ve forma girilecek değerleri yazar):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 surum-hazirla -Dosya "<indirdiğiniz ...-setup.exe>"
+```
+
+Çıkan değerleri (sürüm, adres, SHA-256, boyut, **güncelleme imzası**) yönetim paneli → Sürümler →
+Yeni sürüm formuna girip doğrulama kodunuzla yayınlayın. Elle yapmak isterseniz: Windows kurulum
+dosyasını `C:\ATI\indir\` klasörüne **sürüm numaralı, değişmeyen bir adla**
 koyun (ör. `AI-Trading-Intelligence_0.12.0_x64-setup.exe`). Adresi
 `https://indir.canarslan.net.tr/AI-Trading-Intelligence_0.12.0_x64-setup.exe` olur. Sonra yönetim
 paneli → **Sürümler**'de bu adres, SHA-256 ve boyutla taslak ekleyip doğrulama kodunuzla

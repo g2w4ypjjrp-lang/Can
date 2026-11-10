@@ -17,6 +17,7 @@ interface AdminRelease {
   min_os: string;
   notes: string;
   signed: boolean;
+  updatable: boolean;
   status: "draft" | "published" | "withdrawn";
   published_at: string | null;
   withdrawn_at: string | null;
@@ -56,6 +57,8 @@ function NewRelease({ onCreated }: { onCreated: () => void }) {
     if (platform === "windows") {
       body.sha256 = text(data, "sha256");
       body.size_bytes = size === "" ? null : Number(size);
+      const signature = text(data, "update_signature");
+      if (signature) body.update_signature = signature;
     }
     const ok = await action.run(() => api.post("/admin/v1/releases", body), "Taslak eklendi. Bilgileri kontrol edip yayınlayın.");
     if (ok) {
@@ -102,6 +105,13 @@ function NewRelease({ onCreated }: { onCreated: () => void }) {
           </label>
         </div>
       ) : null}
+      {platform === "windows" ? (
+        <label htmlFor="surum-imza" className="block text-sm font-medium text-fg">
+          Güncelleme imzası (isteğe bağlı; yonet.ps1 surum-hazirla çıktısı). Girilirse kurulu uygulamalar bu sürüme
+          kendiliğinden güncellenir.
+          <textarea id="surum-imza" name="update_signature" rows={2} maxLength={4000} spellCheck={false} className={`mt-1 ${inputClass} font-mono text-xs`} />
+        </label>
+      ) : null}
       <label htmlFor="surum-notlar" className="block text-sm font-medium text-fg">
         Sürüm notları (sitede gösterilir)
         <textarea id="surum-notlar" name="notes" rows={3} maxLength={4000} className={`mt-1 ${inputClass}`} />
@@ -144,6 +154,11 @@ function ReleaseRow({ release, onChanged }: { release: AdminRelease; onChanged: 
       <td className={cell}>
         <p className="font-medium">{label}</p>
         <p className="text-xs text-muted">{release.signed ? "Kod imzalı" : release.platform === "windows" ? "İmzasız" : ""}</p>
+        {release.platform === "windows" ? (
+          <p className="text-xs text-muted" data-testid="release-updatable">
+            {release.updatable ? "Otomatik güncelleme: açık" : "Otomatik güncelleme: yok (imza girilmedi)"}
+          </p>
+        ) : null}
       </td>
       <td className={cell}>
         <a href={release.download_url} className="break-all text-link underline underline-offset-2" rel="noopener">

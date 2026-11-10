@@ -17,6 +17,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { useEvents, usePoll } from "./api/hooks";
 import type { LicenseStatusResponse, StatusResponse } from "./api/types.gen";
 import { Badge } from "./components/ui";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { MODE_LABELS, STATE_LABELS } from "./lib/format";
 import { NavContext } from "./lib/nav";
 import { Analysis } from "./pages/Analysis";
@@ -179,6 +180,7 @@ export function App() {
             </button>
           </div>
         </header>
+        <UpdateBanner />
         <NavContext.Provider value={setPage}>{active.render()}</NavContext.Provider>
       </main>
       <div className="toasts" aria-live="polite">

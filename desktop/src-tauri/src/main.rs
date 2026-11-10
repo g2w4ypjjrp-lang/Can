@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use engine::{Connection, Engine, EngineInfo};
 use tauri::{Manager, RunEvent, State};
+use tauri_plugin_updater::UpdaterExt;
 
 struct AppEngine(Arc<Engine>);
 
@@ -57,8 +58,72 @@ fn engine_command(app: &tauri::AppHandle) -> Option<(PathBuf, Vec<String>)> {
     Some((dir.join("engine").join(name), Vec::new()))
 }
 
+/// Otomatik güncelleme yapılandırılmış mı? Açık anahtar (sunucudaki güncelleme anahtarının açık
+/// kısmı) sürüme gömülmeden güncelleme denetlenmez.
+fn updater_configured(app: &tauri::AppHandle) -> bool {
+    app.config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|u| u.get("pubkey"))
+        .and_then(|k| k.as_str())
+        .is_some_and(|k| !k.trim().is_empty())
+}
+
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    version: String,
+    notes: Option<String>,
+}
+
+#[tauri::command]
+async fn check_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
+    if !updater_configured(&app) {
+        return Ok(None);
+    }
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| format!("Güncelleme denetlenemedi: {e}"))?;
+    Ok(update.map(|u| UpdateInfo {
+        version: u.version.clone(),
+        notes: u.body.clone(),
+    }))
+}
+
+#[tauri::command]
+async fn install_update(
+    app: tauri::AppHandle,
+    engine: tauri::State<'_, AppEngine>,
+) -> Result<(), String> {
+    if !updater_configured(&app) {
+        return Err("Otomatik güncelleme bu sürümde yapılandırılmadı".into());
+    }
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| format!("Güncelleme denetlenemedi: {e}"))?
+        .ok_or_else(|| "Yeni sürüm yok".to_string())?;
+    // İmza indirme sırasında gömülü açık anahtarla doğrulanır; doğrulanmayan dosya kurulmaz.
+    let bytes = update
+        .download(|_, _| {}, || {})
+        .await
+        .map_err(|e| format!("Güncelleme indirilemedi ya da imzası doğrulanamadı: {e}"))?;
+    // Motor kapatılır (dosyaları kilitli kalmasın); borsadaki stop emirleri yerinde kalır.
+    engine.0.shutdown();
+    update
+        .install(bytes)
+        .map_err(|e| format!("Güncelleme kurulamadı: {e}"))?;
+    app.restart();
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // İkinci kez açılırsa mevcut pencere öne getirilir (ikinci motor başlatılmaz).
             if let Some(window) = app.get_webview_window("main") {
@@ -91,7 +156,9 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             engine_connection,
             engine_info,
-            engine_restart
+            engine_restart,
+            check_update,
+            install_update
         ])
         .build(tauri::generate_context!())
         .expect("uygulama başlatılamadı")

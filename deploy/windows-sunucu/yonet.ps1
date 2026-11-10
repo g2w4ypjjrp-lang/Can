@@ -10,12 +10,15 @@
   C:\ATI\betikler\yonet.ps1 yedek
   C:\ATI\betikler\yonet.ps1 eposta-ayarla
   C:\ATI\betikler\yonet.ps1 eposta-dene -Eposta siz@ornek.com
+  C:\ATI\betikler\yonet.ps1 guncelleme-anahtari
+  C:\ATI\betikler\yonet.ps1 surum-hazirla -Dosya "C:\Users\...\AI Trading Intelligence_1.0.0_x64-setup.exe"
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("durum", "baslat", "durdur", "yeniden", "davet", "loglar", "yedek", "eposta-ayarla", "eposta-dene")]
+    [ValidateSet("durum", "baslat", "durdur", "yeniden", "davet", "loglar", "yedek", "eposta-ayarla", "eposta-dene", "guncelleme-anahtari", "surum-hazirla")]
     [string]$Komut,
     [string]$Eposta,
+    [string]$Dosya,
     [string]$Ad,
     [string]$Rol = "super_admin",
     [string]$Servis = "api",
@@ -25,6 +28,19 @@ param(
 $ErrorActionPreference = "Stop"
 $Kok = "C:\ATI"
 $Surekli = @("API", "Aktarma", "Web", "Caddy", "Eposta")
+$NpmCmd = "C:\Program Files\nodejs\npm.cmd"
+$GuncellemeAnahtari = "$Kok\ayarlar\guncelleme.key"
+
+# Tauri imzalayıcısı (sürüm sabit). CI=true: parolasız anahtar, soru sorulmaz.
+function Tauri-Imzalayici([string[]]$Argumanlar) {
+    $env:CI = "true"
+    $eski = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & $NpmCmd exec --yes --package=@tauri-apps/cli@2.12.4 -- tauri signer @Argumanlar 2>&1 | Out-Host
+    $kod = $LASTEXITCODE
+    $ErrorActionPreference = $eski
+    if ($kod -ne 0) { throw "İmzalayıcı hata verdi (çıkış kodu $kod)" }
+}
 
 function Gorev-Var([string]$Ad) {
     return [bool](Get-ScheduledTask -TaskPath "\ATI\" -TaskName $Ad -ErrorAction SilentlyContinue)
@@ -175,6 +191,51 @@ switch ($Komut) {
         if ($LASTEXITCODE -ne 0) {
             Write-Host "Son kayıtlar için: yonet.ps1 loglar -Servis eposta"
         }
+    }
+    "guncelleme-anahtari" {
+        # Otomatik güncelleme imza anahtarı (bir kez). Gizli kısım bu sunucuda kalır; açık kısım
+        # uygulamaya gömülür. Kaybolursa kurulu uygulamalar yeni sürümlere kendiliğinden geçemez.
+        if (-not (Test-Path $GuncellemeAnahtari)) {
+            Write-Host "Güncelleme imza anahtarı oluşturuluyor (yalnızca bir kez)..."
+            Tauri-Imzalayici @("generate", "--ci", "-w", $GuncellemeAnahtari)
+        }
+        if (-not (Test-Path "$GuncellemeAnahtari.pub")) { throw "Açık anahtar bulunamadı: $GuncellemeAnahtari.pub" }
+        Write-Host ""
+        Write-Host "AÇIK ANAHTAR (gizli değildir; uygulamaya gömülmesi için Claude'a gönderin):" -ForegroundColor Green
+        Write-Host (Get-Content "$GuncellemeAnahtari.pub" -Raw).Trim()
+        Write-Host ""
+        Write-Host "GİZLİ ANAHTAR: $GuncellemeAnahtari - kimseyle paylaşmayın; bulut.env ile birlikte yedekleyin."
+    }
+    "surum-hazirla" {
+        # Kurulum dosyasını indirme klasörüne değişmeyen adla koyar, güncelleme imzasını atar ve
+        # yönetim paneli -> Sürümler formuna girilecek değerleri yazar.
+        if (-not $Dosya -or -not (Test-Path $Dosya)) { throw "Kullanım: yonet.ps1 surum-hazirla -Dosya <...-setup.exe yolu>" }
+        if (-not (Test-Path $GuncellemeAnahtari)) { throw "Önce: yonet.ps1 guncelleme-anahtari" }
+        $ad = Split-Path $Dosya -Leaf
+        if ($ad -notmatch '_(\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?)_x64-setup\.exe$') { throw "Dosya adı tanınmadı (beklenen: ..._1.2.3_x64-setup.exe): $ad" }
+        $surum = $Matches[1]
+        $hedefAd = "AI-Trading-Intelligence_$($surum)_x64-setup.exe"
+        $hedef = Join-Path "$Kok\indir" $hedefAd
+        $ozet = (Get-FileHash $Dosya -Algorithm SHA256).Hash.ToLower()
+        if (Test-Path $hedef) {
+            if ((Get-FileHash $hedef -Algorithm SHA256).Hash.ToLower() -ne $ozet) {
+                throw "$hedefAd zaten var ve farklı: yayınlanan dosya değiştirilemez, sürüm numarasını artırın."
+            }
+        } else {
+            Copy-Item $Dosya $hedef
+        }
+        Tauri-Imzalayici @("sign", "-f", $GuncellemeAnahtari, $hedef)
+        $imza = (Get-Content "$hedef.sig" -Raw).Trim()
+        Write-Host ""
+        Write-Host "Yönetim paneli -> Sürümler -> Yeni sürüm formuna girin:" -ForegroundColor Green
+        Write-Host "  Sürüm numarası : $surum"
+        Write-Host "  İndirme adresi : https://indir.canarslan.net.tr/$hedefAd"
+        Write-Host "  SHA-256        : $ozet"
+        Write-Host "  Boyut (bayt)   : $((Get-Item $hedef).Length)"
+        Write-Host "  Güncelleme imzası (tek satır, tamamını kopyalayın):"
+        Write-Host $imza
+        Set-Clipboard -Value $imza -ErrorAction SilentlyContinue
+        Write-Host "(İmza panoya da kopyalandı.)"
     }
     "yedek" {
         Start-ScheduledTask -TaskPath "\ATI\" -TaskName "Yedek"

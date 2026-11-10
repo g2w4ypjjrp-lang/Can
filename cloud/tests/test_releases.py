@@ -187,3 +187,66 @@ async def test_only_release_managers(app: Any, clock: Clock) -> None:
     support = await activate_admin(app, clock, "destek@example.com", ["support"])
     assert (await support.http.get("/admin/v1/releases")).status_code == 403
     assert (await support.http.post("/admin/v1/releases", json=windows())).status_code == 403
+
+
+def signature(text: str = "imza") -> str:
+    import base64
+
+    body = (
+        "untrusted comment: signature from tauri secret key\n"
+        f"RUQ{text}{'A' * 80}\ntrusted comment: timestamp:1794346520\tfile:setup.exe\n{'B' * 88}\n"
+    )
+    return base64.b64encode(body.encode()).decode()
+
+
+async def test_update_manifest_offers_only_newer_signed_windows_release(
+    root: AdminClient, clock: Clock, public: httpx.AsyncClient
+) -> None:
+    url = "/v1/updates/windows-x86_64/1.0.0"
+    assert (await public.get(url)).status_code == 204  # hiç sürüm yok
+
+    # İmzasız sürüm otomatik güncellemede sunulmaz (indirme sayfasında görünür).
+    unsigned = (await root.http.post("/admin/v1/releases", json=windows("1.1.0"))).json()
+    assert unsigned["updatable"] is False
+    assert (await publish(root, clock, unsigned["id"])).status_code == 200
+    assert (await public.get(url)).status_code == 204
+
+    bad = await root.http.post(
+        "/admin/v1/releases", json=windows("1.2.0", update_signature="imza değil")
+    )
+    assert bad.status_code == 422 and ".sig" in bad.text
+    signed = await root.http.post(
+        "/admin/v1/releases", json=windows("1.2.0", update_signature=signature())
+    )
+    assert signed.status_code == 201 and signed.json()["updatable"] is True
+    assert (await public.get(url)).status_code == 204  # taslak sunulmaz
+    assert (await publish(root, clock, signed.json()["id"])).status_code == 200
+
+    manifest = (await public.get(url)).json()
+    assert manifest["version"] == "1.2.0"
+    target = manifest["platforms"]["windows-x86_64"]
+    assert target["signature"] == signature()
+    assert target["url"] == EXE.replace("1.0.0", "1.2.0")
+    assert manifest["pub_date"].endswith("Z")
+    # Güncel ya da daha yeni sürümdeki uygulamaya, bozuk sürüm numarasına ve başka hedefe: 204.
+    for path in (
+        "/v1/updates/windows-x86_64/1.2.0",
+        "/v1/updates/windows-x86_64/1.3.0-beta",
+        "/v1/updates/windows-x86_64/abc",
+        "/v1/updates/darwin-aarch64/1.0.0",
+    ):
+        assert (await public.get(path)).status_code == 204, path
+    assert (await public.get("/v1/updates/windows-x86_64/1.2.0-beta")).status_code == 200
+
+    # Yayınlanan sürümün imzası değiştirilemez.
+    changed = await root.http.patch(
+        f"/admin/v1/releases/{signed.json()['id']}", json={"update_signature": signature("x")}
+    )
+    assert changed.status_code == 409
+
+
+def test_version_order() -> None:
+    from ati_cloud.releases import version_key
+
+    assert version_key("1.2.0") > version_key("1.2.0-beta") > version_key("1.1.9")
+    assert version_key("1.10.0") > version_key("1.9.9")

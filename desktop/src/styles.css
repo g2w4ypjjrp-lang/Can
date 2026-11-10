@@ -1230,3 +1230,26 @@ dl.kv dd {
 .gs-state.ok {
   color: var(--up);
 }
+
+/* --- Güncelleme şeridi ---------------------------------------------------------------------- */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(31, 209, 142, 0.35);
+  background: linear-gradient(90deg, rgba(31, 209, 142, 0.12), rgba(61, 109, 245, 0.08));
+}
+.update-banner > svg {
+  color: var(--up);
+  flex-shrink: 0;
+}
+.update-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}

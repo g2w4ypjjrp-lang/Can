@@ -15,6 +15,7 @@ Güvenlik:
 
 from __future__ import annotations
 
+import base64
 import re
 import uuid
 from typing import Any, Literal
@@ -35,7 +36,7 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 PUBLIC_FIELDS = "version, download_url, sha256, size_bytes, min_os, notes, signed, published_at"
 ADMIN_FIELDS = (
     "id, platform, version, download_url, sha256, size_bytes, min_os, notes, signed, status, "
-    "published_at, withdrawn_at, created_at, updated_at"
+    "published_at, withdrawn_at, created_at, updated_at, update_signature IS NOT NULL AS updatable"
 )
 # Sorgular sabit sütun listelerinden bir kez kurulur (kullanıcı girdisi içermez).
 SQL_LATEST = (
@@ -46,8 +47,14 @@ SQL_LIST = f"SELECT {ADMIN_FIELDS} FROM app_releases ORDER BY created_at DESC LI
 SQL_LOAD = f"SELECT {ADMIN_FIELDS} FROM app_releases WHERE id = %s FOR UPDATE"  # noqa: S608
 SQL_INSERT = (
     "INSERT INTO app_releases (platform, version, download_url, sha256, size_bytes, min_os, "  # noqa: S608
-    f"notes, signed, created_by) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+    f"notes, signed, update_signature, created_by) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
     f"RETURNING {ADMIN_FIELDS}"
+)
+# Otomatik güncelleme: imzalı, yayındaki en son Windows sürümü.
+SQL_UPDATE_CANDIDATE = (
+    "SELECT version, download_url, notes, published_at, update_signature FROM app_releases "
+    "WHERE platform = 'windows' AND status = 'published' AND update_signature IS NOT NULL "
+    "ORDER BY published_at DESC LIMIT 1"
 )
 SQL_PUBLISH = (
     "UPDATE app_releases SET status = 'published', published_at = now(), "  # noqa: S608
@@ -57,6 +64,27 @@ SQL_WITHDRAW = (
     "UPDATE app_releases SET status = 'withdrawn', withdrawn_at = now() "  # noqa: S608
     f"WHERE id = %s RETURNING {ADMIN_FIELDS}"
 )
+
+
+def _check_signature(value: str | None) -> str | None:
+    """Tauri güncelleme imzası: ``signer sign`` çıktısı (.sig dosyası), tek satır base64."""
+    if value is None or not value.strip():
+        return None
+    value = "".join(value.split())
+    try:
+        text = base64.b64decode(value, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        raise ValueError("Güncelleme imzası .sig dosyasının içeriği olmalı (base64)") from None
+    if not text.startswith("untrusted comment:") or "trusted comment:" not in text:
+        raise ValueError("Güncelleme imzası tanınmadı (.sig dosyasının içeriğini yapıştırın)")
+    return value
+
+
+def version_key(version: str) -> tuple[int, int, int, int]:
+    """Sürüm karşılaştırması: ön sürüm (1.2.0-beta) aynı numaralı sürümden küçüktür."""
+    core, _, pre = version.partition("-")
+    major, minor, patch = (int(x) for x in core.split("."))
+    return (major, minor, patch, 0 if pre else 1)
 
 
 def _normalize_sha(value: str | None) -> str | None:
@@ -75,8 +103,10 @@ class ReleaseFields(BaseModel):
     min_os: str = Field(default="", max_length=80)
     notes: str = Field(default="", max_length=4000)
     signed: bool = False
+    update_signature: str | None = Field(default=None, max_length=4000)
 
     _sha = field_validator("sha256")(_normalize_sha)
+    _sig = field_validator("update_signature")(_check_signature)
 
 
 class ReleaseCreate(ReleaseFields):
@@ -91,8 +121,10 @@ class ReleaseUpdate(BaseModel):
     min_os: str | None = Field(default=None, max_length=80)
     notes: str | None = Field(default=None, max_length=4000)
     signed: bool | None = None
+    update_signature: str | None = Field(default=None, max_length=4000)
 
     _sha = field_validator("sha256")(_normalize_sha)
+    _sig = field_validator("update_signature")(_check_signature)
 
 
 class PublishRequest(BaseModel):
@@ -161,6 +193,30 @@ def create_releases_router(db: Database) -> APIRouter:
         response.headers["Cache-Control"] = "public, max-age=60"
         return result
 
+    @router.get("/updates/{target}/{current_version}", response_model=None)
+    async def update_manifest(target: str, current_version: str) -> Response | dict[str, Any]:
+        """Masaüstü otomatik güncelleme (Tauri updater). Daha yeni imzalı sürüm yoksa 204."""
+        if target not in ("windows-x86_64", "windows-x86_64-nsis") or not re.fullmatch(
+            VERSION, current_version
+        ):
+            return Response(status_code=204, headers={"Cache-Control": "public, max-age=60"})
+        async with db.connection() as conn:
+            cur = await conn.execute(SQL_UPDATE_CANDIDATE)
+            row = await cur.fetchone()
+        if row is None or version_key(row["version"]) <= version_key(current_version):
+            return Response(status_code=204, headers={"Cache-Control": "public, max-age=60"})
+        return {
+            "version": row["version"],
+            "notes": row["notes"],
+            "pub_date": row["published_at"].isoformat().replace("+00:00", "Z"),
+            "platforms": {
+                "windows-x86_64": {
+                    "signature": row["update_signature"],
+                    "url": row["download_url"],
+                }
+            },
+        }
+
     return router
 
 
@@ -193,7 +249,8 @@ def create_admin_releases_router(ctx: AdminContext) -> APIRouter:
                     SQL_INSERT,
                     (
                         body.platform, body.version, body.download_url, body.sha256,
-                        body.size_bytes, body.min_os, body.notes, body.signed, admin.id,
+                        body.size_bytes, body.min_os, body.notes, body.signed,
+                        body.update_signature if body.platform == "windows" else None, admin.id,
                     ),
                 )  # fmt: skip
             except (pg_errors.UniqueViolation, pg_errors.CheckViolation) as exc:
@@ -221,7 +278,13 @@ def create_admin_releases_router(ctx: AdminContext) -> APIRouter:
         release = _release_id(release_id)
         async with ctx.db.connection() as conn, conn.transaction():
             before = await load(conn, release)
-            file_fields = {"download_url", "sha256", "size_bytes", "signed"} & changes.keys()
+            file_fields = {
+                "download_url",
+                "sha256",
+                "size_bytes",
+                "signed",
+                "update_signature",
+            } & changes.keys()
             if file_fields and before["status"] != "draft":
                 raise HTTPException(
                     status_code=409,
