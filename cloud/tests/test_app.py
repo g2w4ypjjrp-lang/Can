@@ -216,15 +216,21 @@ def test_database_processes_use_selector_event_loop() -> None:
     import asyncio
     import inspect
 
-    import uvicorn.config
+    import uvicorn
 
     from ati_cloud import loop, server
     from ati_cloud.admin import cli as admin_cli
     from ati_cloud.licensing import cli as license_cli
     from ati_cloud.payments import cli as payments_cli
 
-    factory = uvicorn.config.import_from_string(loop.UVICORN_LOOP)
-    assert factory(use_subprocess=False) is asyncio.SelectorEventLoop
+    # uvicorn'un ayarı gerçekte nasıl yorumladığı: dönen fabrika bir döngü örneği üretmeli.
+    factory = uvicorn.Config(app=None, loop=loop.UVICORN_LOOP).get_loop_factory()
+    assert factory is not None
+    created = factory()
+    try:
+        assert isinstance(created, asyncio.SelectorEventLoop)
+    finally:
+        created.close()
     assert "loop=UVICORN_LOOP" in inspect.getsource(server.main)
 
     async def answer() -> str:
@@ -234,3 +240,47 @@ def test_database_processes_use_selector_event_loop() -> None:
     for module in (admin_cli, license_cli, payments_cli):
         source = inspect.getsource(module)
         assert "asyncio.run(" not in source and "return run(" in source, module.__name__
+
+
+def test_api_entry_point_serves_database_requests(dsn: str) -> None:
+    """Gerçek giriş noktası (ati-cloud-api → uvicorn) açılır ve veritabanından okur. Bir önceki
+    sürümde yanlış döngü ayarı sunucunun hiç açılmamasına yol açtı; birim test bunu yakalamadı."""
+    import os
+    import socket
+    import subprocess
+    import sys
+    import time
+
+    import httpx
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    env = {**os.environ, "ATI_DATABASE_URL": dsn, "ATI_ENVIRONMENT": "test"}
+    proc = subprocess.Popen(  # noqa: S603 - sabit komut, test süreci
+        [sys.executable, "-c", f"from ati_cloud.server import main; main(['--port', '{port}'])"],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    try:
+        deadline = time.monotonic() + 30
+        status = None
+        while time.monotonic() < deadline and proc.poll() is None:
+            try:
+                status = httpx.get(f"http://127.0.0.1:{port}/v1/plans", timeout=2).status_code
+                break
+            except httpx.TransportError:
+                time.sleep(0.2)
+        if status is None:
+            proc.kill()
+            output = proc.communicate()[0].decode(errors="replace")
+            raise AssertionError(f"API açılmadı:\n{output[-3000:]}")
+        assert status == 200
+        assert httpx.get(f"http://127.0.0.1:{port}/v1/releases", timeout=5).status_code == 200
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()

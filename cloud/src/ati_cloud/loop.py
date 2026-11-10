@@ -9,16 +9,12 @@ varsayılan budur; davranış değişmez.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Coroutine
+from collections.abc import Coroutine
 from typing import Any
 
-
-def selector_loop_factory(use_subprocess: bool = False) -> Callable[[], asyncio.AbstractEventLoop]:
-    """uvicorn ``loop`` ayarı için (``"ati_cloud.loop:selector_loop_factory"``)."""
-    return asyncio.SelectorEventLoop
-
-
-UVICORN_LOOP = "ati_cloud.loop:selector_loop_factory"
+# uvicorn ``loop`` ayarı: yerleşik adlar dışındaki değer "modül:nesne" olarak içe aktarılır ve
+# döngü oluşturmak için argümansız çağrılır; SelectorEventLoop sınıfı doğrudan bu işi görür.
+UVICORN_LOOP = "asyncio:SelectorEventLoop"
 
 
 def run[T](coro: Coroutine[Any, Any, T]) -> T:
