@@ -20,9 +20,12 @@ from typing import Any, Literal
 
 from ati_engine.remote.crypto import (
     EngineIdentity,
+    KeyAgreement,
     SignatureError,
+    b64,
     b64url,
     key_id,
+    load_p256,
     open_signed,
     proof_matches,
     unb64,
@@ -57,6 +60,11 @@ class Device:
     last_seq: int
     last_seen: int | None
     revoked_at: int | None
+    kx_key: bytes | None = None  # P-256 anahtar anlaşması (uçtan uca şifreleme, Aşama 18)
+
+    @property
+    def encrypted(self) -> bool:
+        return self.kx_key is not None
 
     def public_dict(self) -> dict[str, Any]:
         return {
@@ -66,6 +74,7 @@ class Device:
             "paired_at": self.paired_at,
             "last_seen": self.last_seen,
             "revoked": self.revoked_at is not None,
+            "encrypted": self.encrypted,
         }
 
 
@@ -85,10 +94,12 @@ class DeviceRegistry:
             last_seq=row[6],
             last_seen=row[7],
             revoked_at=row[8],
+            kx_key=unb64(row[9]) if row[9] else None,
         )
 
     _COLUMNS = (
-        "id, name, signing_key, guarded_key, protection, paired_at, last_seq, last_seen, revoked_at"
+        "id, name, signing_key, guarded_key, protection, paired_at, last_seq, last_seen, "
+        "revoked_at, kx_key"
     )
 
     async def get(self, device_id: str) -> Device | None:
@@ -105,18 +116,27 @@ class DeviceRegistry:
         return [self._row(r) for r in rows]
 
     async def add(
-        self, *, device_id: str, name: str, signing: str, guarded: str, protection: str, now: int
+        self,
+        *,
+        device_id: str,
+        name: str,
+        signing: str,
+        guarded: str,
+        protection: str,
+        kx: str,
+        now: int,
     ) -> None:
         await self.db.execute(
             """
-            INSERT INTO remote_devices (id, name, signing_key, guarded_key, protection, paired_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO remote_devices (id, name, signing_key, guarded_key, protection, paired_at,
+                                        kx_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (id) DO UPDATE SET
                 name = excluded.name, guarded_key = excluded.guarded_key,
                 protection = excluded.protection, paired_at = excluded.paired_at,
-                revoked_at = NULL
+                kx_key = excluded.kx_key, revoked_at = NULL
             """,
-            (device_id, name, signing, guarded, protection, now),
+            (device_id, name, signing, guarded, protection, now, kx),
         )
 
     async def revoke(self, device_id: str, now: int) -> bool:
@@ -160,6 +180,7 @@ class PairingManager:
         self,
         identity: EngineIdentity,
         registry: DeviceRegistry,
+        kx: KeyAgreement,
         *,
         ttl_s: float = 300.0,
         max_skew_s: float = 120.0,
@@ -168,6 +189,7 @@ class PairingManager:
     ) -> None:
         self.identity = identity
         self.registry = registry
+        self.kx = kx
         # Lisans zorunluyken kiradaki telefon sınırı (Aşama 15); None: sınır yok.
         self.companion_limit = companion_limit
         self.ttl_s = ttl_s
@@ -176,16 +198,18 @@ class PairingManager:
         self.session: PairingSession | None = None
 
     def start(self, relay_url: str) -> tuple[str, int]:
-        """Yeni tek kullanımlık eşleştirme oturumu; QR içeriği (JSON metni) ve süre sonu."""
-        import base64
+        """Yeni tek kullanımlık eşleştirme oturumu; QR içeriği (JSON metni) ve süre sonu.
 
+        QR bant dışıdır (kamera): motorun imza anahtarı ve şifreleme anahtarı (``engine_kx``)
+        telefona aktarma servisine güvenmeden ulaşır."""
         session = PairingSession(secrets.token_bytes(32), self._clock() + int(self.ttl_s * 1000))
         self.session = session
         payload = {
             "v": 1,
             "relay": relay_url,
             "engine_id": self.identity.engine_id,
-            "engine_key": base64.b64encode(self.identity.public_raw).decode("ascii"),
+            "engine_key": b64(self.identity.public_raw),
+            "engine_kx": b64(self.kx.public_x963),
             "pair": b64url(session.secret),
             "exp": session.expires_ms,
         }
@@ -213,10 +237,9 @@ class PairingManager:
             signing = unb64(str(p.get("signing_key", "")))
             guarded = unb64(str(p.get("guarded_key", "")))
             verify_p256(signing, signature, data)
-            # Korumalı anahtarın da geçerli bir P-256 noktası olduğunu doğrula.
-            from ati_engine.remote.crypto import load_p256
-
+            # Korumalı ve şifreleme anahtarları da geçerli P-256 noktaları olmalı.
             load_p256(guarded)
+            load_p256(unb64(str(p.get("kx_key", ""))))
         except SignatureError as exc:
             raise PairingError("bad_signature") from exc
         device_id = key_id(signing)
@@ -241,6 +264,7 @@ class PairingManager:
             signing=str(p["signing_key"]),
             guarded=str(p["guarded_key"]),
             protection=str(protection),
+            kx=str(p["kx_key"]),
             now=self._clock(),
         )
         device = await self.registry.get(device_id)

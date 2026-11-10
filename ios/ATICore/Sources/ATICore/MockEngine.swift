@@ -1,6 +1,6 @@
 // Aktarma servisi + motor benzetimi (bellek içi). Arayüz testleri ve birim testleri için:
 // gerçek motorla aynı kuralları uygular (HMAC kanıtı, P-256 imza, sıra numarası, izin listesi,
-// korumalı anahtar) ve yanıtlarını Ed25519 ile imzalar.
+// korumalı anahtar), yanıtlarını Ed25519 ile imzalar ve tüm mesajları uçtan uca şifreler.
 
 import Foundation
 
@@ -11,7 +11,7 @@ import Foundation
 #endif
 
 public actor MockEngine: FrameTransport {
-    private var devices: [String: (signing: Data, guarded: Data, name: String)] = [:]
+    private var devices: [String: (signing: Data, guarded: Data, kx: Data, name: String)] = [:]
     private var lastSeq: [String: Int64] = [:]
     private var helloDevice: String?
     private var otherChannel = false
@@ -37,6 +37,7 @@ public actor MockEngine: FrameTransport {
 
     public init() {
         let key = Curve25519.Signing.PrivateKey()
+        let kx = P256.KeyAgreement.PrivateKey()
         let secret = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
         // Not: actor içindeki anahtarlar init'te ayarlanır; aşağıdaki değerler onlarla aynıdır.
         let publicRaw = key.publicKey.rawRepresentation
@@ -46,14 +47,17 @@ public actor MockEngine: FrameTransport {
             .replacingOccurrences(of: "=", with: "")
         pairingCode = (try? Codec.json([
             "v": 1, "relay": "ws://127.0.0.1:1", "engine_id": Codec.keyID(publicRaw),
-            "engine_key": Codec.base64(publicRaw), "pair": pair,
+            "engine_key": Codec.base64(publicRaw),
+            "engine_kx": Codec.base64(kx.publicKey.x963Representation), "pair": pair,
             "exp": MessageFactory.nowMs() + 600_000,
         ])) ?? ""
         _engineKey = key
+        _engineKX = (try? SoftwareAgreement(rawRepresentation: kx.rawRepresentation)) ?? SoftwareAgreement()
         _pairSecret = secret
     }
 
     private let _engineKey: Curve25519.Signing.PrivateKey
+    private let _engineKX: SoftwareAgreement
     private let _pairSecret: Data
 
     // MARK: FrameTransport
@@ -69,7 +73,16 @@ public actor MockEngine: FrameTransport {
         case "to_engine":
             if otherChannel {
                 push(#"{"type":"engine_offline"}"#)
-            } else if let msg = frame["msg"] as? [String: Any], let device = helloDevice {
+            } else if let device = helloDevice {
+                // Gerçek motor gibi: önce zarf (bu cihaz ve yön için) çözülür; çözülemezse yanıt yok.
+                guard
+                    let msg = try? Envelope.openJSON(
+                        frame["msg"], with: _engineKX,
+                        info: Envelope.info(.deviceToEngine, engineID: engineID, deviceID: device))
+                else {
+                    rejections.append("undecryptable")
+                    return
+                }
                 fromDevice(msg, device: device)
             }
         default: break
@@ -136,6 +149,8 @@ public actor MockEngine: FrameTransport {
             guard proof == expected, let signingText = payload["signing_key"] as? String,
                 let signing = try? Codec.unbase64(signingText),
                 let guardedText = payload["guarded_key"] as? String, let guarded = try? Codec.unbase64(guardedText),
+                let kxText = payload["kx_key"] as? String, let kx = try? Codec.unbase64(kxText),
+                (try? P256.KeyAgreement.PublicKey(x963Representation: kx)) != nil,
                 Codec.keyID(signing) == device, P256Verifier.isValid(publicX963: signing, signature: sig, data: data)
             else {
                 rejections.append("pair")
@@ -143,10 +158,10 @@ public actor MockEngine: FrameTransport {
             }
             if let limit = companionLimit, devices[device] == nil, devices.count >= limit {
                 // Kanıt ve imza doğrulandı: gerçek motor gibi nedeni telefona bildir.
-                sign(["type": "pair_result", "device_id": device, "ok": false, "reason": "device_limit"], to: device)
+                sign(["type": "pair_result", "device_id": device, "ok": false, "reason": "device_limit"], to: device, kx: kx)
                 return
             }
-            devices[device] = (signing, guarded, payload["name"] as? String ?? "iPhone")
+            devices[device] = (signing, guarded, kx, payload["name"] as? String ?? "iPhone")
             sign(["type": "pair_result", "device_id": device, "ok": true, "reason": "ok", "name": "Test Bilgisayarı"], to: device)
             pushSnapshot(device)
             return
@@ -203,9 +218,15 @@ public actor MockEngine: FrameTransport {
         return ["p": text, "s": Codec.base64(sig)]
     }
 
-    private func sign(_ payload: [String: Any], to device: String) {
-        guard device == helloDevice else { return }
-        push((try? Codec.json(["type": "from_engine", "msg": signed(payload)])) ?? "{}")
+    private func sign(_ payload: [String: Any], to device: String, kx: Data? = nil) {
+        guard device == helloDevice, let recipient = kx ?? devices[device]?.kx else { return }
+        push(sealedFrame(signed(payload), device: device, recipient: recipient))
+    }
+
+    private func sealedFrame(_ msg: [String: Any], device: String, recipient: Data, infoDevice: String? = nil) -> String {
+        let info = Envelope.info(.engineToDevice, engineID: engineID, deviceID: infoDevice ?? device)
+        guard let envelope = try? Envelope.sealJSON(msg, to: recipient, info: info) else { return "{}" }
+        return (try? Codec.json(["type": "from_engine", "msg": envelope])) ?? "{}"
     }
 
     private func snapshotPayload(_ device: String, kill: Bool? = nil) -> [String: Any] {
@@ -251,12 +272,25 @@ public actor MockEngine: FrameTransport {
 
     // MARK: Saldırı benzetimi (testler)
 
-    /// Ele geçirilmiş aktarma servisinin sahte özet göndermesi: imza geçersiz.
+    /// Ele geçirilmiş aktarma servisinin sahte özet göndermesi. Telefonun şifreleme anahtarı açık
+    /// olduğundan saldırgan zarfı üretebilir; ama imza geçersizdir.
     public func injectForgedSnapshot() {
-        guard let device = helloDevice else { return }
+        guard let device = helloDevice, let recipient = devices[device]?.kx else { return }
         var msg = signed(snapshotPayload(device, kill: false))
         msg["p"] = (msg["p"] as? String ?? "").replacingOccurrences(of: "\"kill_switch\":false", with: "\"kill_switch\":true")
-        push((try? Codec.json(["type": "from_engine", "msg": msg])) ?? "{}")
+        push(sealedFrame(msg, device: device, recipient: recipient))
+    }
+
+    /// Şifresiz (eski biçim) imzalı özet: telefon kabul etmez.
+    public func injectPlaintextSnapshot() {
+        guard let device = helloDevice else { return }
+        push((try? Codec.json(["type": "from_engine", "msg": signed(snapshotPayload(device, kill: true))])) ?? "{}")
+    }
+
+    /// Başka bir cihaza şifrelenmiş geçerli özeti bu telefona yönlendirme: çözülemez.
+    public func injectMisroutedSnapshot() {
+        guard let device = helloDevice, let recipient = devices[device]?.kx else { return }
+        push(sealedFrame(signed(snapshotPayload(device, kill: true)), device: device, recipient: recipient, infoDevice: "baska-cihaz"))
     }
 
     /// Aktarma servisinin yakaladığı mesajı tekrar göndermesi (geçerli imzalı ama eski özet).

@@ -662,8 +662,9 @@ paketi sıkıştırılmıştır.
 | Uygulama kapalıyken anlık bildirim (APNs) | ⏸️ Bulut dağıtımı (G5) ve Apple hesabı (G6) |
 | Hesap girişi ve lisans ekranı | ⏸️ Bulut hesap/lisans API'si Aşama 15'te; iOS ekranı o zaman bağlanacak |
 
-**Gizlilik notu:** mesajlar imzalıdır ama şifreli değildir. Aktarma servisi özet içeriğini
-görebilir; hassas veri gönderilmez. Uçtan uca şifreleme Aşama 18'de.
+**Gizlilik notu:** Aşama 18'den beri mesajlar uçtan uca imzalı **ve şifrelidir** (P-256 ECDH +
+HKDF-SHA256 + AES-256-GCM; telefonun anahtarı Secure Enclave'de). Aktarma servisi yalnızca
+yönlendirme kimliklerini görür.
 
 ### Aşama 14 — Web sitesi ✅ (kod ve testler; yasal metinler hukukçu onayı, dağıtım G5, ödeme G3 bekliyor)
 

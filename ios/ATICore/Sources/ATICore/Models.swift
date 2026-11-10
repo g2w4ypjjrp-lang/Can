@@ -121,13 +121,18 @@ public enum EngineMessage: Equatable, Sendable {
 }
 
 extension EngineVerifier {
-    /// Aktarma servisinden gelen çerçeveyi çözer: imza doğrulanmadan hiçbir içerik kullanılmaz.
-    public func message(from frame: String) throws -> EngineMessage? {
+    /// Aktarma servisinden gelen çerçeveyi çözer: önce şifreli zarf (bu cihaza ve yöne ait
+    /// olmalı), sonra imza. İmza doğrulanmadan hiçbir içerik kullanılmaz.
+    public func message(from frame: String, agreement: DeviceAgreement, deviceID: String) throws -> EngineMessage? {
         guard let object = try JSONSerialization.jsonObject(with: Data(frame.utf8)) as? [String: Any],
-            object["type"] as? String == "from_engine",
-            let msg = object["msg"] as? [String: Any],
-            let p = msg["p"] as? String, let s = msg["s"] as? String
+            object["type"] as? String == "from_engine"
         else { return nil }
+        let msg = try Envelope.openJSON(
+            object["msg"], with: agreement,
+            info: Envelope.info(.engineToDevice, engineID: engineID, deviceID: deviceID))
+        guard let p = msg["p"] as? String, let s = msg["s"] as? String else {
+            throw ProtocolError.malformed("msg")
+        }
         let signed = SignedMessage(p: p, s: s)
         let payload = try open(signed)
         let data = Data(p.utf8)

@@ -1,9 +1,9 @@
 # Uzaktan kontrol protokolü v1 (iOS ↔ aktarma ↔ motor)
 
 Telefon ile kullanıcının bilgisayarındaki işlem motoru arasında, buluttaki **aktarma
-servisi** üzerinden çalışan, uçtan uca imzalı mesajlaşma. Aktarma servisi mesajları yalnızca
-yönlendirir. Hiçbir anahtarı yoktur. **Bulut ele geçirilse bile komut üretemez, motorun
-durumunu sahteleyemez, cihaz eşleştiremez.**
+servisi** üzerinden çalışan, uçtan uca **imzalı ve şifreli** mesajlaşma. Aktarma servisi
+mesajları yalnızca yönlendirir. Hiçbir anahtarı yoktur. **Bulut ele geçirilse bile komut
+üretemez, motorun durumunu sahteleyemez, cihaz eşleştiremez ve mesaj içeriklerini okuyamaz.**
 
 ## Anahtarlar
 
@@ -12,6 +12,8 @@ durumunu sahteleyemez, cihaz eşleştiremez.**
 | Motor | Ed25519 | Motorun şifreli kasası (DPAPI) | `engine_id` = SHA-256(açık anahtar ham 32 bayt) ilk 16 bayt, onaltılık |
 | Telefon | P-256 **imza anahtarı** (`signing`) | Secure Enclave (yoksa Anahtar Zinciri) | `device_id` = SHA-256(X9.63 açık anahtar) ilk 16 bayt, onaltılık |
 | Telefon | P-256 **korumalı anahtar** (`guarded`) | Secure Enclave, **Face ID/Touch ID zorunlu** erişim denetimiyle | — |
+| Motor | P-256 **şifreleme anahtarı** (`engine_kx`) | Motorun şifreli kasası | — |
+| Telefon | P-256 **şifreleme anahtarı** (`kx_key`) | Secure Enclave (anahtar anlaşması) | — |
 
 Korumalı anahtar Face ID olmadan imza atamaz. Bu yüzden korumalı anahtarla imzalanmış komut,
 telefonda biyometrik doğrulama yapıldığının kanıtıdır. Kanıt telefonun beyanına değil,
@@ -36,15 +38,20 @@ Alıcı önce imzayı `p` metninin UTF-8 baytları üzerinde doğrular, sonra `p
 1. Masaüstü QR kod gösterir. İçeriği:
 
    ```json
-   {"v":1,"relay":"wss://…","engine_id":"…","engine_key":"<b64>","pair":"<b64url gizli>","exp":<ms>}
+   {"v":1,"relay":"wss://…","engine_id":"…","engine_key":"<b64>","engine_kx":"<b64 X9.63>",
+    "pair":"<b64url gizli>","exp":<ms>}
    ```
+
+   - `engine_kx`: motorun şifreleme anahtarı. QR bant dışı olduğundan güvenilir kaynaktır;
+     eşleştirme isteği de bu anahtara şifrelenir.
 
    - `pair` 32 baytlık tek kullanımlık gizli değerdir; 5 dakika geçerlidir.
    - Bu değer yalnızca kamera ile (bant dışı) aktarılır. Aktarma servisi görmez.
 2. Telefon anahtarlarını üretir ve aktarma servisine bağlanır. Motora `pair_request`
    gönderir.
    - `p` içeriği: `type`, `engine_id`, `device_id`, `name`, `signing_key`, `guarded_key`,
-     `protection` (`secure_enclave` | `software`), `ts_ms`, `nonce`.
+     `kx_key` (telefonun şifreleme anahtarı, X9.63), `protection` (`secure_enclave` |
+     `software`), `ts_ms`, `nonce`.
    - Kanıt: `proof` = base64(HMAC-SHA256(pair, p)).
    - İmza: `s`, imza anahtarıyla atılır (anahtara sahip olduğunu kanıtlar).
 3. Motor şunları denetler:
@@ -143,9 +150,43 @@ Bağlantı başına hız sınırı uygulanır. Motor başına en fazla 20 telefo
 
 Test vektörleri: [`test-vectors/remote-v1.json`](test-vectors/remote-v1.json).
 
+## Uçtan uca şifreleme (Aşama 18)
+
+Aktarma çerçevelerindeki `msg`, imzalı mesajın (`{"p","s"[,"proof"]}`, boşluksuz JSON) alıcının
+şifreleme anahtarına şifrelenmiş hâlidir. Önce imzalanır, sonra şifrelenir; alıcı önce çözer,
+sonra imzayı (yukarıdaki kurallarla) doğrular.
+
+```json
+{"v":1,"e":"<geçici açık anahtar, X9.63, b64>","n":"<12 bayt nonce, b64>","c":"<şifreli metin ‖ 16 bayt etiket, b64>"}
+```
+
+1. Gönderen her mesaj için yeni bir geçici P-256 anahtarı üretir.
+2. `ortak = ECDH(geçici, alıcı)` (x koordinatı, 32 bayt).
+3. `anahtar = HKDF-SHA256(ikm=ortak, salt=geçici_açık ‖ alıcı_açık, info, 32 bayt)`.
+4. `c = AES-256-GCM(anahtar, n, düz_metin, ek_veri=info)`.
+
+`info = "ati-remote-v1|<yön>|<engine_id>|<device_id>"`; yön motor → telefon için `e2d`,
+telefon → motor için `d2e`. Bağlam hem anahtar türetiminde hem GCM ek verisindedir. Aktarma
+servisi bir mesajı başka cihaza ya da ters yöne yönlendirirse mesaj çözülemez.
+
+Neden X25519 değil de P-256: telefonun şifreleme anahtarı Secure Enclave'de üretilir ve cihazdan
+çıkmaz. Secure Enclave anahtar anlaşmasında yalnızca P-256'yı destekler.
+
+Kurallar:
+
+- Şifresiz, çözülemeyen veya değiştirilmiş mesaj işlenmez ve yanıtlanmaz. Motor bunu
+  `undecryptable` olarak kaydeder; telefon reddedilen çerçeve sayacını artırır.
+- Şifreleme anahtarı olmadan (bu sürümden önce) eşleşmiş cihaza mesaj gönderilmez; yeniden
+  eşleştirme gerekir. `engine_kx` içermeyen QR kodu telefon tarafından reddedilir.
+- Telefonun şifreleme anahtarı açık olduğundan saldırgan da ona şifreli zarf üretebilir.
+  Gerçeklik zarfın değil, içindeki imzanın sorumluluğundadır. Şifreleme gizlilik sağlar,
+  imza kimlik doğrular.
+
+Test vektörleri (`envelope`): her iki yön için sabit anahtarlar, geçici anahtar ve nonce ile
+üretilmiş zarflar. Python ve Swift aynı baytları üretir ve birbirinin zarfını çözer.
+
 ## Gizlilik notu
 
-Mesajlar aktarma servisine TLS ile gider ve uçtan uca **imzalıdır**, ancak **şifreli değildir**.
-Servis işletmecisi özet içeriğini (motor durumu, pozisyon sembolleri, sanal K/Z özeti) görebilir;
-API anahtarı, emir kimliği, hesap ayrıntısı gönderilmez. Uçtan uca şifreleme (X25519 + AES-GCM)
-güvenlik aşamasında (18) eklenecek.
+Aktarma servisi yalnızca yönlendirme bilgisini görür: `engine_id`, `device_id`, bağlantı
+zamanları ve şifreli zarfların boyutu. Özet, komut, bildirim ve eşleştirme içerikleri uçtan uca
+şifrelidir. API anahtarı, emir kimliği ve hesap ayrıntısı zaten hiç gönderilmez.

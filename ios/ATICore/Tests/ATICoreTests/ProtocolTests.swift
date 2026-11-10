@@ -31,10 +31,33 @@ struct Vectors: Decodable {
     struct Relay: Decodable {
         let device_hello_text: String
     }
+    struct Sealed: Decodable {
+        let v: Int
+        let e: String
+        let n: String
+        let c: String
+        var dictionary: [String: Any] { ["v": v, "e": e, "n": n, "c": c] }
+    }
+    struct EnvelopeCase: Decodable {
+        let info: String
+        let ephemeral_private_hex: String
+        let nonce: String
+        let plaintext: String
+        let envelope: Sealed
+    }
+    struct Envelopes: Decodable {
+        let device_kx_private_hex: String
+        let device_kx_public_x963: String
+        let engine_kx_private_hex: String
+        let engine_kx_public_x963: String
+        let e2d: EnvelopeCase
+        let d2e: EnvelopeCase
+    }
     let engine: Engine
     let device: Device
     let pairing: Pairing
     let relay: Relay
+    let envelope: Envelopes
 
     static func load() throws -> Vectors {
         let url = URL(fileURLWithPath: #filePath)
@@ -95,15 +118,63 @@ final class VectorTests: XCTestCase {
             v.relay.device_hello_text)
     }
 
-    func testFrameDecodingVerifiesSignatureFirst() throws {
+    func testFrameDecodingDecryptsThenVerifiesSignature() throws {
         let v = try Vectors.load()
         let verifier = try EngineVerifier(engineKey: try Codec.unbase64(v.engine.key))
-        let frame = try Codec.json(["type": "from_engine", "msg": v.engine.snapshot.dictionary])
-        guard case .snapshot(let snap) = try verifier.message(from: frame) else { return XCTFail("özet bekleniyordu") }
+        let agreement = try SoftwareAgreement(rawRepresentation: Data(hexString: v.envelope.device_kx_private_hex))
+        let device = v.device.device_id
+        // Python'un şifrelediği gerçek çerçeve.
+        let frame = try Codec.json(["type": "from_engine", "msg": v.envelope.e2d.envelope.dictionary])
+        guard case .snapshot(let snap) = try verifier.message(from: frame, agreement: agreement, deviceID: device)
+        else { return XCTFail("özet bekleniyordu") }
         XCTAssertEqual(snap.data.positions?.first?.symbol, "BTCUSDT")
-        let forged = try Codec.json(["type": "from_engine", "msg": v.engine.tampered_snapshot.dictionary])
-        XCTAssertThrowsError(try verifier.message(from: forged))
-        XCTAssertNil(try verifier.message(from: #"{"type":"engine_offline"}"#))
+        // Saldırgan da telefonun açık anahtarına şifreleyebilir; imza yine de tutmaz.
+        let info = Envelope.info(.engineToDevice, engineID: v.engine.engine_id, deviceID: device)
+        let forgedEnvelope = try Envelope.sealJSON(v.engine.tampered_snapshot.dictionary, to: agreement.publicKeyX963, info: info)
+        let forged = try Codec.json(["type": "from_engine", "msg": forgedEnvelope])
+        XCTAssertThrowsError(try verifier.message(from: forged, agreement: agreement, deviceID: device)) { error in
+            XCTAssertEqual(error as? ProtocolError, .badSignature)
+        }
+        // Şifresiz (eski biçim) ve başka cihaza ait çerçeve çözülemez.
+        let plaintext = try Codec.json(["type": "from_engine", "msg": v.engine.snapshot.dictionary])
+        XCTAssertThrowsError(try verifier.message(from: plaintext, agreement: agreement, deviceID: device)) { error in
+            XCTAssertEqual(error as? ProtocolError, .undecryptable)
+        }
+        XCTAssertThrowsError(try verifier.message(from: frame, agreement: agreement, deviceID: "baska")) { error in
+            XCTAssertEqual(error as? ProtocolError, .undecryptable)
+        }
+        XCTAssertThrowsError(try verifier.message(from: frame, agreement: SoftwareAgreement(), deviceID: device))
+        XCTAssertNil(try verifier.message(from: #"{"type":"engine_offline"}"#, agreement: agreement, deviceID: device))
+    }
+
+    func testEnvelopeVectorsOpenAndReproduce() throws {
+        let v = try Vectors.load()
+        let cases: [(Vectors.EnvelopeCase, String)] = [
+            (v.envelope.e2d, v.envelope.device_kx_private_hex),
+            (v.envelope.d2e, v.envelope.engine_kx_private_hex),
+        ]
+        for (item, recipientHex) in cases {
+            let recipient = try SoftwareAgreement(rawRepresentation: Data(hexString: recipientHex))
+            let info = Data(item.info.utf8)
+            let opened = try Envelope.open(item.envelope.dictionary, with: recipient, info: info)
+            XCTAssertEqual(String(data: opened, encoding: .utf8), item.plaintext)
+            let again = try Envelope.seal(
+                Data(item.plaintext.utf8), to: recipient.publicKeyX963, info: info,
+                ephemeral: try P256.KeyAgreement.PrivateKey(rawRepresentation: Data(hexString: item.ephemeral_private_hex)),
+                nonce: try AES.GCM.Nonce(data: try Codec.unbase64(item.nonce)))
+            XCTAssertEqual(again["e"] as? String, item.envelope.e)
+            XCTAssertEqual(again["n"] as? String, item.envelope.n)
+            XCTAssertEqual(again["c"] as? String, item.envelope.c)  // Python ile bayt bayt aynı
+            var flipped = try Codec.unbase64(item.envelope.c)
+            flipped[0] ^= 1
+            var tampered = item.envelope.dictionary
+            tampered["c"] = Codec.base64(flipped)
+            XCTAssertThrowsError(try Envelope.open(tampered, with: recipient, info: info))
+            XCTAssertThrowsError(try Envelope.open(item.envelope.dictionary, with: recipient, info: Data("x".utf8)))
+        }
+        XCTAssertEqual(
+            try SoftwareAgreement(rawRepresentation: Data(hexString: v.envelope.device_kx_private_hex)).publicKeyX963,
+            try Codec.unbase64(v.envelope.device_kx_public_x963))
     }
 }
 
@@ -117,6 +188,7 @@ final class FactoryTests: XCTestCase {
         let exp = MessageFactory.nowMs() + (expired ? -1000 : 300_000)
         let text = try Codec.json([
             "v": 1, "relay": relay, "engine_id": Codec.keyID(key), "engine_key": Codec.base64(key),
+            "engine_kx": Codec.base64(P256.KeyAgreement.PrivateKey().publicKey.x963Representation),
             "pair": secret, "exp": exp,
         ])
         return (try PairingCode.parse(text), text)
@@ -131,15 +203,22 @@ final class FactoryTests: XCTestCase {
         var dict = try JSONSerialization.jsonObject(with: Data(try code().1.utf8)) as! [String: Any]
         dict["engine_id"] = String(repeating: "0", count: 32)
         XCTAssertThrowsError(try PairingCode.parse(try Codec.json(dict)))
+        // Şifreleme anahtarı eksik (eski masaüstü) veya geçersizse kod reddedilir.
+        var noKX = try JSONSerialization.jsonObject(with: Data(try code().1.utf8)) as! [String: Any]
+        noKX.removeValue(forKey: "engine_kx")
+        XCTAssertThrowsError(try PairingCode.parse(try Codec.json(noKX)))
+        noKX["engine_kx"] = Codec.base64(Data(repeating: 4, count: 65))
+        XCTAssertThrowsError(try PairingCode.parse(try Codec.json(noKX)))
     }
 
     func testPairRequestCarriesProofAndSignature() throws {
         let (pairing, _) = try code()
         let signing = SoftwareSigner()
         let guarded = SoftwareSigner()
+        let agreement = SoftwareAgreement()
         let msg = try MessageFactory.pairRequest(
-            code: pairing, signing: signing, guardedKey: guarded.publicKeyX963, name: "iPhone",
-            protection: "software")
+            code: pairing, signing: signing, guardedKey: guarded.publicKeyX963,
+            agreementKey: agreement.publicKeyX963, name: "iPhone", protection: "software")
         let data = Data(msg.p.utf8)
         XCTAssertTrue(P256Verifier.isValid(publicX963: signing.publicKeyX963, signature: try Codec.unbase64(msg.s), data: data))
         let key = SymmetricKey(data: try Codec.unbase64URL(pairing.pair))
@@ -147,6 +226,25 @@ final class FactoryTests: XCTestCase {
         let payload = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         XCTAssertEqual(payload["device_id"] as? String, Codec.keyID(signing.publicKeyX963))
         XCTAssertEqual(payload["guarded_key"] as? String, Codec.base64(guarded.publicKeyX963))
+        XCTAssertEqual(payload["kx_key"] as? String, Codec.base64(agreement.publicKeyX963))
+    }
+
+    func testFramesToEngineAreEncryptedForEngineAndDevice() throws {
+        let engineKX = SoftwareAgreement()
+        let signing = SoftwareSigner()
+        let deviceID = Codec.keyID(signing.publicKeyX963)
+        let engineID = String(repeating: "c", count: 32)
+        let message = try MessageFactory.command(
+            .engageKillSwitch, engineID: engineID, deviceID: deviceID, signer: signing, key: .signing, seq: 1)
+        let frame = try MessageFactory.toEngine(message, engineKX: engineKX.publicKeyX963, engineID: engineID, deviceID: deviceID)
+        XCTAssertFalse(frame.contains("engage_kill_switch"))
+        let object = try JSONSerialization.jsonObject(with: Data(frame.utf8)) as! [String: Any]
+        XCTAssertEqual(object["type"] as? String, "to_engine")
+        let info = Envelope.info(.deviceToEngine, engineID: engineID, deviceID: deviceID)
+        let opened = try Envelope.openJSON(object["msg"], with: engineKX, info: info)
+        XCTAssertEqual(opened["p"] as? String, message.p)
+        XCTAssertThrowsError(
+            try Envelope.openJSON(object["msg"], with: engineKX, info: Envelope.info(.engineToDevice, engineID: engineID, deviceID: deviceID)))
     }
 
     func testCommandIsSignedWithRequestedKey() throws {

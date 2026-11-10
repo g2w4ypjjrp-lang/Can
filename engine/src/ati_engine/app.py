@@ -51,7 +51,7 @@ from ati_engine.ml.registry import ModelRegistry
 from ati_engine.observability.logging import configure_logging
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.paper.competition import PaperCompetition
-from ati_engine.remote.crypto import EngineIdentity, b64, unb64
+from ati_engine.remote.crypto import EngineIdentity, KeyAgreement, b64, unb64
 from ati_engine.remote.runtime_bridge import (
     build_executors,
     build_snapshot,
@@ -262,8 +262,9 @@ class Engine:
 
     @staticmethod
     async def _start_remote(runtime: EngineRuntime) -> None:
-        """Uzaktan kontrol: motor kimliği (Ed25519) kasada kalıcıdır. Aktarma servisi adresi
-        ayarlanmışsa servise giden bağlantı açılır; yoksa yalnızca eşleştirme ekranı kapalıdır."""
+        """Uzaktan kontrol: motor kimliği (Ed25519) ve şifreleme anahtarı kasada kalıcıdır.
+        Aktarma servisi adresi ayarlanmışsa servise giden bağlantı açılır; yoksa yalnızca
+        eşleştirme ekranı kapalıdır."""
         cfg = runtime.settings.remote
         stored = await runtime.vault.get("remote.engine_key")
         if stored is None:
@@ -271,9 +272,17 @@ class Engine:
             await runtime.vault.put("remote.engine_key", b64(identity.private_raw()))
         else:
             identity = EngineIdentity.from_private_raw(unb64(stored.get_secret_value()))
+        # Uçtan uca şifreleme anahtarı (P-256 anlaşma; Aşama 18), aynı kasada.
+        stored_kx = await runtime.vault.get("remote.kx_key")
+        if stored_kx is None:
+            kx = KeyAgreement.generate()
+            await runtime.vault.put("remote.kx_key", b64(kx.private_raw()))
+        else:
+            kx = KeyAgreement.from_private_raw(unb64(stored_kx.get_secret_value()))
         service = RemoteService(
             db=runtime.db,
             identity=identity,
+            kx=kx,
             relay_url=cfg.relay_url,
             executors=build_executors(runtime),
             snapshot=lambda: build_snapshot(runtime),

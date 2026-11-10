@@ -1,5 +1,6 @@
 """Testler için telefon benzetimi: iOS uygulamasıyla aynı kablo biçimini üretir (P-256, ham r‖s
-imza, ``{"p", "s"}`` mesajları). Anahtarlar yazılımdır (Secure Enclave yerine)."""
+imza, ``{"p", "s"}`` mesajları, uçtan uca şifreli zarf). Anahtarlar yazılımdır (Secure Enclave
+yerine)."""
 
 from __future__ import annotations
 
@@ -14,9 +15,13 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 
 from ati_engine.remote.crypto import (
+    KeyAgreement,
+    channel_info,
     hmac_proof,
     key_id,
+    open_json,
     relay_hello_text,
+    seal_json,
     unb64url,
     verify_ed25519,
 )
@@ -48,6 +53,7 @@ class DeviceSim:
         self.guarded = ec.generate_private_key(ec.SECP256R1())
         self.signing_key = x963(self.signing)
         self.device_id = key_id(self.signing_key)
+        self.kx = KeyAgreement.generate()  # uçtan uca şifreleme (iPhone'da Secure Enclave)
         self.last_seq = 0
 
     def next_seq(self) -> int:
@@ -64,6 +70,7 @@ class DeviceSim:
             "signing_key": b64(self.signing_key),
             "guarded_key": b64(x963(self.guarded)),
             "protection": "software",
+            "kx_key": b64(self.kx.public_x963),
             "ts_ms": ts if ts is not None else now_ms(),
             "nonce": secrets.token_hex(8),
         }
@@ -116,6 +123,15 @@ class DeviceSim:
                 )
             ),
         }
+
+    def seal(self, engine_kx: bytes, engine_id: str, message: dict[str, Any]) -> dict[str, Any]:
+        """Motora giden mesajı motorun şifreleme anahtarına şifreler (QR'daki ``engine_kx``)."""
+        return seal_json(engine_kx, message, channel_info("d2e", engine_id, self.device_id))
+
+    def open_sealed(self, engine_key: bytes, engine_id: str, envelope: Any) -> dict[str, Any]:
+        """Motordan gelen zarfı çözer, sonra imzayı doğrular (telefonun yaptığı gibi)."""
+        message = open_json(self.kx, envelope, channel_info("e2d", engine_id, self.device_id))
+        return self.open_engine(engine_key, message)
 
     @staticmethod
     def open_engine(engine_key: bytes, message: dict[str, str]) -> dict[str, Any]:

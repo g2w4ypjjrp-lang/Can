@@ -5,6 +5,10 @@ Motor bilgisayardadır (NAT arkasında). Bu yüzden aktarma servisine bağlantı
 açar. Telefondan gelen her mesaj ``protocol.py`` denetimlerinden geçmeden uygulanmaz. Motordan
 çıkan her mesaj motor anahtarıyla imzalanır ve yalnızca eşleştirilmiş cihazlara, tek tek
 gönderilir (yayın yapılmaz).
+
+Uçtan uca şifreleme (Aşama 18): her mesaj alıcının P-256 anahtarına şifrelenir (``crypto.seal``).
+Aktarma servisi yalnızca yönlendirme kimliklerini ve şifreli zarfı görür. Şifresiz veya
+çözülemeyen mesaj işlenmez; şifreleme anahtarı olmayan (eski) cihaza mesaj gönderilmez.
 """
 
 from __future__ import annotations
@@ -20,7 +24,17 @@ from typing import Any
 
 import websockets
 
-from ati_engine.remote.crypto import EngineIdentity, b64, relay_hello_text
+from ati_engine.remote.crypto import (
+    EngineIdentity,
+    KeyAgreement,
+    SealError,
+    b64,
+    channel_info,
+    open_json,
+    relay_hello_text,
+    seal_json,
+    unb64,
+)
 from ati_engine.remote.protocol import (
     CommandVerifier,
     Device,
@@ -54,6 +68,7 @@ class RemoteService:
         *,
         db: Database,
         identity: EngineIdentity,
+        kx: KeyAgreement,
         relay_url: str | None,
         executors: dict[str, Executor],
         snapshot: SnapshotBuilder,
@@ -65,6 +80,7 @@ class RemoteService:
     ) -> None:
         self.db = db
         self.identity = identity
+        self.kx = kx
         self.relay_url = relay_url
         self.executors = executors
         self.snapshot_builder = snapshot
@@ -74,6 +90,7 @@ class RemoteService:
         self.pairing = PairingManager(
             identity,
             self.registry,
+            kx,
             ttl_s=pairing_ttl_s,
             max_skew_s=max_skew_s,
             clock=clock,
@@ -83,7 +100,9 @@ class RemoteService:
         self.connected = False
         self.online: set[str] = set()
         self.recent_events: deque[dict[str, Any]] = deque(maxlen=30)
-        self.stats = {"accepted": 0, "rejected": 0, "paired": 0, "snapshots": 0}
+        self.stats = {
+            "accepted": 0, "rejected": 0, "paired": 0, "snapshots": 0, "undecryptable": 0,
+        }  # fmt: skip
         self._ws: Any = None
         self._send_lock = asyncio.Lock()
         self._stop = asyncio.Event()
@@ -151,15 +170,25 @@ class RemoteService:
                 with contextlib.suppress(asyncio.CancelledError):
                     await ticker
 
-    async def _send_to(self, device_id: str, payload: dict[str, Any]) -> None:
+    async def _send_to(
+        self, device_id: str, payload: dict[str, Any], kx_key: bytes | None = None
+    ) -> None:
+        """İmzalar, cihazın şifreleme anahtarına şifreler ve gönderir."""
         ws = self._ws
         if ws is None:
             return
-        message = {
-            "type": "to_device",
-            "device_id": device_id,
-            "msg": self.identity.signed(payload),
-        }
+        if kx_key is None:
+            device = await self.registry.get(device_id)
+            kx_key = device.kx_key if device is not None else None
+        if kx_key is None:
+            logger.warning("Cihazın şifreleme anahtarı yok; yeniden eşleştirme gerekli")
+            return
+        envelope = seal_json(
+            kx_key,
+            self.identity.signed(payload),
+            channel_info("e2d", self.identity.engine_id, device_id),
+        )
+        message = {"type": "to_device", "device_id": device_id, "msg": envelope}
         async with self._send_lock:
             await ws.send(json.dumps(message, ensure_ascii=False))
 
@@ -174,9 +203,18 @@ class RemoteService:
         elif kind == "device_offline":
             self.online.discard(device_id)
         elif kind == "from_device":
-            msg = message.get("msg")
-            if isinstance(msg, dict):
-                await self.handle(msg, device_id)
+            try:
+                msg = open_json(
+                    self.kx,
+                    message.get("msg"),
+                    channel_info("d2e", self.identity.engine_id, device_id),
+                )
+            except SealError:
+                # Şifresiz, değiştirilmiş veya başka cihaza/yöne ait mesaj: yanıt verilmez.
+                self.stats["undecryptable"] += 1
+                await self._log(device_id, None, None, False, "undecryptable", None)
+                return
+            await self.handle(msg, device_id)
 
     # --- Gelen mesajlar ------------------------------------------------------------------------
 
@@ -233,8 +271,10 @@ class RemoteService:
             reply.update(ok=False, reason=exc.reason)
             if exc.reason == "device_limit":
                 # Kanıt (QR gizli değeri) ve imza doğrulandıktan sonra oluşur: istek gerçekten
-                # kullanıcının ekranındaki koddan geliyor; telefona nedeni bildirilir.
-                await self._send_to(device_id, reply)
+                # kullanıcının ekranındaki koddan geliyor; telefona nedeni bildirilir (cihaz
+                # kaydedilmediği için şifreleme anahtarı istekten alınır).
+                kx_key = unb64(str(json.loads(msg["p"])["kx_key"]))
+                await self._send_to(device_id, reply, kx_key)
             return reply  # diğer başarısız eşleştirmelere yanıt gönderilmez
         self.stats["paired"] += 1
         await self._log(device_id, None, "pair", True, "ok", device.name)

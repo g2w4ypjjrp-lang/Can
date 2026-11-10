@@ -3,6 +3,8 @@
 // İmza, gönderilen JSON metninin kendisi üzerine atılır: {"p": metin, "s": imza}.
 // Telefon → motor: P-256 ECDSA/SHA-256, ham r‖s (64 bayt).
 // Motor → telefon: Ed25519; telefon QR koddan aldığı motor anahtarıyla doğrular.
+// Uçtan uca şifreleme (Aşama 18): imzalı mesaj alıcının P-256 anahtarına şifrelenir
+// (geçici anahtar → ECDH → HKDF-SHA256 → AES-256-GCM). Aktarma servisi içeriği göremez.
 
 import Foundation
 
@@ -18,6 +20,7 @@ public enum ProtocolError: Error, Equatable, Sendable {
     case badSignature
     case malformed(String)
     case signerFailed(String)
+    case undecryptable
 }
 
 // MARK: - Kodlama yardımcıları
@@ -143,6 +146,115 @@ public struct EngineVerifier: Sendable {
     }
 }
 
+// MARK: - Uçtan uca şifreleme (Aşama 18)
+
+/// Telefonun P-256 anahtar anlaşması anahtarı. Uygulamada Secure Enclave'dedir (CryptoKit Secure
+/// Enclave'de P-256 anlaşmasını destekler); simülatör ve testlerde yazılım anahtarı.
+public protocol DeviceAgreement: Sendable {
+    /// X9.63 sıkıştırılmamış açık anahtar (65 bayt).
+    var publicKeyX963: Data { get }
+    func sharedSecret(with peerX963: Data) throws -> SharedSecret
+}
+
+public struct SoftwareAgreement: DeviceAgreement {
+    public let rawRepresentation: Data
+    public let publicKeyX963: Data
+
+    public init() {
+        let key = P256.KeyAgreement.PrivateKey()
+        rawRepresentation = key.rawRepresentation
+        publicKeyX963 = key.publicKey.x963Representation
+    }
+
+    public init(rawRepresentation: Data) throws {
+        let key = try P256.KeyAgreement.PrivateKey(rawRepresentation: rawRepresentation)
+        self.rawRepresentation = key.rawRepresentation
+        publicKeyX963 = key.publicKey.x963Representation
+    }
+
+    public func sharedSecret(with peerX963: Data) throws -> SharedSecret {
+        let peer = try P256.KeyAgreement.PublicKey(x963Representation: peerX963)
+        return try P256.KeyAgreement.PrivateKey(rawRepresentation: rawRepresentation)
+            .sharedSecretFromKeyAgreement(with: peer)
+    }
+}
+
+public enum Direction: String, Sendable {
+    case engineToDevice = "e2d"
+    case deviceToEngine = "d2e"
+}
+
+/// Şifreli zarf: {"v":1, "e": geçici açık anahtar, "n": nonce, "c": şifreli metin + etiket}.
+/// Bağlam (yön, motor ve cihaz kimliği) HKDF bilgisinde ve GCM ek verisindedir: aktarma servisi
+/// mesajı başka cihaza veya yöne yönlendirirse çözülemez.
+public enum Envelope {
+    static let tagBytes = 16
+
+    public static func info(_ direction: Direction, engineID: String, deviceID: String) -> Data {
+        Data("ati-remote-v1|\(direction.rawValue)|\(engineID)|\(deviceID)".utf8)
+    }
+
+    static func key(shared: SharedSecret, ephemeral: Data, recipient: Data, info: Data) -> SymmetricKey {
+        shared.hkdfDerivedSymmetricKey(
+            using: SHA256.self, salt: ephemeral + recipient, sharedInfo: info, outputByteCount: 32)
+    }
+
+    /// ``ephemeral`` ve ``nonce`` yalnızca test vektörleri içindir; normalde her mesajda yenidir.
+    public static func seal(
+        _ plaintext: Data, to recipientX963: Data, info: Data,
+        ephemeral: P256.KeyAgreement.PrivateKey = P256.KeyAgreement.PrivateKey(),
+        nonce: AES.GCM.Nonce = AES.GCM.Nonce()
+    ) throws -> [String: Any] {
+        let recipient = try P256.KeyAgreement.PublicKey(x963Representation: recipientX963)
+        let shared = try ephemeral.sharedSecretFromKeyAgreement(with: recipient)
+        let eph = ephemeral.publicKey.x963Representation
+        let symmetric = key(shared: shared, ephemeral: eph, recipient: recipientX963, info: info)
+        let box = try AES.GCM.seal(plaintext, using: symmetric, nonce: nonce, authenticating: info)
+        let nonceData = nonce.withUnsafeBytes { Data($0) }
+        return [
+            "v": 1, "e": Codec.base64(eph), "n": Codec.base64(nonceData),
+            "c": Codec.base64(box.ciphertext + box.tag),
+        ]
+    }
+
+    public static func open(_ envelope: Any?, with agreement: DeviceAgreement, info: Data) throws -> Data {
+        guard let env = envelope as? [String: Any], intValue(env["v"]) == 1,
+            let e = env["e"] as? String, let n = env["n"] as? String, let c = env["c"] as? String,
+            c.count <= 96_000
+        else { throw ProtocolError.undecryptable }
+        guard let eph = try? Codec.unbase64(e), let nonceData = try? Codec.unbase64(n),
+            let sealed = try? Codec.unbase64(c), nonceData.count == 12, sealed.count >= tagBytes
+        else { throw ProtocolError.undecryptable }
+        do {
+            let shared = try agreement.sharedSecret(with: eph)
+            let symmetric = key(shared: shared, ephemeral: eph, recipient: agreement.publicKeyX963, info: info)
+            let box = try AES.GCM.SealedBox(
+                nonce: AES.GCM.Nonce(data: nonceData), ciphertext: sealed.prefix(sealed.count - tagBytes),
+                tag: sealed.suffix(tagBytes))
+            return try AES.GCM.open(box, using: symmetric, authenticating: info)
+        } catch {
+            throw ProtocolError.undecryptable
+        }
+    }
+
+    public static func sealJSON(_ object: [String: Any], to recipientX963: Data, info: Data) throws -> [String: Any] {
+        try seal(Data(try Codec.json(object).utf8), to: recipientX963, info: info)
+    }
+
+    public static func openJSON(_ envelope: Any?, with agreement: DeviceAgreement, info: Data) throws -> [String: Any] {
+        let data = try open(envelope, with: agreement, info: info)
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ProtocolError.undecryptable
+        }
+        return object
+    }
+
+    static func intValue(_ value: Any?) -> Int? {
+        if let int = value as? Int { return int }
+        return (value as? NSNumber)?.intValue
+    }
+}
+
 // MARK: - Eşleştirme kodu (QR)
 
 public struct PairingCode: Codable, Equatable, Sendable {
@@ -150,6 +262,8 @@ public struct PairingCode: Codable, Equatable, Sendable {
     public let relay: String
     public let engine_id: String
     public let engine_key: String
+    /// Motorun şifreleme anahtarı (P-256, X9.63). QR bant dışı olduğu için güvenilir kaynaktır.
+    public let engine_kx: String
     public let pair: String
     public let exp: Int64
 
@@ -166,6 +280,11 @@ public struct PairingCode: Codable, Equatable, Sendable {
         let key = try Codec.unbase64(code.engine_key)
         guard Codec.keyID(key) == code.engine_id else {
             throw ProtocolError.invalidPairingCode("Motor kimliği anahtarla eşleşmiyor")
+        }
+        guard let kx = try? Codec.unbase64(code.engine_kx),
+            (try? P256.KeyAgreement.PublicKey(x963Representation: kx)) != nil
+        else {
+            throw ProtocolError.invalidPairingCode("Şifreleme anahtarı geçersiz; masaüstü uygulamasını güncelleyin")
         }
         guard (try? Codec.unbase64URL(code.pair))?.count == 32 else {
             throw ProtocolError.invalidPairingCode("Eşleştirme gizli değeri geçersiz")
@@ -220,15 +339,15 @@ public enum MessageFactory {
     public static func nowMs(_ date: Date = Date()) -> Int64 { Int64(date.timeIntervalSince1970 * 1000) }
 
     public static func pairRequest(
-        code: PairingCode, signing: DeviceSigner, guardedKey: Data, name: String,
+        code: PairingCode, signing: DeviceSigner, guardedKey: Data, agreementKey: Data, name: String,
         protection: String, now: Date = Date(), nonce: String = UUID().uuidString
     ) throws -> SignedMessage {
         let deviceID = Codec.keyID(signing.publicKeyX963)
         let payload: [String: Any] = [
             "v": 1, "type": "pair_request", "engine_id": code.engine_id, "device_id": deviceID,
             "name": String(name.prefix(60)), "signing_key": Codec.base64(signing.publicKeyX963),
-            "guarded_key": Codec.base64(guardedKey), "protection": protection,
-            "ts_ms": nowMs(now), "nonce": nonce,
+            "guarded_key": Codec.base64(guardedKey), "kx_key": Codec.base64(agreementKey),
+            "protection": protection, "ts_ms": nowMs(now), "nonce": nonce,
         ]
         let text = try Codec.json(payload)
         let data = Data(text.utf8)
@@ -265,7 +384,13 @@ public enum MessageFactory {
         ])
     }
 
-    public static func toEngine(_ message: SignedMessage) throws -> String {
-        try Codec.json(["type": "to_engine", "msg": message.dictionary])
+    /// Motora giden çerçeve: imzalı mesaj, motorun şifreleme anahtarına şifrelenir.
+    public static func toEngine(
+        _ message: SignedMessage, engineKX: Data, engineID: String, deviceID: String
+    ) throws -> String {
+        let envelope = try Envelope.sealJSON(
+            message.dictionary, to: engineKX,
+            info: Envelope.info(.deviceToEngine, engineID: engineID, deviceID: deviceID))
+        return try Codec.json(["type": "to_engine", "msg": envelope])
     }
 }

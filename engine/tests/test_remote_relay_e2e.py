@@ -105,12 +105,16 @@ async def stack(tmp_path: Path, relay_url: str) -> AsyncIterator[Stack]:
 
 
 class Phone:
-    """Telefon: aktarma servisine bağlanır, motor mesajlarını imzasından doğrular."""
+    """Telefon: aktarma servisine bağlanır; motora şifreli gönderir, motor mesajlarını çözer ve
+    imzasından doğrular."""
 
-    def __init__(self, sim: DeviceSim, ws: Any, engine_key: bytes) -> None:
+    def __init__(self, sim: DeviceSim, ws: Any, qr: dict[str, Any]) -> None:
         self.sim = sim
         self.ws = ws
-        self.engine_key = engine_key
+        self.engine_key = base64.b64decode(qr["engine_key"])
+        self.engine_kx = base64.b64decode(qr["engine_kx"])
+        self.engine_id = qr["engine_id"]
+        self.frames: list[str] = []
 
     @classmethod
     async def connect(cls, relay: str, sim: DeviceSim, qr: dict[str, Any]) -> Phone:
@@ -118,18 +122,22 @@ class Phone:
         await ws.send(json.dumps(sim.hello(qr["engine_id"])))
         welcome = json.loads(await ws.recv())
         assert welcome["type"] == "welcome" and welcome["engine_online"] is True
-        return cls(sim, ws, base64.b64decode(qr["engine_key"]))
+        return cls(sim, ws, qr)
 
     async def send(self, msg: dict[str, Any]) -> None:
-        await self.ws.send(json.dumps({"type": "to_engine", "msg": msg}))
+        sealed = self.sim.seal(self.engine_kx, self.engine_id, msg)
+        await self.ws.send(json.dumps({"type": "to_engine", "msg": sealed}))
 
     async def next(self, kind: str, within: float = 10.0) -> dict[str, Any]:
         async with asyncio.timeout(within):
             while True:
-                frame = json.loads(await self.ws.recv())
+                raw = await self.ws.recv()
+                self.frames.append(raw)
+                frame = json.loads(raw)
                 if frame.get("type") != "from_engine":
                     continue
-                payload = DeviceSim.open_engine(self.engine_key, frame["msg"])  # imza doğrulanır
+                # Önce zarf çözülür, sonra imza doğrulanır.
+                payload = self.sim.open_sealed(self.engine_key, self.engine_id, frame["msg"])
                 if payload["type"] == kind:
                     return payload
 
@@ -191,8 +199,15 @@ async def test_pair_and_control_through_real_relay(stack: Stack, relay_url: str)
     actors = {a["actor"] for a in audit}
     assert f"remote:{phone.sim.device_id}" in actors
 
+    # Aktarma servisinin gördüğü çerçevelerde içerik yok (uçtan uca şifreli).
+    assert phone.frames
+    for raw in phone.frames:
+        for secret in ("kill_switch", "telefondan test", "Acil durdurma", "iPhone", "snapshot"):
+            assert secret not in raw
+
     devices = (await http.get("/v1/remote/status")).json()["devices"]
     assert [d["name"] for d in devices] == ["Can'ın iPhone'u"]
+    assert devices[0]["encrypted"] is True
     assert devices[0]["online"] is True
     revoke = await http.post("/v1/remote/devices/revoke", params={"device_id": phone.sim.device_id})
     assert revoke.json() == {"revoked": True}

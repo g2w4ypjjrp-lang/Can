@@ -17,6 +17,8 @@ public protocol KeyProvider: Sendable {
     var protection: String { get }
     func signingKey() throws -> DeviceSigner
     func guardedPublicKey() throws -> Data
+    /// Uçtan uca şifreleme anahtarı (motordan gelen mesajları çözer).
+    func agreementKey() throws -> DeviceAgreement
     func guardedSigner(reason: String) async throws -> DeviceSigner
     func reset() throws
 }
@@ -25,6 +27,8 @@ public struct PairedEngine: Codable, Equatable, Sendable {
     public var relay: String
     public var engineID: String
     public var engineKey: String
+    /// Motorun şifreleme anahtarı (QR'dan). Bu alan olmadan kaydedilmiş eşleşme geçersizdir.
+    public var engineKX: String
     public var engineName: String
     public var deviceName: String
     public var pairedAtMs: Int64
@@ -181,15 +185,17 @@ public final class RemoteController {
             session?.apply(relayStatus)
             return
         }
-        guard let verifier else { return }
+        guard let verifier, let deviceID = session?.deviceID else { return }
         do {
-            guard let message = try verifier.message(from: frame) else { return }
+            let agreement = try keys.agreementKey()
+            guard let message = try verifier.message(from: frame, agreement: agreement, deviceID: deviceID)
+            else { return }
             session?.apply(message)
             if case .result(let result) = message, result.device_id == session?.deviceID {
                 banner = result.ok ? result.message : ReasonText.text(result.reason)
             }
         } catch {
-            rejectedFrames += 1  // imzası doğrulanamayan mesaj: yok sayılır
+            rejectedFrames += 1  // çözülemeyen veya imzası doğrulanamayan mesaj: yok sayılır
         }
     }
 
@@ -206,9 +212,13 @@ public final class RemoteController {
         stopped = false
         try await open(relay: code.relay, engineID: code.engine_id)
         let request = try MessageFactory.pairRequest(
-            code: code, signing: signer, guardedKey: try keys.guardedPublicKey(), name: deviceName,
+            code: code, signing: signer, guardedKey: try keys.guardedPublicKey(),
+            agreementKey: try keys.agreementKey().publicKeyX963, name: deviceName,
             protection: keys.protection)
-        try await transport?.send(try MessageFactory.toEngine(request))
+        try await transport?.send(
+            try MessageFactory.toEngine(
+                request, engineKX: try Codec.unbase64(code.engine_kx), engineID: code.engine_id,
+                deviceID: deviceID))
         try await waitUntil("eşleştirme yanıtı", seconds: responseTimeout) { self.session?.pairResult != nil }
         guard let result = session?.pairResult else { throw ControllerError.timeout("eşleştirme") }
         guard result.ok else {
@@ -217,7 +227,7 @@ public final class RemoteController {
         }
         let engine = PairedEngine(
             relay: code.relay, engineID: code.engine_id, engineKey: code.engine_key,
-            engineName: result.name ?? "Bilgisayar", deviceName: deviceName,
+            engineKX: code.engine_kx, engineName: result.name ?? "Bilgisayar", deviceName: deviceName,
             pairedAtMs: MessageFactory.nowMs())
         storage.pairedEngine = engine
         paired = engine
@@ -255,7 +265,10 @@ public final class RemoteController {
             let message = try MessageFactory.command(
                 command, args: args, engineID: paired.engineID, deviceID: deviceID, signer: signer,
                 key: command.requiredKey, seq: seq)
-            try await transport.send(try MessageFactory.toEngine(message))
+            try await transport.send(
+                try MessageFactory.toEngine(
+                    message, engineKX: try Codec.unbase64(paired.engineKX), engineID: paired.engineID,
+                    deviceID: deviceID))
             banner = "Gönderildi, motorun onayı bekleniyor…"
         } catch {
             banner = "Gönderilemedi: \(error.localizedDescription)"
@@ -280,17 +293,20 @@ public final class SoftwareKeyProvider: KeyProvider, @unchecked Sendable {
     private let lock = NSLock()
     private var signing: SoftwareSigner
     private var guarded: SoftwareSigner
+    private var agreement: SoftwareAgreement
     private let authorize: @Sendable (String) async throws -> Void
 
     public init(authorize: @escaping @Sendable (String) async throws -> Void = { _ in }) {
         signing = SoftwareSigner()
         guarded = SoftwareSigner()
+        agreement = SoftwareAgreement()
         self.authorize = authorize
     }
 
     public var protection: String { "software" }
     public func signingKey() throws -> DeviceSigner { lock.withLock { signing } }
     public func guardedPublicKey() throws -> Data { lock.withLock { guarded.publicKeyX963 } }
+    public func agreementKey() throws -> DeviceAgreement { lock.withLock { agreement } }
 
     public func guardedSigner(reason: String) async throws -> DeviceSigner {
         try await authorize(reason)
@@ -301,6 +317,7 @@ public final class SoftwareKeyProvider: KeyProvider, @unchecked Sendable {
         lock.withLock {
             signing = SoftwareSigner()
             guarded = SoftwareSigner()
+            agreement = SoftwareAgreement()
         }
     }
 }

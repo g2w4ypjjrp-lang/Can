@@ -12,7 +12,14 @@ from typing import Any
 
 import pytest
 
-from ati_engine.remote.crypto import EngineIdentity, SignatureError, verify_p256
+from ati_engine.remote.crypto import (
+    EngineIdentity,
+    KeyAgreement,
+    SignatureError,
+    channel_info,
+    seal_json,
+    verify_p256,
+)
 from ati_engine.remote.protocol import CommandVerifier, DeviceRegistry, PairingManager
 from ati_engine.remote.service import RemoteService
 from ati_engine.storage.database import Database
@@ -60,6 +67,7 @@ async def make_service(
     service = RemoteService(
         db=db,
         identity=identity or EngineIdentity.generate(),
+        kx=KeyAgreement.generate(),
         relay_url=None,
         executors={n: recorder.executor(n) for n in names},
         snapshot=snapshot,
@@ -121,7 +129,9 @@ async def test_pairing_rejects_expired_session_and_key_mismatch(db: Database) ->
     clock = [now_ms()]
     registry = DeviceRegistry(db)
     identity = EngineIdentity.generate()
-    manager = PairingManager(identity, registry, ttl_s=60, clock=lambda: clock[0])
+    manager = PairingManager(
+        identity, registry, KeyAgreement.generate(), ttl_s=60, clock=lambda: clock[0]
+    )
     qr = json.loads(manager.start("wss://r")[0])
     device = DeviceSim()
     other = DeviceSim()
@@ -332,6 +342,7 @@ async def test_pairing_respects_license_companion_limit(db: Database) -> None:
     service = RemoteService(
         db=db,
         identity=EngineIdentity.generate(),
+        kx=KeyAgreement.generate(),
         relay_url=None,
         executors={},
         snapshot=lambda: _empty_snapshot(),
@@ -339,7 +350,7 @@ async def test_pairing_respects_license_companion_limit(db: Database) -> None:
     )
     sent: list[dict[str, Any]] = []
 
-    async def capture(device_id: str, payload: dict[str, Any]) -> None:
+    async def capture(device_id: str, payload: dict[str, Any], kx: bytes | None = None) -> None:
         sent.append(payload)
 
     service._send_to = capture  # type: ignore[method-assign]
@@ -369,3 +380,173 @@ async def test_pairing_respects_license_companion_limit(db: Database) -> None:
 
 async def _empty_snapshot() -> dict[str, Any]:
     return {}
+
+
+# --- Uçtan uca şifreleme (Aşama 18) ----------------------------------------------------------------
+
+
+class FakeRelay:
+    """Motorun aktarma bağlantısı yerine: gönderilen çerçeveleri toplar."""
+
+    def __init__(self) -> None:
+        self.frames: list[dict[str, Any]] = []
+
+    async def send(self, text: str) -> None:
+        self.frames.append(json.loads(text))
+
+
+async def test_relay_sees_only_ciphertext_and_routing(db: Database) -> None:
+    service, recorder = await make_service(db)
+    relay = FakeRelay()
+    service._ws = relay
+    qr = json.loads(service.pairing.start("wss://relay.example")[0])
+    assert base64.b64decode(qr["engine_kx"]) == service.kx.public_x963
+    engine_kx = base64.b64decode(qr["engine_kx"])
+    engine_key = base64.b64decode(qr["engine_key"])
+    engine_id = qr["engine_id"]
+    device = DeviceSim("Ayşe'nin iPhone'u")
+    await service._dispatch(
+        {
+            "type": "from_device",
+            "device_id": device.device_id,
+            "msg": device.seal(engine_kx, engine_id, device.pair_request(qr)),
+        }
+    )
+    assert [d.encrypted for d in await service.registry.all()] == [True]
+    command = device.command(engine_id, "engage_kill_switch", {"reason": "gizli-neden-42"})
+    await service._dispatch(
+        {
+            "type": "from_device",
+            "device_id": device.device_id,
+            "msg": device.seal(engine_kx, engine_id, command),
+        }
+    )
+    assert [c[0] for c in recorder.calls] == ["engage_kill_switch"]
+    assert relay.frames, "motor yanıt göndermeli"
+    types = []
+    for frame in relay.frames:
+        assert set(frame) == {"type", "device_id", "msg"} and set(frame["msg"]) == {
+            "v",
+            "e",
+            "n",
+            "c",
+        }
+        text = json.dumps(frame, ensure_ascii=False)
+        for secret in ("Ayşe", "engage_kill_switch", "snapshot", "pair_result", "engine_state"):
+            assert secret not in text  # aktarma servisi içeriği göremez
+        payload = device.open_sealed(engine_key, engine_id, frame["msg"])
+        types.append(payload["type"])
+    assert {"pair_result", "result", "snapshot"} <= set(types)
+
+
+async def test_plaintext_tampered_and_misrouted_messages_are_dropped(db: Database) -> None:
+    service, recorder, device = await paired(db)
+    service._ws = FakeRelay()
+    engine_id = service.identity.engine_id
+    other = DeviceSim("başka telefon")
+    command = device.command(engine_id, "engage_kill_switch")
+    sealed = device.seal(service.kx.public_x963, engine_id, command)
+    flipped = {**sealed, "c": base64.b64encode(
+        bytes([base64.b64decode(sealed["c"])[0] ^ 1]) + base64.b64decode(sealed["c"])[1:]
+    ).decode()}  # fmt: skip
+    wrong_direction = seal_json(
+        service.kx.public_x963, command, channel_info("e2d", engine_id, device.device_id)
+    )
+    attempts = [
+        (command, device.device_id),  # şifresiz (eski biçim)
+        (flipped, device.device_id),  # değiştirilmiş şifreli metin
+        (sealed, other.device_id),  # aktarma servisi başka cihaza yönlendiriyor
+        (wrong_direction, device.device_id),  # yön karıştırma
+        (seal_json(KeyAgreement.generate().public_x963, command,
+                   channel_info("d2e", engine_id, device.device_id)), device.device_id),
+        ({"v": 2, "e": "", "n": "", "c": ""}, device.device_id),
+        ("metin", device.device_id),
+    ]  # fmt: skip
+    for msg, route in attempts:
+        await service._dispatch({"type": "from_device", "device_id": route, "msg": msg})
+    assert recorder.calls == []
+    assert service.stats["undecryptable"] == len(attempts)
+    assert service._ws.frames == []  # hiçbirine yanıt verilmedi
+    await service._dispatch({"type": "from_device", "device_id": device.device_id, "msg": sealed})
+    assert [c[0] for c in recorder.calls] == ["engage_kill_switch"]
+
+
+async def test_pairing_requires_encryption_key(db: Database) -> None:
+    service, _ = await make_service(db)
+    qr = json.loads(service.pairing.start("wss://relay.example")[0])
+    device = DeviceSim()
+    request = device.pair_request(qr)
+    payload = json.loads(request["p"])
+    for broken in (None, "", base64.b64encode(b"\x04" + b"0" * 64).decode()):
+        body = {k: v for k, v in payload.items() if k != "kx_key"}
+        if broken is not None:
+            body["kx_key"] = broken
+        text = json.dumps(body)
+        from ati_engine.remote.crypto import hmac_proof, unb64url
+        from remote_device import raw_signature
+
+        forged = {
+            "p": text,
+            "s": base64.b64encode(raw_signature(device.signing, text.encode())).decode(),
+            "proof": base64.b64encode(hmac_proof(unb64url(qr["pair"]), text.encode())).decode(),
+        }
+        reply = await service.handle(forged, device.device_id)
+        assert reply is not None and reply["reason"] == "bad_signature", broken
+    assert await service.registry.all() == []
+
+
+async def test_devices_without_encryption_key_get_no_messages(db: Database) -> None:
+    service, _ = await make_service(db)
+    relay = FakeRelay()
+    service._ws = relay
+    await db.execute(
+        "INSERT INTO remote_devices (id, name, signing_key, guarded_key, protection, paired_at) "
+        "VALUES ('eski', 'Eski iPhone', 'AA==', 'AA==', 'software', 1)"
+    )
+    await service.push_snapshot("eski")
+    assert relay.frames == []
+
+
+def test_envelope_vectors_open_and_reproduce() -> None:
+    """Diller arası şifreli zarf vektörleri: çözülür ve aynı geçici anahtar/nonce ile birebir
+    yeniden üretilir; dosya üreticiyle günceldir (iOS aynı dosyayı kullanır)."""
+    import importlib.util
+
+    from ati_engine.remote.crypto import SealError, open_json, open_sealed, seal, unb64
+
+    root = Path(__file__).resolve().parents[2]
+    path = root / "shared" / "protocol" / "test-vectors" / "remote-v1.json"
+    vectors = json.loads(path.read_text(encoding="utf-8"))
+    spec = importlib.util.spec_from_file_location(
+        "gen_remote_vectors", root / "engine" / "scripts" / "gen_remote_vectors.py"
+    )
+    assert spec is not None and spec.loader is not None
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    assert generator.render() == path.read_text(encoding="utf-8"), "vektörler güncel değil"
+
+    env = vectors["envelope"]
+    keys = {
+        "e2d": KeyAgreement.from_private_raw(bytes.fromhex(env["device_kx_private_hex"])),
+        "d2e": KeyAgreement.from_private_raw(bytes.fromhex(env["engine_kx_private_hex"])),
+    }
+    assert base64.b64decode(env["device_kx_public_x963"]) == keys["e2d"].public_x963
+    for direction, recipient in keys.items():
+        case = env[direction]
+        info = case["info"].encode()
+        assert open_sealed(recipient, case["envelope"], info).decode() == case["plaintext"]
+        again = seal(
+            recipient.public_x963,
+            case["plaintext"].encode(),
+            info,
+            ephemeral=KeyAgreement.from_private_raw(bytes.fromhex(case["ephemeral_private_hex"])),
+            nonce=unb64(case["nonce"]),
+        )
+        assert again == case["envelope"]
+        message = open_json(recipient, case["envelope"], info)
+        assert set(message) == {"p", "s"}
+        other = "d2e" if direction == "e2d" else "e2d"
+        with pytest.raises(SealError):
+            open_sealed(recipient, case["envelope"], env[other]["info"].encode())
+        with pytest.raises(SealError):
+            open_sealed(keys[other], case["envelope"], info)

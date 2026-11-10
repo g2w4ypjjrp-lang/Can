@@ -98,6 +98,31 @@ final class ControllerTests: XCTestCase {
         XCTAssertEqual(controller.session?.snapshot?.data.engine.kill_switch, false)
     }
 
+    func testPlaintextAndMisroutedFramesAreRejected() async throws {
+        let controller = makeController()
+        try await controller.pair(code: engine.pairingCode, deviceName: "Test iPhone")
+        try await eventually("özet") { controller.session?.snapshot != nil }
+        await engine.injectPlaintextSnapshot()  // şifresiz (eski biçim), imzası geçerli
+        await engine.injectMisroutedSnapshot()  // başka cihaza şifrelenmiş
+        try await eventually("iki çerçeve reddedildi") { controller.rejectedFrames == 2 }
+        XCTAssertEqual(controller.session?.snapshot?.data.engine.kill_switch, false)
+    }
+
+    func testRelaySeesOnlyCiphertext() async throws {
+        let controller = makeController()
+        try await controller.pair(code: engine.pairingCode, deviceName: "Ayşe'nin iPhone'u")
+        await controller.send(.pauseAutotrade)
+        try await eventually("komut") { controller.banner == "Otomatik işlem durduruldu" }
+        XCTAssertFalse(spy.sent.isEmpty)
+        for frame in spy.sent where frame.contains("to_engine") {
+            XCTAssertFalse(frame.contains("pause_autotrade"))
+            XCTAssertFalse(frame.contains("Ayşe"))
+            XCTAssertFalse(frame.contains("signing_key"))
+        }
+        let rejections = await engine.rejections
+        XCTAssertFalse(rejections.contains("undecryptable"))
+    }
+
     func testReplayedCommandIsRejectedByEngine() async throws {
         let controller = makeController()
         try await controller.pair(code: engine.pairingCode, deviceName: "Test iPhone")
