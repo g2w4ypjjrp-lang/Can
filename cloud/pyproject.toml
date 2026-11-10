@@ -24,6 +24,7 @@ dependencies = [
 ati-cloud-admin = "ati_cloud.admin.cli:main"
 ati-cloud-api = "ati_cloud.server:main"
 ati-cloud-license = "ati_cloud.licensing.cli:main"
+ati-cloud-mail = "ati_cloud.mail:main"
 ati-cloud-migrate = "ati_cloud.db.migrate:main"
 ati-cloud-payments = "ati_cloud.payments.cli:main"
 ati-cloud-relay = "ati_cloud.relay:main"

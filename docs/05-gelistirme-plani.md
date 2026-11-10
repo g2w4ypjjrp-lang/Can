@@ -949,7 +949,19 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
   gece yedeği ve ödeme bakımı ekler. İşlem motoru sunucuya kurulmaz. Betiklerin sözdizimi ve
   ürettiği ayarlar doğrulandı; Windows üzerinde ilk çalıştırma sunucuda yapılacak.
 
-Testler: bulut 184 (sürümler 15, platform ve veritabanı TLS ayarları 10), web birim 43, uçtan uca yönetici + sayfalar 25 (sürüm yayınla →
+- **E-posta gönderimi** (`ati-cloud-mail`, `cloud/src/ati_cloud/mail.py`): kuyruk
+  (`email_outbox`) → SMTP; `FOR UPDATE SKIP LOCKED` + 10 dk kilit, geçici hatada artan bekleme (en
+  çok 8 deneme), kalıcı hatada (alıcı reddi) tekrar yok, süresi dolmuş doğrulama/sıfırlama
+  bağlantısı gönderilmez, lisans anahtarı e-postaya yazılmaz, günlüklerde adres maskeli. Türkçe
+  şablonlar (doğrulama, parola sıfırlama, hesap zaten var, lisans hazır). Önerilen sağlayıcı
+  Resend (ücretsiz plan, İrlanda bölgesi). Windows sunucusunda **Eposta** servisi ve
+  `yonet.ps1 eposta-ayarla` / `eposta-dene`; Render'da `ati-eposta` işçisi.
+- Windows sunucusunda bulunan ve düzeltilen hatalar: Türkçe yerel ayarda PostgreSQL kurulumu,
+  psycopg'nin Windows olay döngüsüyle çalışmaması (API ve araçlar SelectorEventLoop), servis
+  hesabının `C:\ATI` okuma izni, ters vekil arkasında kök alan adında `/yonetim` 500.
+
+Testler: bulut 194 (sürümler 15, platform/veritabanı ayarları 12, e-posta 8; gerçek smtplib ve
+yerel SMTP sunucusuyla), web birim 43, uçtan uca yönetici + sayfalar 25 (sürüm yayınla →
 İndir sayfasında görünür → geri çek; `/indir` erişilebilirlik 0 ihlal).
 
 ## Açık kararlar (sizden bilgi gerekecek)

@@ -90,13 +90,46 @@ saklayın.
 - [ ] Yönetim → **Denetim kaydı**'ndaki `admin.login` satırının IP'si,
       <https://www.cloudflare.com/cdn-cgi/trace> sayfasındaki `ip=` değeriyle aynı
 
+## E-posta gönderimi (Resend, ücretsiz plan)
+
+Kayıt doğrulama, parola sıfırlama ve "lisansınız hazır" e-postaları kuyruğa yazılır; sunucudaki
+**Eposta** servisi bunları SMTP ile gönderir. Önerilen sağlayıcı **Resend**: ücretsiz planda ayda
+3.000, günde 100 e-posta. Lisans anahtarı e-postayla gönderilmez (panelde parolayla görülür).
+
+1. <https://resend.com> → kayıt olun.
+2. **Domains → Add Domain** → `canarslan.net.tr`, **Region: Ireland (eu-west-1)** → ekleyin.
+3. **Sign in to Cloudflare** düğmesiyle DNS kayıtlarını (DKIM, SPF) otomatik ekletin; ya da
+   gösterilen kayıtları Cloudflare → DNS'e elle ekleyin (**DNS only**). Ad alanına kök alan adını
+   yazmayın (`send`, `resend._domainkey`). Doğrulama genelde 15 dakika sürer.
+4. Cloudflare → DNS → **Add record**: Type `TXT`, Name `_dmarc`, Content `v=DMARC1; p=none;`
+   (bir süre sorunsuz gönderimden sonra `p=quarantine` yapılabilir).
+5. Resend → **API Keys → Create API Key** → izin: **Sending access**, alan adı
+   `canarslan.net.tr` → anahtarı kopyalayın (bir kez gösterilir; kimseyle paylaşmayın).
+6. Sunucuda yönetici PowerShell'inde:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 eposta-ayarla
+   ```
+
+   Sorulara Enter ile varsayılanı kabul edin; yalnızca **API anahtarı** sorusunda kopyaladığınız
+   anahtarı yapıştırın (ekranda görünmez).
+7. Deneyin:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 eposta-dene -Eposta <adresiniz>
+   ```
+
+Not: Resend hesap verilerini ve gönderim kayıtlarını ABD'de tutar (e-postalar İrlanda'dan
+gönderilir). Müşteri e-posta adresleri bu nedenle yurt dışına aktarılır; KVKK aydınlatma metninde
+belirtilmelidir (hukukçu onayı).
+
 ## Günlük kullanım
 
 | İş | Komut (yönetici PowerShell'i) |
 |---|---|
 | Durum | `C:\ATI\betikler\yonet.ps1 durum` |
 | Yeniden başlat | `C:\ATI\betikler\yonet.ps1 yeniden` |
-| Günlükler | `C:\ATI\betikler\yonet.ps1 loglar -Servis api` (`web`, `caddy`, `aktarma`, `odeme`) |
+| Günlükler | `C:\ATI\betikler\yonet.ps1 loglar -Servis api` (`web`, `caddy`, `aktarma`, `eposta`, `odeme`) |
 | Elle yedek | `C:\ATI\betikler\yonet.ps1 yedek` |
 | Güncelleme | Yeni ZIP'i indirip 3. ve 4. adımları tekrarlayın (ayarlar, anahtarlar ve veritabanı korunur) |
 
@@ -122,7 +155,7 @@ yayınlayın. SHA-256'yı sunucuda şöyle alabilirsiniz:
 
 ## Henüz bağlı olmayanlar
 
-* **E-posta gönderimi:** müşteri kaydındaki doğrulama ve parola sıfırlama e-postaları bir e-posta
-  sağlayıcısı bağlanana kadar gitmez (yönetici daveti etkilenmez).
+* **E-posta gönderimi:** yukarıdaki Resend adımları yapılana kadar e-postalar kuyrukta bekler
+  (yönetici daveti etkilenmez).
 * **Kurulum dosyası:** GitHub Actions'ta derlenir; Actions çalışana kadar indirme sayfası
   "yakında" gösterir.

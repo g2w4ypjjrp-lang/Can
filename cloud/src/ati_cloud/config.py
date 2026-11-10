@@ -8,6 +8,7 @@ Manager) ortam değişkeni olarak enjekte edilir; depoya asla yazılmaz.
 from __future__ import annotations
 
 import ipaddress
+from email.utils import parseaddr
 from typing import Literal, Self
 
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
@@ -89,6 +90,15 @@ class CloudSettings(BaseSettings):
     # İndirme sayfası: Windows kurulum paketinin bulunabileceği alan adları. Yönetici paneli
     # (oturumu ele geçirilse bile) indirme bağlantısını başka bir siteye yönlendiremez.
     release_download_hosts: list[str] = ["canarslan.net.tr", "indir.canarslan.net.tr"]
+    # E-posta gönderimi (``ati-cloud-mail``, SMTP). Sunucu boşsa e-postalar kuyrukta bekler.
+    # Resend: smtp.resend.com, 465 (ssl), kullanıcı "resend", parola = API anahtarı.
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=465, ge=1, le=65535)
+    smtp_security: Literal["ssl", "starttls", "none"] = "ssl"
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    mail_from: str = "AI Trading Intelligence <bildirim@canarslan.net.tr>"
+    mail_reply_to: str | None = None
 
     @property
     def database_dsn(self) -> str:
@@ -128,6 +138,10 @@ class CloudSettings(BaseSettings):
                     "staging/production ortamında lisans gizli değerleri zorunludur "
                     "(ATI_LICENSE_PEPPER, ATI_LICENSE_KEK, ATI_LEASE_SIGNING_KEY)"
                 )
+            if self.smtp_host and self.smtp_security == "none":
+                raise ValueError("staging/production ortamında SMTP bağlantısı şifreli olmalı")
+            if "@" not in parseaddr(self.mail_from)[1]:
+                raise ValueError("ATI_MAIL_FROM geçerli bir gönderen adresi içermeli")
             params = conninfo_to_dict(self.database_dsn)
             sslmode = params.get("sslmode")
             private_network = sslmode == "require" and self.database_sslmode == "require"

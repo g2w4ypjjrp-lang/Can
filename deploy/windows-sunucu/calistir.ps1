@@ -2,12 +2,12 @@
 .SYNOPSIS
   Bir servisi ayar dosyasıyla başlatır ve gözetir (zamanlanmış görevlerden çağrılır).
 
-  Sürekli servisler (api, aktarma, web, caddy) kapanırsa artan beklemeyle (5 sn → 60 sn) yeniden
+  Sürekli servisler (api, aktarma, web, caddy, eposta) kapanırsa artan beklemeyle (5 sn → 60 sn) yeniden
   başlatılır. Tek seferlik işler (odeme, yedek) bir kez çalışıp çıkar. Çıktılar C:\ATI\loglar altında.
 #>
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("api", "aktarma", "web", "caddy", "odeme", "yedek")]
+    [ValidateSet("api", "aktarma", "web", "caddy", "eposta", "odeme", "yedek")]
     [string]$Servis
 )
 
@@ -27,6 +27,8 @@ $Tanimlar = @{
                  Env = "web.env"; Dizin = "$Uygulama\web"; Surekli = $true }
     caddy   = @{ Dosya = "$Kok\araclar\caddy.exe"; Arg = @("run", "--config", "$Kok\ayarlar\Caddyfile", "--adapter", "caddyfile")
                  Env = "caddy.env"; Dizin = $Kok; Surekli = $true }
+    eposta  = @{ Dosya = "$Scripts\ati-cloud-mail.exe"; Arg = @("run")
+                 Env = "bulut.env"; Dizin = "$Uygulama\cloud"; Surekli = $true }
     odeme   = @{ Dosya = "$Scripts\ati-cloud-payments.exe"; Arg = @("maintain")
                  Env = "bulut.env"; Dizin = "$Uygulama\cloud"; Surekli = $false }
     yedek   = @{ Dosya = "C:\Program Files\PostgreSQL\16\bin\pg_dump.exe"; Arg = @()

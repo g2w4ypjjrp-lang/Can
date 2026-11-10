@@ -464,6 +464,7 @@ Gorev "API" "api" $acilis $surekli
 Gorev "Aktarma" "aktarma" $acilis $surekli
 Gorev "Web" "web" $acilis $surekli
 Gorev "Caddy" "caddy" $acilis $surekli
+Gorev "Eposta" "eposta" $acilis $surekli
 Gorev "Odeme-Bakimi" "odeme" (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 10) -RepetitionDuration (New-TimeSpan -Days 3650)) $kisa
 Gorev "Yedek" "yedek" (New-ScheduledTaskTrigger -Daily -At "03:30") $kisa
 
@@ -484,3 +485,6 @@ Write-Host "Sıradaki adımlar (deploy\windows-sunucu\README.md):"
 Write-Host "  1. Cloudflare DNS kayıtları bu sunucunun IP adresine (DNS only) yönlendirilmiş olmalı."
 Write-Host "  2. İlk yönetici:  powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 davet -Eposta <e-posta> -Ad `"<Ad Soyad>`""
 Write-Host "  3. Gizli anahtar dosyasını yedekleyin: $bulutEnvYolu"
+if (-not $bulut.Contains("ATI_SMTP_HOST")) {
+    Write-Host "  4. E-posta gönderimi için: powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 eposta-ayarla"
+}

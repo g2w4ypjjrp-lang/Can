@@ -131,6 +131,34 @@ services:
       - key: NEXT_TELEMETRY_DISABLED
         value: "1"
 
+  # E-posta gönderici: kuyruktaki e-postaları SMTP ile gönderir (Resend önerilir; deploy/render.md).
+  - type: worker
+    name: ati-eposta
+    runtime: docker
+    region: frankfurt
+    plan: 0.5c-512mb
+    dockerfilePath: ./cloud/Dockerfile
+    dockerContext: ./cloud
+    dockerCommand: ati-cloud-mail run
+    autoDeployTrigger: checksPass
+    envVars:
+      - fromGroup: ati-gizli
+      - fromGroup: ati-bulut-ayarlari
+      - key: ATI_DATABASE_URL
+        fromDatabase:
+          name: ati-db
+          property: connectionString
+      - key: ATI_SMTP_HOST
+        value: smtp.resend.com
+      - key: ATI_SMTP_PORT
+        value: "465"
+      - key: ATI_SMTP_SECURITY
+        value: ssl
+      - key: ATI_SMTP_USERNAME
+        value: resend
+      - key: ATI_SMTP_PASSWORD
+        sync: false
+
   # Ödeme bakımı: dönmeyen iyzico ödemelerini sorgular, 24 saati geçen ödenmemiş siparişleri iptal
   # eder (10 dakikada bir).
   - type: cron
