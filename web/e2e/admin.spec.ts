@@ -1,6 +1,7 @@
 // Yönetim paneli uçtan uca: davet (TOTP kurulumu, kurtarma kodları), paket fiyatı → sitede görünür,
 // lisans üretme/dondurma/tam anahtar (TOTP), mesajlar, denetim zinciri, yönetici daveti, ödeme
-// ayarları (canlı mod kapalı), çıkış/giriş (parola + TOTP), sınırlı rolün yetkisi, erişilebilirlik.
+// ayarları (canlı mod kapalı), sürüm yayınlama → İndir sayfası, çıkış/giriş (parola + TOTP),
+// sınırlı rolün yetkisi, erişilebilirlik.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
@@ -123,6 +124,54 @@ test("ödeme ayarları: canlı mod kapalı, şirket bilgileri kaydedilir", async
   await page.getByRole("button", { name: "Kaydet" }).nth(1).click();
   await expect(page.getByRole("status").filter({ hasText: "Şirket bilgileri kaydedildi" })).toBeVisible();
   await noAxeViolations(page);
+});
+
+test("sürüm eklenir, TOTP ile yayınlanır ve İndir sayfasında görünür", async () => {
+  const sha = "3f".repeat(32);
+  await page.goto("/indir");
+  await expect(page.getByText("İndirme yakında açılacak")).toBeVisible();
+
+  await page.goto("/yonetim");
+  await page.getByRole("navigation", { name: "Yönetim menüsü" }).getByRole("link", { name: "Sürümler (indirme)" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Sürümler (indirme)" })).toBeVisible();
+  // İzinsiz alan adındaki dosya reddedilir (sunucu denetimi).
+  await page.getByLabel("Sürüm numarası").fill("1.0.0");
+  await page.getByLabel(/^İndirme adresi/).fill("https://kotu.example/kurulum-setup.exe");
+  await page.getByLabel(/^SHA-256 özeti/).fill(sha);
+  await page.getByLabel("Boyut (bayt)").fill("95000000");
+  await page.getByRole("button", { name: "Taslak ekle" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "yalnızca şu alan adlarından" })).toBeVisible();
+  await page.getByLabel(/^İndirme adresi/).fill("https://indir.canarslan.net.tr/AI-Trading-Intelligence_1.0.0_x64-setup.exe");
+  await page.getByLabel("Sürüm notları (sitede gösterilir)").fill("İlk genel sürüm.");
+  await page.getByRole("button", { name: "Taslak ekle" }).click();
+  const row = page.getByTestId("release-windows-1.0.0");
+  await expect(row.getByTestId("release-status")).toHaveText("Taslak");
+  await noAxeViolations(page);
+
+  // Taslak sitede görünmez; yayınlandıktan sonra görünür.
+  await page.goto("/indir");
+  await expect(page.getByText("İndirme yakında açılacak")).toBeVisible();
+  await page.goto("/yonetim/surumler");
+  await row.getByLabel("Doğrulama kodu (TOTP)").fill(await root.next());
+  await row.getByRole("button", { name: "Windows 1.0.0 yayınla" }).click();
+  await expect(row.getByTestId("release-status")).toHaveText("Yayında");
+
+  await page.goto("/indir");
+  await expect(page.getByTestId("windows-version")).toContainText("Sürüm 1.0.0");
+  await expect(page.getByTestId("windows-sha256")).toHaveText(sha);
+  const download = page.getByRole("link", { name: "Windows için indir" });
+  await expect(download).toHaveAttribute("href", "https://indir.canarslan.net.tr/AI-Trading-Intelligence_1.0.0_x64-setup.exe");
+  await expect(page.getByText("Bu sürüm henüz kod imzalı değil")).toBeVisible();
+  await expect(page.getByText("İlk genel sürüm.")).toBeVisible();
+  await noAxeViolations(page);
+
+  // Geri çekilince sayfadan kalkar.
+  await page.goto("/yonetim/surumler");
+  await row.getByLabel("Geri çekme nedeni").fill("Test sürümü");
+  await row.getByRole("button", { name: "Windows 1.0.0 geri çek" }).click();
+  await expect(row.getByTestId("release-status")).toHaveText("Geri çekildi");
+  await page.goto("/indir");
+  await expect(page.getByText("İndirme yakında açılacak")).toBeVisible();
 });
 
 test("çıkış ve parola + TOTP ile yeniden giriş", async () => {

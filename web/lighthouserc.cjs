@@ -5,6 +5,7 @@ const PAGES = [
   "/",
   "/ozellikler",
   "/paketler",
+  "/indir",
   "/sss",
   "/iletisim",
   "/giris",

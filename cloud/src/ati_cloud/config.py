@@ -51,6 +51,9 @@ class CloudSettings(BaseSettings):
     payments_live_allowed: bool = False
     # Ödeme (Aşama 17): sağlayıcının tarayıcıyı geri gönderdiği ve bildirim yolladığı API adresi.
     public_api_url: str = "http://localhost:8080"
+    # İndirme sayfası: Windows kurulum paketinin bulunabileceği alan adları. Yönetici paneli
+    # (oturumu ele geçirilse bile) indirme bağlantısını başka bir siteye yönlendiremez.
+    release_download_hosts: list[str] = ["canarslan.net.tr", "indir.canarslan.net.tr"]
 
     @property
     def licensing_configured(self) -> bool:

@@ -73,6 +73,7 @@ def concrete(path: str) -> str:
         .replace("{device_id}", str(uuid.uuid4()))
         .replace("{admin_id}", str(uuid.uuid4()))
         .replace("{order_id}", str(uuid.uuid4()))
+        .replace("{release_id}", str(uuid.uuid4()))
     )
 
 

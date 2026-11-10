@@ -118,6 +118,20 @@ export function Panel() {
         </p>
       </section>
 
+      <section aria-labelledby="uygulama" className="mt-10">
+        <h2 id="uygulama" className="text-xl font-semibold text-fg">
+          Uygulama
+        </h2>
+        <Card className="mt-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <p className="text-sm text-muted">
+            Windows kurulum paketi, dosya doğrulama (SHA-256) ve iPhone uygulaması indirme sayfasında.
+          </p>
+          <LinkButton href="/indir" variant="secondary">
+            Uygulamayı indir
+          </LinkButton>
+        </Card>
+      </section>
+
       <OrdersSection />
 
       <section aria-labelledby="hesap" className="mt-10">

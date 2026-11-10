@@ -2,7 +2,7 @@
 
 Sağlık uç noktaları (Aşama 1), müşteri hesapları ve iletişim formu (Aşama 14), lisans
 (Aşama 15), yönetici API'si (Aşama 16, ``/admin/v1``: ayrı oturum, zorunlu 2FA, rol bazlı
-yetki) ve ödeme/teslim (Aşama 17).
+yetki), ödeme/teslim (Aşama 17) ve indirme sayfasının sürüm bilgisi (``releases``).
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ from ati_cloud.licensing.api import create_license_router
 from ati_cloud.licensing.service import Licensing
 from ati_cloud.payments.api import create_admin_payments_router, create_payments_router
 from ati_cloud.payments.service import Payments
+from ati_cloud.releases import create_admin_releases_router, create_releases_router
 
 
 def _check_database(dsn: str) -> list[int]:
@@ -92,6 +93,8 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
     app.state.payments = payments
     app.include_router(create_payments_router(payments))
     app.include_router(create_admin_payments_router(admin, payments))
+    app.include_router(create_releases_router(db))
+    app.include_router(create_admin_releases_router(admin))
 
     @app.get("/health")
     async def health() -> dict[str, str]:

@@ -8,6 +8,7 @@ import { Container } from "@/components/ui";
 const NAV: NavItem[] = [
   { href: "/ozellikler", label: "Özellikler" },
   { href: "/paketler", label: "Paketler" },
+  { href: "/indir", label: "İndir" },
   { href: "/sss", label: "SSS" },
   { href: "/iletisim", label: "İletişim" },
 ];

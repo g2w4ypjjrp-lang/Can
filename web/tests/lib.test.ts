@@ -7,6 +7,7 @@ import { buildCsp, newNonce, originOf } from "@/lib/csp";
 import { formatMinor, parseMoney, toCsv } from "@/lib/admin";
 import { durationLabel, formatDate, formatPrice, isOrderSettled, licenseStatusLabel, orderStatusLabel, safeNext } from "@/lib/format";
 import { groupPlans, type Plan } from "@/lib/plans";
+import { fetchReleases, fileName, formatSize, usable, type Release } from "@/lib/releases";
 import { SELLER_PLACEHOLDERS, withPlaceholders } from "@/lib/seller";
 
 describe("safeNext (açık yönlendirme koruması)", () => {
@@ -212,5 +213,50 @@ describe("ödeme yardımcıları", () => {
     expect(seller.legal_name).toBe("Örnek Yazılım A.Ş.");
     expect(seller.mersis).toBe("[MERSİS no]");
     expect(withPlaceholders(null)).toEqual(SELLER_PLACEHOLDERS);
+  });
+});
+
+describe("indirme sayfası (sürümler)", () => {
+  const release = (extra: Partial<Release> = {}): Release => ({
+    version: "1.0.0",
+    download_url: "https://indir.canarslan.net.tr/AI%20Trading_1.0.0_x64-setup.exe",
+    sha256: "a".repeat(64),
+    size_bytes: 95_000_000,
+    min_os: "",
+    notes: "",
+    signed: false,
+    published_at: "2026-11-10T09:00:00Z",
+    ...extra,
+  });
+
+  it("boyutu ikili birimle yazar", () => {
+    expect(formatSize(95_000_000)).toBe("90,6 MB");
+    expect(formatSize(512)).toBe("512 bayt");
+    expect(formatSize(null)).toBe("—");
+    expect(formatSize(0)).toBe("—");
+  });
+
+  it("dosya adını adresten çıkarır", () => {
+    expect(fileName(release().download_url)).toBe("AI Trading_1.0.0_x64-setup.exe");
+    expect(fileName("bozuk")).toBe("kurulum.exe");
+  });
+
+  it("yalnızca https ve geçerli özetli kaydı gösterir (ikinci kat denetim)", () => {
+    expect(usable(release())).not.toBeNull();
+    expect(usable(release({ download_url: "http://indir.canarslan.net.tr/a.exe" }))).toBeNull();
+    expect(usable(release({ download_url: "javascript:alert(1)" }))).toBeNull();
+    expect(usable(release({ download_url: "https://x@kotu.example/a.exe" }))).toBeNull();
+    expect(usable(release({ sha256: "ZZ" }))).toBeNull();
+    expect(usable(release({ sha256: null }))).not.toBeNull(); // iPhone: App Store bağlantısı
+    expect(usable(null)).toBeNull();
+  });
+
+  it("API'ye ulaşılamazsa sayfa çökmez", async () => {
+    const failing = vi.fn().mockRejectedValue(new Error("ağ yok")) as unknown as typeof fetch;
+    expect(await fetchReleases(failing)).toEqual({ releases: { windows: null, ios: null }, reachable: false });
+    const ok = vi.fn().mockResolvedValue(new Response(JSON.stringify({ windows: release(), ios: null }))) as unknown as typeof fetch;
+    const result = await fetchReleases(ok);
+    expect(result.reachable).toBe(true);
+    expect(result.releases.windows?.version).toBe("1.0.0");
   });
 });

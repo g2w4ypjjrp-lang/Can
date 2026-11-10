@@ -10,6 +10,7 @@ const GROUPS = [
     links: [
       { href: "/ozellikler", label: "Özellikler" },
       { href: "/paketler", label: "Paketler" },
+      { href: "/indir", label: "İndir" },
       { href: "/sss", label: "Sık sorulan sorular" },
     ],
   },
