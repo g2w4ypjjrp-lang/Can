@@ -48,6 +48,7 @@ from ati_engine.market.events import AggTrade
 from ati_engine.market.orderbook import OrderBook, SyncState
 from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT, MarketDataService
 from ati_engine.ml.registry import ModelRegistry
+from ati_engine.notify.telegram import TelegramNotifier
 from ati_engine.observability.logging import configure_logging
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.paper.competition import PaperCompetition
@@ -189,6 +190,7 @@ class Engine:
                 self._start_execution(runtime)
             await self._start_license(runtime)
             await self._start_remote(runtime)
+            await self._start_telegram(runtime)
 
             supervisor.spawn("loop-lag-monitor", loop_monitor.run)
             supervisor.spawn(
@@ -259,6 +261,21 @@ class Engine:
                     max_restarts=50, window_s=3600, backoff_initial_s=5, backoff_max_s=300
                 ),
             )
+
+    @staticmethod
+    async def _start_telegram(runtime: EngineRuntime) -> None:
+        """Telegram bildirimleri: kullanıcı bot anahtarını ve sohbeti girip açtıysa çalışır."""
+        notifier = TelegramNotifier(
+            vault=runtime.vault,
+            store=SettingsStore(runtime.db),
+            api_base=runtime.settings.notify.telegram_api,
+        )
+        await notifier.load()
+        notifier.subscribe(runtime.bus)
+        runtime.telegram = notifier
+        runtime.supervisor.spawn(
+            "telegram", notifier.run, RestartPolicy(max_restarts=20, window_s=3600)
+        )
 
     @staticmethod
     async def _start_remote(runtime: EngineRuntime) -> None:

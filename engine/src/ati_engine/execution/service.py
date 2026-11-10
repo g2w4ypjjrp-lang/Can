@@ -85,6 +85,7 @@ class ExecutionService:
         self.settings = settings
         self.cfg = settings.execution
         self.db = db
+        self.bus = bus
         self.audit = audit
         self.keys = keys
         self.trading_mode = trading_mode
@@ -236,6 +237,8 @@ class ExecutionService:
             )
             reconciler = Reconciler(engine, unknown_grace_s=self.cfg.unknown_order_grace_s)
             engine.on_stream_reset = lambda: reconciler.run("stream_reset")
+            if self.bus is not None:
+                engine.on_trade = self.bus.publish
             await engine.start()
             execution = MarketExecution(market, engine, rest, reconciler, symbols)
             await reconciler.run("startup")

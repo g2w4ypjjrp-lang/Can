@@ -106,7 +106,7 @@ test("gerçek hesap kilitli; test ağı anahtarı doğrulanmadan saklanmaz", asy
   await expect(form.getByTestId("key-usdm_futures-secret")).toHaveValue(""); // gizli anahtar ekranda kalmaz
 
   await page.getByTestId("mode-testnet").click();
-  await expect(page.getByTestId("settings-mode")).toHaveText("Test ağı");
+  await expect(page.getByTestId("settings-mode")).toHaveText("Demo Trading");
 });
 
 test("test ağında işlem: risk kapısı stopsuz işlemi reddeder, korumalı işlemi açar ve kapatır", async ({ page }) => {
@@ -250,4 +250,17 @@ test("backtest ve eğitim ekranı: üç bölüm açılır, geçmiş veri kapalı
   await expect(page.getByTestId("lab-backtest")).toContainText("etkin değil");
   await page.getByTestId("lab-bt-symbols").fill("");
   await expect(page.getByTestId("lab-bt-start")).toBeDisabled();
+});
+
+test("telegram bildirimi: biçim denetimi, kayıtlı anahtar ipucu, kapalı başlar", async ({ page }) => {
+  await open(page, "settings");
+  const card = page.getByTestId("telegram");
+  await expect(card.getByTestId("telegram-state")).toHaveText("Kapalı");
+  await expect(card.getByTestId("telegram-test")).toBeDisabled();
+  await card.getByTestId("telegram-token").fill("yanlis");
+  await card.getByTestId("telegram-chat").fill("987654321");
+  await card.getByTestId("telegram-save").click();
+  await expect(card).toContainText("Bot anahtarı biçimi geçersiz");
+  await card.getByTestId("telegram-discover").click();
+  await expect(card).toContainText("geçerli bir bot anahtarı");
 });

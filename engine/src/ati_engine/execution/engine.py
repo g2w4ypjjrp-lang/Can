@@ -24,15 +24,24 @@ import contextlib
 import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from decimal import ROUND_DOWN, Decimal
 from typing import Any
 
-from ati_engine.core.models import EngineState, Market, OrderStatus, OrderType, Side, SymbolInfo
+from ati_engine.core.events import TradeNotice
+from ati_engine.core.models import (
+    EngineState,
+    Market,
+    OrderStatus,
+    OrderType,
+    Side,
+    SymbolInfo,
+    format_decimal,
+)
 from ati_engine.execution.approval import RiskDecision, RiskGateLike, RiskRejected
 from ati_engine.execution.orders import OrderManager, OrderRecord, make_client_id
-from ati_engine.execution.positions import PositionBook
+from ati_engine.execution.positions import PositionBook, PositionChange
 from ati_engine.execution.venue import (
     ExecutionBlocked,
     Fill,
@@ -109,6 +118,8 @@ class TradingEngine:
         self.engine_state = engine_state or (lambda: EngineState.RUNNING)
         self.fill_timeout_s = fill_timeout_s
         self.positions = PositionBook(db, mode=self.mode, market=self.market)
+        # Pozisyon açılış/kapanış bildirimi (ExecutionService olay yoluna bağlar).
+        self.on_trade: Callable[[TradeNotice], Awaitable[None]] | None = None
         self.orders = OrderManager(
             db,
             venue,
@@ -583,6 +594,7 @@ class TradingEngine:
             ts=fill.ts,
             decision_id=record.decision_id,
         )
+        await self._notify_trade(record, fill, change)
         managed = self.managed.get(record.symbol)
         if managed is None or record.purpose not in PROTECTIVE | {"exit", "emergency_close"}:
             return
@@ -591,6 +603,36 @@ class TradingEngine:
             managed.state = "closed"
             self._spawn(self._cancel_protection(managed))
             return
+
+    async def _notify_trade(self, record: OrderRecord, fill: Fill, change: PositionChange) -> None:
+        """Bildirim (Telegram vb.): pozisyonun ilk açılış dolumu ve kapanışı. Bildirim hatası
+        işlem akışını etkilemez."""
+        if self.on_trade is None:
+            return
+        notice: TradeNotice | None = None
+        if change.closed is not None:
+            closed = change.closed
+            notice = TradeNotice(
+                market=self.market.value, mode=self.mode.value, symbol=record.symbol,
+                action="closed", side="long" if closed.direction >= 0 else "short",
+                quantity=format_decimal(abs(fill.qty)), price=format_decimal(fill.price),
+                net_pnl=format_decimal(closed.realized_pnl - closed.fees),
+            )  # fmt: skip
+        elif (
+            record.purpose == "entry"
+            and change.position is not None
+            and abs(change.position.quantity) == abs(fill.qty)
+        ):
+            notice = TradeNotice(
+                market=self.market.value, mode=self.mode.value, symbol=record.symbol,
+                action="opened", side="long" if change.position.quantity > 0 else "short",
+                quantity=format_decimal(abs(fill.qty)), price=format_decimal(fill.price),
+            )  # fmt: skip
+        if notice is not None:
+            try:
+                await self.on_trade(notice)
+            except Exception:  # bildirim hatası işlem akışını bozmaz
+                logger.warning("İşlem bildirimi iletilemedi", exc_info=True)
 
     async def _on_terminal(self, record: OrderRecord) -> None:
         managed = self.managed.get(record.symbol)

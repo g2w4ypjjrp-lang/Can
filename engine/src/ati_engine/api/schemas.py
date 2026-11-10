@@ -862,6 +862,19 @@ class DecisionInfo(BaseModel):
     reason: str | None = None
 
 
+class TelegramConfig(BaseModel):
+    """Telegram bildirim ayarı. Boş bırakılan anahtar/sohbet değiştirilmez."""
+
+    bot_token: str | None = Field(default=None, max_length=100)
+    chat_id: str | None = Field(default=None, max_length=40)
+    enabled: bool = False
+    categories: list[str] = Field(default_factory=lambda: ["safety", "trades", "alerts"])
+
+
+class TelegramDiscover(BaseModel):
+    bot_token: str | None = Field(default=None, max_length=100)
+
+
 class RemoteToggle(BaseModel):
     """Telefondan kontrolü aç/kapat (masaüstü uygulaması)."""
 

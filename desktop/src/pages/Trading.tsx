@@ -49,7 +49,7 @@ export function Trading() {
   return (
     <div className="page" data-testid="page-trading">
       <div className="notice">
-        <b>Binance test ağı.</b> Gerçek hesapla işlem bu sürümde kilitlidir; açılması için açık onayınız (G1: işlem yetkili ve para
+        <b>Binance Demo Trading (sahte bakiye, gerçek fiyatlar).</b> Gerçek hesapla işlem bu sürümde kilitlidir; açılması için açık onayınız (G1: işlem yetkili ve para
         çekme yetkisi kapalı canlı anahtar, G2: ilk gerçek işlem) gerekir.
       </div>
       <ErrorBox error={status.error} what="Emir yürütme" />
@@ -62,7 +62,7 @@ export function Trading() {
                 {info.connected ? (info.stream_connected ? "Bağlı" : "Akış bekleniyor") : info.key_stored ? "Bağlı değil" : "Anahtar yok"}
               </Badge>
             </div>
-            <div className="stat-hint">{info.error ?? (info.connected ? `${info.open_positions ?? 0} açık pozisyon` : "Ayarlar → Test ağı anahtarı")}</div>
+            <div className="stat-hint">{info.error ?? (info.connected ? `${info.open_positions ?? 0} açık pozisyon` : "Ayarlar → Demo Trading anahtarı")}</div>
           </div>
         ))}
       </div>
@@ -146,7 +146,7 @@ export function Trading() {
       </Confirm>
       <Confirm
         open={closeAll}
-        title="Tüm test ağı pozisyonlarını kapat"
+        title="Tüm Demo Trading pozisyonlarını kapat"
         danger
         confirmLabel="Tümünü kapat"
         onCancel={() => setCloseAll(false)}
@@ -208,9 +208,9 @@ function TradeForm({
   };
 
   return (
-    <Card title="Yeni test ağı işlemi" testId="trade-form">
-      {!enabled && <div className="notice">İşlem açmak için Ayarlar'dan işlem modunu <b>Test ağı</b> yapın.</div>}
-      {enabled && !connected && <div className="notice">Bu piyasa için test ağı anahtarı bağlı değil.</div>}
+    <Card title="Yeni Demo Trading işlemi" testId="trade-form">
+      {!enabled && <div className="notice">İşlem açmak için Ayarlar'dan işlem modunu <b>Demo Trading</b> yapın.</div>}
+      {enabled && !connected && <div className="notice">Bu piyasa için Demo Trading anahtarı bağlı değil.</div>}
       <form className="form" onSubmit={onSubmit}>
         <Field label="Piyasa">
           <select value={market} onChange={(e) => setMarket(e.target.value as Market)} data-testid="trade-market">

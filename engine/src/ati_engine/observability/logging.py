@@ -69,6 +69,10 @@ def configure_logging(
         root.removeHandler(handler)
         handler.close()
     root.setLevel(level)
+    # HTTP istemcilerinin istek günlükleri adres yazar (Telegram adresinde bot anahtarı, Binance
+    # adreslerinde imza bulunabilir); yalnızca uyarı ve üstü kaydedilir.
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(max(logging.WARNING, root.level))
 
     if console:
         stream = logging.StreamHandler(sys.stderr)

@@ -47,7 +47,7 @@ export function Dashboard() {
         <Stat
           label="Günlük zarar"
           value={account ? pct(account.daily_loss_pct as number, 2, false) : "—"}
-          hint={account ? (account.halted ? "Gün kilitli" : `Özsermaye ${price(account.equity as string)}`) : "Test ağı bağlı değil"}
+          hint={account ? (account.halted ? "Gün kilitli" : `Özsermaye ${price(account.equity as string)}`) : "Demo anahtarı bağlı değil"}
           tone={account?.halted ? "down" : undefined}
         />
       </div>
@@ -71,7 +71,7 @@ export function Dashboard() {
           </div>
           <hr />
           <div className="row">
-            <span>Otomatik işlem (yalnızca test ağı):</span>
+            <span>Otomatik işlem (yalnızca Demo Trading):</span>
             <Badge tone={auto.data?.enabled ? "ok" : "neutral"} testId="auto-state">
               {auto.data?.enabled ? "Açık" : "Kapalı"}
             </Badge>

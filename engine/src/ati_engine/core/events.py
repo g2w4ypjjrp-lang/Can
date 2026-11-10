@@ -78,6 +78,19 @@ class Alert(SystemEvent, frozen=True, kw_only=True):
     context: dict[str, Any] = msgspec.field(default_factory=dict)
 
 
+class TradeNotice(SystemEvent, frozen=True, kw_only=True):
+    """Pozisyon açıldı / kapandı özeti (bildirimler için; emir ayrıntısı ve anahtar içermez)."""
+
+    market: str
+    mode: str
+    symbol: str
+    action: str  # "opened" | "closed"
+    side: str  # "long" | "short"
+    quantity: str
+    price: str
+    net_pnl: str | None = None
+
+
 # Yerel API ve protokol şeması için bilinen çekirdek sistem olayları
 # (piyasa sistem olayları ``market.events.PUBLIC_MARKET_EVENT_TYPES`` içindedir).
 PUBLIC_EVENT_TYPES: tuple[type[SystemEvent], ...] = (

@@ -88,6 +88,8 @@ from ati_engine.api.schemas import (
     StrategyInfo,
     StrategyRegistryInfo,
     TaskInfo,
+    TelegramConfig,
+    TelegramDiscover,
     TestnetKeyRequest,
     TestnetKeyResponse,
     TestnetTradeRequest,
@@ -122,6 +124,7 @@ from ati_engine.licensing.keys import InvalidLicenseKey
 from ati_engine.licensing.manager import LicenseManager, LicenseRejected, LicenseUnavailable
 from ati_engine.market.service import MarketDataService
 from ati_engine.ml.registry import ModelError
+from ati_engine.notify.telegram import TelegramError, TelegramNotifier
 from ati_engine.paper.competition import LIVE_CANDIDATE, PaperCompetition
 from ati_engine.remote.service import REMOTE_ENABLED_KEY, RemoteService
 from ati_engine.runtime import EngineRuntime
@@ -1234,6 +1237,64 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             details={"enabled": body.enabled, "environment": "testnet"},
         )
         return trader.status()
+
+    # --- Telegram bildirimleri ------------------------------------------------------------------
+
+    def telegram_or_404() -> TelegramNotifier:
+        if runtime.telegram is None:
+            raise HTTPException(status_code=404, detail="Bildirim servisi etkin değil")
+        return runtime.telegram
+
+    @app.get("/v1/notifications/telegram")
+    async def telegram_status(_: Auth) -> dict[str, Any]:
+        return telegram_or_404().status()
+
+    @app.post("/v1/notifications/telegram")
+    async def telegram_configure(body: TelegramConfig, _: Auth) -> dict[str, Any]:
+        notifier = telegram_or_404()
+        try:
+            await notifier.configure(
+                token=body.bot_token or None,
+                chat_id=body.chat_id or None,
+                enabled=body.enabled,
+                categories=body.categories,
+            )
+        except TelegramError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        await runtime.audit.record(
+            actor=LOCAL_ACTOR,
+            action="notify.telegram_configured",
+            details={"enabled": body.enabled, "categories": body.categories,
+                     "token_changed": bool(body.bot_token)},
+        )  # fmt: skip
+        return notifier.status()
+
+    @app.post("/v1/notifications/telegram/test")
+    async def telegram_test(_: Auth) -> dict[str, Any]:
+        notifier = telegram_or_404()
+        try:
+            await notifier.send_now(
+                "✅ AI Trading Intelligence: Telegram bildirimleri çalışıyor.\n"
+                "Acil durdurma, pozisyon açılış/kapanışları ve uyarılar buraya gelecek."
+            )
+        except TelegramError as exc:
+            notifier.last_error = str(exc)
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return notifier.status()
+
+    @app.post("/v1/notifications/telegram/discover")
+    async def telegram_discover(body: TelegramDiscover, _: Auth) -> list[dict[str, str]]:
+        try:
+            return await telegram_or_404().discover(body.bot_token)
+        except TelegramError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.post("/v1/notifications/telegram/remove")
+    async def telegram_clear(_: Auth) -> dict[str, Any]:
+        notifier = telegram_or_404()
+        await notifier.clear()
+        await runtime.audit.record(actor=LOCAL_ACTOR, action="notify.telegram_removed")
+        return notifier.status()
 
     # --- Uzaktan kontrol: telefon eşleştirme (Aşama 13) -----------------------------------------
 

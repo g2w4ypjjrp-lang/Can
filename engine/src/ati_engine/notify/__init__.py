@@ -1,0 +1,1 @@
+"""Kullanıcı bildirimleri (Telegram)."""

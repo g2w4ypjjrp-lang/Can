@@ -75,6 +75,7 @@ async def test_status_requires_valid_token(running: RunningEngine) -> None:
     assert {t["name"] for t in body["tasks"]} == {
         "loop-lag-monitor",
         "heartbeat",
+        "telegram",  # bildirim kuyruğu (kapalıyken boşta bekler)
         "execution-connect",  # test ağı anahtarı yoksa hemen tamamlanır
     }
 

@@ -31,7 +31,7 @@ export function Performance() {
           { key: "paper", label: "Strateji yarışması" },
           { key: "positions", label: "Açık sanal pozisyonlar" },
           { key: "trades", label: "İşlem geçmişi" },
-          { key: "testnet", label: "Test ağı emirleri" },
+          { key: "testnet", label: "Demo Trading emirleri" },
         ]}
       />
       {view === "paper" && (
@@ -101,7 +101,7 @@ export function Performance() {
         </Card>
       )}
       {view === "testnet" && (
-        <Card title="Test ağı emir geçmişi (bu oturum)">
+        <Card title="Demo Trading emir geçmişi (bu oturum)">
           <ErrorBox error={testnet.error} what="Emir yürütme" />
           <DataTable
             rows={testnet.data}

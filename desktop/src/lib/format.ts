@@ -95,7 +95,7 @@ export const STATE_LABELS: Record<string, string> = {
 
 export const MODE_LABELS: Record<string, string> = {
   paper: "Sanal işlem",
-  testnet: "Test ağı",
+  testnet: "Demo Trading",
   live: "Gerçek hesap",
 };
 

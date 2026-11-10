@@ -4,6 +4,7 @@ import type { AuditEntry, Market, StatusResponse, TestnetKeyResponse, TradingMod
 import { Badge, Card, DataTable, ErrorBox, Field } from "../components/ui";
 import { MARKET_LABELS, MODE_LABELS, time } from "../lib/format";
 import { LicenseSection } from "./License";
+import { TelegramSection } from "./Telegram";
 
 interface ExecutionStatus {
   live_locked: boolean;
@@ -67,7 +68,7 @@ export function Settings() {
           </ul>
         )}
         <p className="muted small">
-          Sanal işlem gerçek emir göndermez. Test ağı Binance'in sahte parayla çalışan ortamıdır. Gerçek hesapla işlem bu sürümde
+          Sanal işlem gerçek emir göndermez. Demo Trading, Binance'in sahte bakiyeyle ve gerçek fiyatlarla çalışan ortamıdır. Gerçek hesapla işlem bu sürümde
           kilitlidir: işlem yetkili canlı anahtar (G1) ve ilk gerçek işlem (G2) için açık onayınız gerekir.
         </p>
       </Card>
@@ -77,6 +78,8 @@ export function Settings() {
           <KeyForm key={market} market={market} info={execution.data?.markets[market]} onChange={execution.refresh} />
         ))}
       </div>
+
+      <TelegramSection />
 
       <Card title="Denetim kaydı (son işlemler)">
         <ErrorBox error={audit.error} />

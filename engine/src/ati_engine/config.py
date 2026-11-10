@@ -218,6 +218,19 @@ def is_release_build() -> bool:
     return bool(getattr(sys, "frozen", False))
 
 
+class NotifySettings(BaseModel):
+    """Bildirimler. Telegram adresi yalnızca testlerde değiştirilir."""
+
+    telegram_api: str = "https://api.telegram.org"
+
+    @field_validator("telegram_api")
+    @classmethod
+    def _secure_telegram(cls, value: str) -> str:
+        if value.startswith(("https://", "http://127.0.0.1", "http://localhost")):
+            return value.rstrip("/")
+        raise ValueError("Telegram adresi https:// ile başlamalı")
+
+
 class LicenseSettings(BaseModel):
     """Lisans (Aşama 15). Kira, buluttaki lisans servisinin Ed25519 anahtarıyla imzalanır;
     güvenilir açık anahtar(lar) sürüme gömülür.
@@ -473,6 +486,7 @@ class EngineSettings(BaseSettings):
     autotrade: AutoTradeSettings = Field(default_factory=AutoTradeSettings)
     remote: RemoteSettings = Field(default_factory=RemoteSettings)
     license: LicenseSettings = Field(default_factory=LicenseSettings)
+    notify: NotifySettings = Field(default_factory=NotifySettings)
 
     @model_validator(mode="after")
     def _release_license(self) -> Self:
