@@ -190,26 +190,88 @@ Bilgi "Caddy $(& $CaddyExe version)"
 # ---------------------------------------------------------------------------------------------
 Adim "PostgreSQL 16 (yalnızca bu makineden erişilir)"
 $PgSifreDosyasi = Join-Path $Ayarlar "postgres-yonetici.txt"
-$pgVar = Get-Service -Name $PgServis -ErrorAction SilentlyContinue
-if (-not $pgVar) {
-    $super = Rastgele-Hex 24
-    Yaz-Utf8 $PgSifreDosyasi "postgres kullanıcısının parolası (yalnızca bakım için): $super`r`n"
+$Psql = Join-Path $PgKlasor "bin\psql.exe"
+$PgGunluk = Join-Path $env:TEMP "install-postgresql.log"
+# Veritabanı adresi ayar dosyasına yalnızca ilk kurulum başarıyla bittikten sonra yazılır.
+$ilkKurulumBitti = (Oku-Env (Join-Path $Ayarlar "bulut.env")).Contains("ATI_DATABASE_URL")
+
+function Pg-Sifre {
+    if (-not (Test-Path $PgSifreDosyasi)) { return $null }
+    return ([System.IO.File]::ReadAllText($PgSifreDosyasi).Split(":")[-1]).Trim()
+}
+
+function Pg-Baglaniyor([string]$Sifre) {
+    if (-not $Sifre -or -not (Test-Path $Psql)) { return $false }
+    $servis = Get-Service -Name $PgServis -ErrorAction SilentlyContinue
+    if (-not $servis) { return $false }
+    if ($servis.Status -ne "Running") {
+        try { Start-Service $PgServis } catch { return $false }
+    }
+    $env:PGPASSWORD = $Sifre
+    for ($i = 0; $i -lt 10; $i++) {
+        $ErrorActionPreference = "Continue"   # 5.1: yönlendirilen stderr hata sayılmasın
+        & $Psql -h 127.0.0.1 -U postgres -d postgres -tAc "SELECT 1" 2>&1 | Out-Null
+        $kod = $LASTEXITCODE
+        $ErrorActionPreference = "Stop"
+        if ($kod -eq 0) { return $true }
+        Start-Sleep -Seconds 2
+    }
+    return $false
+}
+
+function Pg-Kaldir {
+    Bilgi "Yarım kalan PostgreSQL kurulumu kaldırılıyor (içinde veri yok)…"
+    if (Get-Service -Name $PgServis -ErrorAction SilentlyContinue) {
+        try { Stop-Service $PgServis -Force } catch { }
+    }
+    $kaldirici = Join-Path $PgKlasor "uninstall-postgresql.exe"
+    if (Test-Path $kaldirici) { Start-Process $kaldirici -ArgumentList "--mode", "unattended" -Wait | Out-Null }
+    if (Get-Service -Name $PgServis -ErrorAction SilentlyContinue) { & sc.exe delete $PgServis | Out-Null }
+    Start-Sleep -Seconds 3
+    if (Test-Path $PgKlasor) {
+        try { Remove-Item $PgKlasor -Recurse -Force }
+        catch { Hata "$PgKlasor silinemedi. Bilgisayarı yeniden başlatıp betiği tekrar çalıştırın." }
+    }
+}
+
+function Pg-Kur {
+    $sifre = Rastgele-Hex 24
+    Yaz-Utf8 $PgSifreDosyasi "postgres kullanıcısının parolası (yalnızca bakım için): $sifre`r`n"
     $kurulum = Indir-Dogrula "pg"
     $imza = Get-AuthenticodeSignature $kurulum
     if ($imza.Status -ne "Valid") { Hata "PostgreSQL kurulum dosyasının dijital imzası geçersiz: $($imza.Status)" }
     Bilgi "Kuruluyor (birkaç dakika sürebilir)…"
+    # --locale C: Türkçe Windows'un yerel ayar adı ("Turkish_Türkiye.1254") veritabanı kümesinin
+    # oluşturulmasını bozar. Türkçe karakterler etkilenmez (veritabanı UTF-8).
     $p = Start-Process $kurulum -Wait -PassThru -ArgumentList @(
         "--mode", "unattended", "--unattendedmodeui", "none",
-        "--superpassword", $super, "--serverport", "5432", "--servicename", $PgServis,
-        "--prefix", "`"$PgKlasor`"",
+        "--superpassword", $sifre, "--serverport", "5432", "--servicename", $PgServis,
+        "--prefix", "`"$PgKlasor`"", "--locale", "C",
         "--enable-components", "server,commandlinetools", "--disable-components", "pgAdmin,stackbuilder")
-    if ($p.ExitCode -ne 0) { Hata "PostgreSQL kurulamadı (çıkış kodu $($p.ExitCode)). Günlük: $env:TEMP\install-postgresql.log" }
-} elseif (-not (Test-Path $PgSifreDosyasi)) {
-    Hata "Bu makinede zaten bir PostgreSQL 16 ($PgServis) var ama bu betikle kurulmamış. postgres parolasını $PgSifreDosyasi dosyasına 'postgres kullanıcısının parolası (yalnızca bakım için): <parola>' biçiminde yazıp tekrar çalıştırın."
+    if (-not (Pg-Baglaniyor $sifre)) {
+        if (Test-Path $PgGunluk) {
+            Write-Host "    Kurulum günlüğündeki hata satırları:" -ForegroundColor Yellow
+            Select-String -Path $PgGunluk -Pattern "error|fail|problem|unable|invalid" |
+                Select-Object -Last 15 | ForEach-Object { Write-Host "    $($_.Line)" }
+        }
+        Hata "PostgreSQL kurulamadı (çıkış kodu $($p.ExitCode)). Bu ekranın görüntüsünü gönderin. Günlük: $PgGunluk"
+    }
+    if ($p.ExitCode -ne 0) { Bilgi "Kurulum programı $($p.ExitCode) koduyla bitti ama veritabanı çalışıyor; devam ediliyor." }
 }
-$super = ([System.IO.File]::ReadAllText($PgSifreDosyasi).Split(":")[-1]).Trim()
-Start-Service $PgServis
-$Psql = Join-Path $PgKlasor "bin\psql.exe"
+
+$super = Pg-Sifre
+$pgServisi = Get-Service -Name $PgServis -ErrorAction SilentlyContinue
+if (-not $super -and ($pgServisi -or (Test-Path $PgKlasor))) {
+    Hata "Bu makinede bu betikle kurulmamış bir PostgreSQL 16 var ($PgKlasor). postgres parolasını $PgSifreDosyasi dosyasına 'postgres kullanıcısının parolası (yalnızca bakım için): <parola>' biçiminde yazıp tekrar çalıştırın."
+}
+if (-not (Pg-Baglaniyor $super)) {
+    if ($ilkKurulumBitti) {
+        Hata "PostgreSQL çalışmıyor. Veri kaybını önlemek için otomatik onarım yapılmaz. 'Get-Service $PgServis' çıktısını ve $PgKlasor\data\log klasöründeki son günlüğü gönderin."
+    }
+    if ($pgServisi -or (Test-Path $PgKlasor)) { Pg-Kaldir }
+    Pg-Kur
+    $super = Pg-Sifre
+}
 $env:PGPASSWORD = $super
 function Sql([string]$Komut, [string]$Veritabani = "postgres") {
     $sonuc = & $Psql -h 127.0.0.1 -U postgres -d $Veritabani -v ON_ERROR_STOP=1 -tAc $Komut
