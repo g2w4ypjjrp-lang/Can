@@ -19,6 +19,9 @@ describe("yönetim paneli alan adı ayrımı", () => {
   it("herkese açık sitede /yonetim 404 olur", () => {
     const response = adminRouting(request("https://canarslan.net.tr/yonetim/giris"), ADMIN);
     expect(response?.status).toBe(404);
+    // Yeniden yazma değil: vekil arkasında Next.js yeniden yazmayı dış adrese iletip 500 veriyordu.
+    expect(response?.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response?.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(adminRouting(request("https://canarslan.net.tr/paketler"), ADMIN)).toBeNull();
   });
 

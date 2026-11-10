@@ -15,7 +15,13 @@ export function adminRouting(request: NextRequest, adminHost: string | null): Ne
     return NextResponse.redirect(new URL("/yonetim", request.url));
   }
   if (host !== adminHost && isAdminPath) {
-    return NextResponse.rewrite(new URL("/__yok", request.url), { status: 404 });
+    // Doğrudan 404 (yeniden yazma değil): ters vekil "X-Forwarded-Proto: https" gönderdiğinde
+    // Next.js yeniden yazma adresini dış adres sanıp isteği kendine HTTPS ile iletmeye çalışıyor ve
+    // 500 veriyordu (Windows sunucusunda Caddy arkasında bulundu).
+    return new NextResponse("Sayfa bulunamadı", {
+      status: 404,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "X-Robots-Tag": "noindex, nofollow", "Cache-Control": "no-store" },
+    });
   }
   return null;
 }
