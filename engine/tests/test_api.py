@@ -77,6 +77,7 @@ async def test_status_requires_valid_token(running: RunningEngine) -> None:
         "heartbeat",
         "telegram",  # bildirim kuyruğu (kapalıyken boşta bekler)
         "crash-reports",  # isteğe bağlı hata raporu kuyruğu (kapalıyken boşta bekler)
+        "strategy-reliability",  # strateji ağırlıklarını saatte bir günceller
         "execution-connect",  # test ağı anahtarı yoksa hemen tamamlanır
     }
 

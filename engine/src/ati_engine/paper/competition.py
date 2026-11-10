@@ -43,6 +43,7 @@ from ati_engine.core.models import Market
 from ati_engine.execution.fills import FillSimulator, SimulatedFill
 from ati_engine.market.events import AggTrade
 from ati_engine.scoring.live import LiveBarScore
+from ati_engine.scoring.reliability import Reliability, reliability
 from ati_engine.storage.database import Database
 from ati_engine.strategies.base import MarketKind
 from ati_engine.strategies.library import strategies_for
@@ -633,6 +634,14 @@ class PaperCompetition:
                 if row and row[0] == "paper":
                     await set_stage(self.db, sid, "live_candidate")
                     logger.info("Strateji canlı adayı oldu", extra={"strategy": sid})
+
+    def reliability(self, market: Market) -> dict[str, Reliability]:
+        """Piyasadaki her stratejinin sanal sonuçlarına göre güvenilirlik çarpanı."""
+        return {
+            name: reliability([t.r_multiple for t in account.trades])
+            for (name, account_market), account in self.accounts.items()
+            if account_market is market and name != "opportunity_score"
+        }
 
     def leaderboard(self, market: Market | None = None) -> list[dict[str, Any]]:
         rows = []

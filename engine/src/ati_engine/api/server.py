@@ -847,6 +847,24 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             for s in ALL_STRATEGIES
         ]
 
+    @app.get("/v1/opportunities/reliability")
+    async def opportunity_reliability(_: Auth) -> dict[str, Any]:
+        """Stratejilerin sanal sonuçlara göre puandaki ağırlık çarpanı (yoksa hepsi 1)."""
+        paper = runtime.paper
+        return {
+            "markets": {
+                market.value: {
+                    name: r.to_dict() for name, r in sorted(paper.reliability(market).items())
+                }
+                for market in Market
+            }
+            if paper is not None
+            else {},
+            "explanation": "Çarpan, stratejinin sanal yarışmadaki işlemlerinin ortalama R katından "
+            "hesaplanır (az işlemde 1'e doğru küçültülür; en az 10 işlem gerekir). Sınırlar "
+            "0,4-1,4. Geçmiş sanal sonuçlar gelecekteki sonuçları göstermez.",
+        }
+
     @app.get("/v1/opportunities/calibration")
     async def opportunity_calibration(_: Auth) -> dict[str, Any]:
         engine = opportunities_or_404()

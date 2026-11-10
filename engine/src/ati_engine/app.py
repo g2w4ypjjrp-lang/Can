@@ -418,6 +418,22 @@ class Engine:
         )
         await competition.load(settings.markets)
         runtime.paper = competition
+        if runtime.opportunities is not None:
+            engine = runtime.opportunities
+
+            async def refresh_reliability() -> None:
+                """Strateji ağırlıklarını sanal sonuçlara göre saatte bir günceller."""
+                while True:
+                    for market, scorer in engine.scorers.items():
+                        scorer.reliability = {
+                            name: r.multiplier
+                            for name, r in competition.reliability(market).items()
+                        }
+                    await asyncio.sleep(3600)
+
+            runtime.supervisor.spawn(
+                "strategy-reliability", refresh_reliability, RestartPolicy(max_restarts=10)
+            )
         if services and runtime.opportunities is not None:
             runtime.bus.subscribe(
                 AggTrade, competition.on_trade, name="paper-trades", maxsize=200_000

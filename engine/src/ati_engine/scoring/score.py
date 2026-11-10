@@ -182,8 +182,17 @@ class OpportunityScorer:
             self.weights.update(weights)
         self.costs = cost_model or CostModel()
         self.calibration = calibration
+        # Strateji adı → güvenilirlik çarpanı (sanal yarışma sonuçlarından; yoksa 1).
+        self.reliability: Mapping[str, float] = {}
 
     # --- Bileşenler --------------------------------------------------------------------
+
+    def _weight(self, sig: StrategySignal, regime: str | None) -> float:
+        """Sinyalin uzlaşıdaki ağırlığı: rejim çarpanı × sanal sonuç güvenilirliği."""
+        factors = REGIME_FACTORS.get(regime or "", {})
+        return factors.get(CATEGORY.get(sig.strategy, ""), 1.0) * self.reliability.get(
+            sig.strategy, 1.0
+        )
 
     def _components(self, x: ScoreInputs) -> dict[str, tuple[float | None, str]]:
         s = x.snapshot
@@ -191,11 +200,12 @@ class OpportunityScorer:
 
         if x.signals:
             regime = x.context.regime if x.context is not None else None
-            factors = REGIME_FACTORS.get(regime or "", {})
             total = sum(
-                sig.direction * sig.strength * factors.get(CATEGORY.get(sig.strategy, ""), 1.0)
-                for sig in x.signals
+                sig.direction * sig.strength * self._weight(sig, regime) for sig in x.signals
             )
+            reliable = self.reliability
+            lowered = sum(1 for sig in x.signals if reliable.get(sig.strategy, 1.0) < 0.95)
+            raised = sum(1 for sig in x.signals if reliable.get(sig.strategy, 1.0) > 1.05)
             longs = sum(1 for sig in x.signals if sig.direction > 0)
             shorts = len(x.signals) - longs
             note = ""
@@ -203,6 +213,10 @@ class OpportunityScorer:
                 note = "; trend rejimi: trend ve kırılım stratejileri öne çıkarıldı"
             elif regime == "range":
                 note = "; yatay rejim: ortalamaya dönüş stratejileri öne çıkarıldı"
+            if lowered or raised:
+                note += (
+                    f"; sanal sonuçlara göre {raised} sinyal güçlendirildi, {lowered} zayıflatıldı"
+                )
             out["strategies"] = (
                 math.tanh(total / 1.5),
                 f"{len(x.signals)} strateji sinyal verdi ({longs} long, {shorts} short){note}",
@@ -421,6 +435,7 @@ class OpportunityScorer:
                     "strategy": sig.strategy,
                     "direction": "long" if sig.direction > 0 else "short",
                     "strength": round(sig.strength, 3),
+                    "weight": round(self._weight(sig, x.context.regime if x.context else None), 3),
                     "reason": sig.reason,
                 }
                 for sig in x.signals
