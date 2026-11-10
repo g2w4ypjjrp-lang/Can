@@ -244,7 +244,7 @@ export function Field({
 const AUTH_POINTS = [
   "İşlem motoru kendi bilgisayarınızda çalışır",
   "Borsa API anahtarlarınız bize gönderilmez",
-  "Önce sanal işlem ve test ağıyla deneyin",
+  "Önce sanal işlem ve Demo Trading ile deneyin",
 ];
 
 /** Hesap sayfaları (giriş, kayıt, parola): solda marka paneli, sağda form. */

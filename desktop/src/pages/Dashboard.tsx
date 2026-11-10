@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAction, usePoll } from "../api/hooks";
 import type { OpportunitySummary, StatusResponse, WhaleAlertInfo } from "../api/types.gen";
+import { GettingStarted } from "../components/GettingStarted";
 import { Badge, Card, Confirm, DataTable, Disclaimer, ErrorBox, Stat } from "../components/ui";
 import { duration, MARKET_LABELS, MODE_LABELS, num, pct, price, STATE_LABELS, time } from "../lib/format";
 
@@ -33,6 +34,7 @@ export function Dashboard() {
   return (
     <div className="page" data-testid="page-dashboard">
       <ErrorBox error={status.error} what="Motor durumu" />
+      <GettingStarted />
       <div className="stats">
         <Stat
           label="Motor"

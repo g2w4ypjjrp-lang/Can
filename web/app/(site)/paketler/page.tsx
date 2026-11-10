@@ -36,7 +36,7 @@ export default async function PlansPage() {
                   <div>
                     <h2 className="text-xl font-semibold text-fg">{trial.name}</h2>
                     <p className="mt-1 text-muted">
-                      {durationLabel(trial.duration_days)} boyunca {deviceLabel(trial.device_limit)}; tüm özellikler, sanal işlem ve test ağı.
+                      {durationLabel(trial.duration_days)} boyunca {deviceLabel(trial.device_limit)}; tüm özellikler, sanal işlem ve Binance Demo Trading.
                     </p>
                   </div>
                 </div>

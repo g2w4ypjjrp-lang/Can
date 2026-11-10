@@ -29,7 +29,7 @@ const STEPS = [
   },
   {
     title: "Binance API anahtarını güvenli bağlayın",
-    text: "Önce test ağı (testnet) anahtarıyla deneyin. Gerçek hesapta anahtara yalnızca okuma ve işlem izni verin; para çekme (withdraw) iznini asla açmayın ve IP kısıtlaması kullanın.",
+    text: "Önce Binance Demo Trading anahtarıyla (demo.binance.com → API Management, sahte bakiye) deneyin. Gerçek hesapta anahtara yalnızca okuma ve işlem izni verin; para çekme (withdraw) iznini asla açmayın ve IP kısıtlaması kullanın.",
   },
 ];
 

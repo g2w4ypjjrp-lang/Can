@@ -1,3 +1,4 @@
+import { Inbox } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import type { ApiError } from "../api/client";
 
@@ -64,7 +65,12 @@ export function Badge({
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <div className="empty">{children}</div>;
+  return (
+    <div className="empty">
+      <Inbox aria-hidden="true" size={20} />
+      <span>{children}</span>
+    </div>
+  );
 }
 
 /** Hata kutusu. Servis kapalıysa (404) bunu açıklayan sakin bir mesaj gösterir. */

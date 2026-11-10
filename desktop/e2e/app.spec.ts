@@ -29,6 +29,19 @@ test("genel bakış motor durumunu ve hazırlık koşullarını gösterir", asyn
   await expect(page.getByTestId("conditions")).toContainText("risk.daily_loss");
 });
 
+test("başlarken kartı yapılacakları gösterir ve ilgili ekrana götürür", async ({ page }) => {
+  await open(page);
+  const card = page.getByTestId("getting-started");
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("1 / 3 adım tamam"); // lisans (bu sürümde zorunlu değil) tamam
+  await expect(page.getByTestId("gs-binance")).toContainText("demo.binance.com");
+  await page.getByTestId("gs-phone").click();
+  await expect(page.getByTestId("page-phone")).toBeVisible();
+  await page.getByTestId("nav-dashboard").click();
+  await page.getByTestId("gs-binance").click();
+  await expect(page.getByTestId("page-settings")).toBeVisible();
+});
+
 test("bütün ekranlar açılır", async ({ page }) => {
   await open(page);
   for (const key of [

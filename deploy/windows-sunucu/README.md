@@ -137,6 +137,24 @@ Not: Resend hesap verilerini ve gönderim kayıtlarını ABD'de tutar (e-postala
 gönderilir). Müşteri e-posta adresleri bu nedenle yurt dışına aktarılır; KVKK aydınlatma metninde
 belirtilmelidir (hukukçu onayı).
 
+## Paketler, lisanslar ve site görünümü (yönetim paneli)
+
+* **Paketler:** Başlangıçta tüm paketler pasif ve fiyatsızdır (fiyat bir iş kararıdır). Yönetim
+  paneli → **Paketler ve fiyatlar**'da fiyat girip paketi etkinleştirince sitede ve satın almada
+  görünür. Ödeme sağlayıcısı (PayTR/iyzico) ve canlı ödeme ayrı onay (G3) ister.
+* **Elle lisans (kendiniz ya da bir müşteri için):** müşteri önce sitede hesap açar
+  (canarslan.net.tr/kayit). Sonra panel → **Lisanslar → Lisans üret**: paket seçin, müşterinin
+  e-postasını yazın. Anahtar (`ATI-…`) bir kez gösterilir; müşteri panelinde de görünür. Paket pasif
+  olsa da elle lisans üretilebilir (ör. 7 günlük deneme).
+* **Uygulamada etkinleştirme:** kurulum paketinde lisans zorunludur; uygulama açılınca anahtar istenir.
+  Lisans sunucusunun imza anahtarı `bulut.env` içindedir: bu dosya kaybolursa kurulu uygulamalar
+  lisansı doğrulayamaz, yedeği kritik önemdedir.
+* **Müşteri silme:** panel → Müşteriler → ayrıntı → **Müşteriyi sil** (yalnızca süper yönetici,
+  e-posta yazılarak ve doğrulama koduyla). Kişisel veriler anonimleşir, lisanslar iptal olur;
+  siparişler yasal saklama için kalır.
+* **Site görünümü:** panel → **Ayarlar → Site görünümü**: Okyanus, Zümrüt, Gün batımı, Altın,
+  Grafit. Değişiklik ~30 saniyede sitede görünür.
+
 ## Günlük kullanım
 
 | İş | Komut (yönetici PowerShell'i) |

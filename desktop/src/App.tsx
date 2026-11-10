@@ -17,6 +17,7 @@ import { useEvents, usePoll } from "./api/hooks";
 import type { LicenseStatusResponse, StatusResponse } from "./api/types.gen";
 import { Badge } from "./components/ui";
 import { MODE_LABELS, STATE_LABELS } from "./lib/format";
+import { NavContext } from "./lib/nav";
 import { Analysis } from "./pages/Analysis";
 import { Dashboard, stateTone } from "./pages/Dashboard";
 import { Markets } from "./pages/Markets";
@@ -175,7 +176,7 @@ export function App() {
             </button>
           </div>
         </header>
-        {active.render()}
+        <NavContext.Provider value={setPage}>{active.render()}</NavContext.Provider>
       </main>
       <div className="toasts" aria-live="polite">
         {toasts.map((t) => (

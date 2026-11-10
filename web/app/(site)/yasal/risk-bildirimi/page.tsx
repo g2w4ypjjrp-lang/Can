@@ -73,7 +73,7 @@ export default function RiskDisclosurePage() {
 
       <h2>7. Gerçek parayla işlem</h2>
       <p>
-        Yazılım varsayılan olarak sanal işlem ve test ağıyla çalışır. Gerçek hesapta işlemi açmak sizin ayrı ve açık
+        Yazılım varsayılan olarak sanal işlem ve Binance Demo Trading (sahte bakiye) ortamıyla çalışır. Gerçek hesapta işlemi açmak sizin ayrı ve açık
         onayınızı gerektirir. Bu onayı vermeden önce stratejinizi sanal ortamda yeterince test etmenizi ve küçük
         tutarlarla başlamanızı öneririz.
       </p>

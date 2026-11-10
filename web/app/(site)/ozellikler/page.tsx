@@ -94,11 +94,11 @@ const SECTIONS: Section[] = [
   {
     id: "sanal",
     icon: TestTubeDiagonal,
-    title: "Sanal işlem (paper trading) ve test ağı",
+    title: "Sanal işlem (paper trading) ve Binance Demo Trading",
     lead: "Gerçek para riske atmadan, canlı piyasada deneyin.",
     points: [
       "Sanal bakiyeyle canlı fiyatlarla işlem; emir, komisyon ve kayma gerçeğe yakın benzetilir.",
-      "Otomatik işlem motoru Binance test ağında çalışır; emirler gerçek borsa akışından geçer ama gerçek para kullanılmaz.",
+      "Otomatik işlem motoru Binance Demo Trading'de (sahte bakiye, gerçek fiyatlar) çalışır; emirler gerçek borsa akışından geçer ama gerçek para kullanılmaz.",
       "Gerçek hesapta işlem varsayılan olarak kapalıdır ve yalnızca sizin ayrı ve açık onayınızla açılabilir.",
     ],
   },

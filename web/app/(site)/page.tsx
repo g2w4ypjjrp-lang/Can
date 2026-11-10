@@ -35,7 +35,7 @@ const HIGHLIGHTS = [
   "Gerekçeli fırsat puanı",
   "Backtest",
   "Sanal işlem",
-  "Test ağı",
+  "Demo Trading",
   "Risk kapısı",
   "Acil durdurma",
   "iPhone ile kontrol",
@@ -77,7 +77,7 @@ const STEPS: { icon: LucideIcon; title: string; text: string }[] = [
   {
     icon: KeyRound,
     title: "Borsa hesabınızı bağlayın",
-    text: "Binance API anahtarınızı ekleyin. Anahtar bilgisayarınızda şifreli saklanır; para çekme yetkisi açık anahtar kabul edilmez.",
+    text: "Önce Binance Demo Trading anahtarı (demo.binance.com) ile sahte bakiyeyle deneyin. Anahtar bilgisayarınızda şifreli saklanır; para çekme yetkisi açık anahtar kabul edilmez.",
   },
   {
     icon: FlaskConical,
@@ -130,7 +130,7 @@ export default async function HomePage() {
               </LinkButton>
             </div>
             <ul className="mt-9 grid max-w-lg grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-fg">
-              {["Önce sanal işlem", "Binance test ağı desteği", "Çekim yetkili anahtar reddedilir", "Tamamen Türkçe arayüz"].map((item) => (
+              {["Önce sanal işlem", "Binance Demo Trading desteği", "Çekim yetkili anahtar reddedilir", "Tamamen Türkçe arayüz"].map((item) => (
                 <li key={item} className="flex items-center gap-2">
                   <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-success-bg text-success-fg">
                     <Check aria-hidden="true" className="h-3 w-3" strokeWidth={3} />
@@ -383,8 +383,8 @@ export default async function HomePage() {
                 </div>
               </div>
               <p className="mt-4 text-sm leading-relaxed text-muted">
-                Durumu izleyin, bildirim alın, acil durdurmayı tek dokunuşla kullanın. Telefondan yeni pozisyon açılamaz ve para
-                çekilemez.
+                Masaüstündeki QR kodu okutarak saniyeler içinde eşleşir. Durumu izleyin, bildirim alın, acil durdurmayı tek dokunuşla
+                kullanın. Telefondan yeni pozisyon açılamaz ve para çekilemez.
               </p>
               <div className="mt-6">
                 <PhoneViz />

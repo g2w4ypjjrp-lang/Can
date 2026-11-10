@@ -29,7 +29,7 @@ export const FAQ: FaqItem[] = [
   {
     q: "Gerçek parayla işlem nasıl açılır?",
     a: [
-      "Uygulama sanal işlem ve Binance test ağı ile başlar. Gerçek hesapta işlem varsayılan olarak kapalıdır; açmak için ayarlarda ayrıca ve açıkça onay vermeniz gerekir.",
+      "Uygulama sanal işlem ve Binance Demo Trading (sahte bakiye, gerçek fiyatlar) ile başlar. Gerçek hesapta işlem varsayılan olarak kapalıdır; açmak için ayarlarda ayrıca ve açıkça onay vermeniz gerekir.",
       "Gerçek hesapta da işlem başına risk, günlük zarar sınırı ve acil durdurma her zaman etkindir.",
     ],
   },
