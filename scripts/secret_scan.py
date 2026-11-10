@@ -6,14 +6,18 @@
 
 Aranır: özel anahtar blokları (PEM/OpenSSH), bulut ve hizmet belirteçleri (AWS, GitHub, Slack,
 Stripe, Google), API anahtarı / gizli anahtar atamaları, gerçek ortam dosyalarında (``.env``)
-doldurulmuş gizli değişkenler. Test verisi ve belgelenmiş örnekler için satıra
-``secret-scan: allow`` yazılır (gerekçesiyle). Bulgu varsa çıkış kodu 1'dir; bulgu metni
-maskelenerek yazılır (tarama çıktısı gizli bilgiyi sızdırmaz).
+doldurulmuş gizli değişkenler. Bulgu varsa çıkış kodu 1'dir; bulgu metni maskelenerek ve parmak
+iziyle (değerin SHA-256 özetinin ilk 16 hanesi) yazılır (çıktı gizli bilgiyi sızdırmaz).
+
+Bilinçli test değerleri iki yolla işaretlenir: satıra ``secret-scan: allow`` yazmak ya da parmak
+izini gerekçesiyle ``.secretscanignore`` dosyasına eklemek. Geçmişe girmiş test değerleri için
+yalnızca ikincisi işe yarar (geçmiş değiştirilemez).
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import math
 import re
 import subprocess
@@ -52,15 +56,32 @@ BINARY_SUFFIXES = (
 SKIP_PATHS = ("node_modules/", ".venv/", "target/", ".next/")
 
 
+IGNORE_FILE = ".secretscanignore"
+
+
 @dataclass(frozen=True)
 class Finding:
     where: str
     line: int
     kind: str
     excerpt: str
+    fingerprint: str = ""
 
     def __str__(self) -> str:
-        return f"{self.where}:{self.line}: {self.kind}: {self.excerpt}"
+        return f"{self.where}:{self.line}: {self.kind}: {self.excerpt} [parmak izi {self.fingerprint}]"
+
+
+def fingerprint(value: str) -> str:
+    return hashlib.sha256(value.strip().encode()).hexdigest()[:16]
+
+
+def load_ignored(path: str = IGNORE_FILE) -> set[str]:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+    except FileNotFoundError:
+        return set()
+    return {ln.split()[0] for ln in lines if ln.strip() and not ln.lstrip().startswith("#")}
 
 
 def entropy(text: str) -> float:
@@ -90,11 +111,12 @@ def scan_line(path: str, number: int, line: str) -> Iterator[Finding]:
         value = match.group(match.lastindex or 0)
         if kind == "API anahtarı ataması" and (PLACEHOLDER.search(value) or entropy(value) < 3.5):
             continue
-        yield Finding(path, number, kind, mask(value))
+        yield Finding(path, number, kind, mask(value), fingerprint(value))
     if is_env_file(path):
         match = ENV_SECRET.search(line)
         if match and not PLACEHOLDER.search(match.group(1)):
-            yield Finding(path, number, "ortam dosyasında gizli değer", mask(match.group(1)))
+            value = match.group(1)
+            yield Finding(path, number, "ortam dosyasında gizli değer", mask(value), fingerprint(value))
 
 
 def scan_text(path: str, text: str) -> Iterator[Finding]:
@@ -174,6 +196,9 @@ def self_test() -> int:
         failures.append("ortam dosyası")
     if any(j(["q9Wm2", "Rt7Yx4Lp8Kz"]) in str(f) for f in env_hit):
         failures.append("maskeleme")
+    aws = list(scan_line("ornek.py", 1, must_find["aws"]))
+    if not aws or aws[0].fingerprint != fingerprint(j(["AKIA", "Q3EGRZ7PWNXH4K2M"])):
+        failures.append("parmak izi")
     print("Öz sınama:", "başarısız: " + ", ".join(failures) if failures else "tamam", file=sys.stderr)
     return 1 if failures else 0
 
@@ -189,6 +214,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.history:
         seen = {(f.where, f.line) for f in findings}
         findings += [f for f in scan_history() if (f.where, f.line) not in seen]
+    ignored = load_ignored()
+    findings = [f for f in findings if f.fingerprint not in ignored]
     for finding in findings:
         print(finding)
     scope = "izlenen dosyalar + git geçmişi" if args.history else "izlenen dosyalar"

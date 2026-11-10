@@ -83,9 +83,16 @@ def rss_bytes() -> int | None:
 
         counters = Counters()
         counters.cb = ctypes.sizeof(Counters)
-        handle = ctypes.windll.kernel32.GetCurrentProcess()  # type: ignore[attr-defined]
-        if ctypes.windll.psapi.GetProcessMemoryInfo(  # type: ignore[attr-defined]
-            handle, ctypes.byref(counters), counters.cb
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        psapi = ctypes.windll.psapi  # type: ignore[attr-defined]
+        # 64 bit HANDLE: türler bildirilmezse ctypes 32 bit tamsayı geçirir ve çağrı başarısız olur.
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        psapi.GetProcessMemoryInfo.argtypes = [
+            wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD,
+        ]  # fmt: skip
+        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+        if psapi.GetProcessMemoryInfo(
+            kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb
         ):
             return int(counters.WorkingSetSize)
     return None
@@ -165,6 +172,7 @@ class Soak:
                 "lag_p99_ms": round(sorted(self.lags_ms)[int(len(self.lags_ms) * 0.99)], 1)
                 if self.lags_ms
                 else 0,
+                "lag_max_ms": round(max(self.lags_ms), 1) if self.lags_ms else 0,
             }
         )
         self.lags_ms.clear()
@@ -205,10 +213,16 @@ def evaluate(soak: Soak, healthy: bool, kill_ms: float, args: argparse.Namespace
         <= args.max_rss_growth,
         "görev sayısı sabit (≤ +10)": median([s["tasks"] for s in late])
         <= median([s["tasks"] for s in early]) + 10,
-        f"olay döngüsü gecikmesi p99 ≤ {args.max_lag_ms:.0f} ms": max(
-            s["lag_p99_ms"] for s in samples
+        # Kararlı durum (ısınmadan sonra) ve açılış ayrı değerlendirilir: açılışta tek seferlik
+        # yükleme beklenebilir ama motoru saniyelerce kilitlememeli.
+        f"olay döngüsü gecikmesi p99 ≤ {args.max_lag_ms:.0f} ms (ısınmadan sonra)": max(
+            s["lag_p99_ms"] for s in samples[warm:] or samples
         )
         <= args.max_lag_ms,
+        f"açılışta en uzun bekleme ≤ {args.max_startup_lag_ms:.0f} ms": max(
+            s["lag_max_ms"] for s in samples[:warm]
+        )
+        <= args.max_startup_lag_ms,
         "olay akışı sürdü": samples[-1]["events"] > samples[warm]["events"],
         "acil durdurma ≤ 500 ms": kill_ms <= 500,
     }
@@ -220,6 +234,8 @@ def evaluate(soak: Soak, healthy: bool, kill_ms: float, args: argparse.Namespace
         "rss_buyume_yuzde": round(growth("rss_mb"), 1),
         "yigin_buyume_yuzde": round(growth("py_heap_mb"), 1),
         "acil_durdurma_ms": round(kill_ms, 1),
+        "acilis_en_uzun_bekleme_ms": max(s["lag_max_ms"] for s in samples[:warm]),
+        "kararli_gecikme_p99_ms": max(s["lag_p99_ms"] for s in samples[warm:] or samples),
         "denetimler": checks,
         "basarili": all(checks.values()),
         "ornekler": samples,
@@ -227,6 +243,14 @@ def evaluate(soak: Soak, healthy: bool, kill_ms: float, args: argparse.Namespace
 
 
 async def run(args: argparse.Namespace) -> int:
+    if args.debug_slow:
+        # Olay döngüsünü 200 ms'den uzun tutan adımları (görev/geri çağrı adıyla) günlüğe yazar.
+        import logging
+
+        logging.basicConfig(level=logging.WARNING, format="YAVAŞ ADIM: %(message)s")
+        loop = asyncio.get_running_loop()
+        loop.set_debug(True)
+        loop.slow_callback_duration = 0.2
     tracemalloc.start()
     os.environ[TOKEN_ENV] = TOKEN
     origin = "http://127.0.0.1:4173"
@@ -315,7 +339,9 @@ async def run(args: argparse.Namespace) -> int:
         f"İstek {report['istek']}, olay {report['olay']}, "
         f"RSS büyümesi %{report['rss_buyume_yuzde']}, "
         f"yığın büyümesi %{report['yigin_buyume_yuzde']}, "
-        f"acil durdurma {report['acil_durdurma_ms']} ms"
+        f"acil durdurma {report['acil_durdurma_ms']} ms, "
+        f"açılışta en uzun bekleme {report['acilis_en_uzun_bekleme_ms']} ms, "
+        f"kararlı gecikme p99 {report['kararli_gecikme_p99_ms']} ms"
     )
     if report["api_hatalari"]:
         print("API hataları:", report["api_hatalari"])
@@ -340,7 +366,11 @@ def main() -> int:
     parser.add_argument("--tick-s", type=float, default=0.05, help="sahte piyasa olay aralığı")
     parser.add_argument("--max-rss-growth", type=float, default=25.0)
     parser.add_argument("--max-lag-ms", type=float, default=250.0)
+    parser.add_argument("--max-startup-lag-ms", type=float, default=3000.0)
     parser.add_argument("--json")
+    parser.add_argument(
+        "--debug-slow", action="store_true", help="olay döngüsünü tutan adımları adıyla yaz"
+    )
     args = parser.parse_args()
     if args.hours == 0 and args.minutes == 0:
         args.minutes = 3
