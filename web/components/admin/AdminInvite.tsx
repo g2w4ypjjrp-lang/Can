@@ -63,8 +63,8 @@ export function AdminInvite({ token }: { token: string | undefined }) {
   }
   if (codes) {
     return (
-      <Card className="space-y-4 shadow-soft">
-        <h1 className="text-xl font-semibold text-fg">Kurtarma kodlarınız</h1>
+      <Card className="space-y-4 p-7 shadow-lift sm:p-8">
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">Kurtarma kodlarınız</h1>
         <p className="text-sm text-muted">
           Telefonunuza erişemediğinizde bu kodlarla giriş yapabilirsiniz. Her kod bir kez kullanılır. Bu kodlar bir daha
           gösterilmeyecek; güvenli bir yere (ör. parola yöneticisi) kaydedin.
@@ -87,8 +87,8 @@ export function AdminInvite({ token }: { token: string | undefined }) {
     );
   }
   return (
-    <Card className="space-y-5 shadow-soft">
-      <h1 className="text-xl font-semibold text-fg">Yönetici hesabını etkinleştir</h1>
+    <Card className="space-y-5 p-7 shadow-lift sm:p-8">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Yönetici hesabını etkinleştir</h1>
       <Feedback error={action.error} />
       {setup ? (
         <>

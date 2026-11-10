@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 
 import { useApi } from "@/components/ApiContext";
-import { AdminPage, Feedback, Table, TotpInput, cell, inputClass, smallButton, useAdminAction, useAdminQuery } from "@/components/admin/kit";
+import { AdminPage, Feedback, Table, TotpInput, cell, inputClass, smallButton, useAdminAction, useAdminQuery, StatusPill } from "@/components/admin/kit";
 import { dateTime } from "@/lib/admin";
 import { formatSize } from "@/lib/releases";
 
@@ -153,7 +153,9 @@ function ReleaseRow({ release, onChanged }: { release: AdminRelease; onChanged: 
         {release.size_bytes ? <p className="text-xs text-muted">{formatSize(release.size_bytes)}</p> : null}
       </td>
       <td className={cell}>
-        <p data-testid="release-status">{STATUS[release.status]}</p>
+        <StatusPill testId="release-status" tone={release.status === "published" ? "success" : release.status === "withdrawn" ? "neutral" : "warn"}>
+          {STATUS[release.status]}
+        </StatusPill>
         <p className="text-xs text-muted">{dateTime(release.published_at ?? release.created_at)}</p>
       </td>
       <td className={cell}>

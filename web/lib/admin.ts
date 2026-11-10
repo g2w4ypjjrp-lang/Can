@@ -14,21 +14,24 @@ export interface NavEntry {
   href: string;
   label: string;
   permission: string | null;
+  group: "Genel" | "Satış" | "Müşteriler" | "Sistem";
 }
 
 export const ADMIN_NAV: NavEntry[] = [
-  { href: "/yonetim", label: "Özet", permission: "report.usage" },
-  { href: "/yonetim/paketler", label: "Paketler ve fiyatlar", permission: "plan.manage" },
-  { href: "/yonetim/lisanslar", label: "Lisanslar", permission: "license.read" },
-  { href: "/yonetim/musteriler", label: "Müşteriler", permission: "customer.read" },
-  { href: "/yonetim/siparisler", label: "Siparişler", permission: "order.read" },
-  { href: "/yonetim/mesajlar", label: "Mesajlar", permission: "customer.read" },
-  { href: "/yonetim/raporlar", label: "Raporlar", permission: "report.sales" },
-  { href: "/yonetim/surumler", label: "Sürümler (indirme)", permission: "release.manage" },
-  { href: "/yonetim/denetim", label: "Denetim kaydı", permission: "audit.read" },
-  { href: "/yonetim/yoneticiler", label: "Yöneticiler", permission: "admin.manage" },
-  { href: "/yonetim/ayarlar", label: "Ayarlar", permission: null },
+  { href: "/yonetim", label: "Özet", permission: "report.usage", group: "Genel" },
+  { href: "/yonetim/siparisler", label: "Siparişler", permission: "order.read", group: "Satış" },
+  { href: "/yonetim/paketler", label: "Paketler ve fiyatlar", permission: "plan.manage", group: "Satış" },
+  { href: "/yonetim/raporlar", label: "Raporlar", permission: "report.sales", group: "Satış" },
+  { href: "/yonetim/musteriler", label: "Müşteriler", permission: "customer.read", group: "Müşteriler" },
+  { href: "/yonetim/lisanslar", label: "Lisanslar", permission: "license.read", group: "Müşteriler" },
+  { href: "/yonetim/mesajlar", label: "Mesajlar", permission: "customer.read", group: "Müşteriler" },
+  { href: "/yonetim/surumler", label: "Sürümler (indirme)", permission: "release.manage", group: "Sistem" },
+  { href: "/yonetim/yoneticiler", label: "Yöneticiler", permission: "admin.manage", group: "Sistem" },
+  { href: "/yonetim/denetim", label: "Denetim kaydı", permission: "audit.read", group: "Sistem" },
+  { href: "/yonetim/ayarlar", label: "Ayarlar", permission: null, group: "Sistem" },
 ];
+
+export const NAV_GROUPS = ["Genel", "Satış", "Müşteriler", "Sistem"] as const;
 
 export function can(me: AdminMe | null, permission: string | null): boolean {
   return permission === null || Boolean(me?.permissions.includes(permission));

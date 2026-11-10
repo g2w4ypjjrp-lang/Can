@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 
 import { useApi } from "@/components/ApiContext";
 import { useAdmin } from "@/components/admin/AdminSession";
-import { AdminPage, Feedback, Table, TotpInput, cell, inputClass, smallButton, useAdminAction, useAdminQuery } from "@/components/admin/kit";
+import { AdminPage, Feedback, Table, TotpInput, cell, inputClass, smallButton, useAdminAction, useAdminQuery, StatusPill, licenseTone } from "@/components/admin/kit";
 import { Button, Card } from "@/components/ui";
 import { can, dateTime, toCsv } from "@/lib/admin";
 import { licenseStatusLabel } from "@/lib/format";
@@ -281,7 +281,7 @@ export function Licenses() {
                 <td className={cell}>{l.serial}</td>
                 <td className={`${cell} font-mono`}>{l.key_hint}</td>
                 <td className={cell}>{l.plan_code}</td>
-                <td className={cell}>{licenseStatusLabel(l.status)}</td>
+                <td className={cell}><StatusPill tone={licenseTone(l.status)}>{licenseStatusLabel(l.status)}</StatusPill></td>
                 <td className={cell}>{l.customer_email ?? "—"}</td>
                 <td className={cell}>{l.active_devices} / {l.device_limit}</td>
                 <td className={cell}>{dateTime(l.expires_at)}</td>

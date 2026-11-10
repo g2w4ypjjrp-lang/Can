@@ -38,8 +38,8 @@ export function AdminLogin({ next }: { next?: string }) {
   }
 
   return (
-    <Card className="shadow-soft">
-      <h1 className="text-xl font-semibold text-fg">Yönetici girişi</h1>
+    <Card className="p-7 shadow-lift sm:p-8">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Yönetici girişi</h1>
       {challenge === null ? (
         <form onSubmit={onPassword} className="mt-5 space-y-4">
           <Field id="email" name="email" type="email" label="E-posta" autoComplete="username" required />

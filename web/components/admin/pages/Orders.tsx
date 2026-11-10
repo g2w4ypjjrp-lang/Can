@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 
 import { useApi } from "@/components/ApiContext";
 import { useAdmin } from "@/components/admin/AdminSession";
-import { AdminPage, Feedback, Table, TotpInput, cell, inputClass, smallButton, useAdminAction, useAdminQuery } from "@/components/admin/kit";
+import { AdminPage, Feedback, Table, TotpInput, cell, inputClass, smallButton, useAdminAction, useAdminQuery, StatusPill, orderTone } from "@/components/admin/kit";
 import { Button, Card } from "@/components/ui";
 import { can, dateTime, formatMinor, parseMoney } from "@/lib/admin";
 import { formatPrice, licenseStatusLabel, orderStatusLabel } from "@/lib/format";
@@ -279,7 +279,7 @@ export function Orders() {
               <td className={cell}>{o.customer_email}</td>
               <td className={cell}>{o.plan_name ?? "—"}</td>
               <td className={cell}>{formatPrice(o.total_minor, o.currency)}</td>
-              <td className={cell}>{o.review_reason ? "İnceleme gerekli" : orderStatusLabel(o.status)}</td>
+              <td className={cell}>{o.review_reason ? <StatusPill tone="warn">İnceleme gerekli</StatusPill> : <StatusPill tone={orderTone(o.status)}>{orderStatusLabel(o.status)}</StatusPill>}</td>
               <td className={cell}>{dateTime(o.created_at)}</td>
               <td className={cell}>
                 <button type="button" className={smallButton} onClick={() => setSelected(o.id)} aria-label={`Sipariş ${o.order_no} ayrıntı`}>

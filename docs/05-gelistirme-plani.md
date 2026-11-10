@@ -964,6 +964,22 @@ Testler: bulut 194 (sürümler 15, platform/veritabanı ayarları 12, e-posta 8;
 yerel SMTP sunucusuyla), web birim 43, uçtan uca yönetici + sayfalar 25 (sürüm yayınla →
 İndir sayfasında görünür → geri çek; `/indir` erişilebilirlik 0 ihlal).
 
+### Tasarım yenilemesi — web sitesi ve yönetim paneli ✅
+
+- Tasarım sistemi: açık/koyu renk belirteçleri (metin çiftleri WCAG AA), Inter + JetBrains Mono
+  (npm, kendi sunucumuzdan), cam yüzeyler, degrade marka, hareketli ışık arka planı; tema seçici
+  (Sistem/Açık/Koyu, nonce'lu betikle boyamadan önce). Satır içi stil yok (CSP).
+- Site: yeni ana sayfa (örnek arayüz penceresi, akan özellik şeridi, bento özellik kartları,
+  güvenlik mimarisi şeması, 14 strateji, platformlar, paket özeti, SSS seçkisi), özellikler
+  (görselli dönüşümlü bölümler), paketler, SSS, iletişim, yasal sayfalar, hesap sayfaları,
+  müşteri paneli, 404. Görseller "örnek arayüz"; kazanç iddiası yok.
+- Yönetim paneli: gruplu ve ikonlu yan menü, üst çubuk, Ctrl+K hızlı geçiş, mobil çekmece; özet
+  ekranında gelir/sipariş göstergeleri, 30 günlük etkileşimli gelir grafiği (imleç, klavye, tablo
+  görünümü), lisans durumu çubukları, son siparişler, kullanım, hızlı işlemler, son etkinlikler;
+  tablolarda renkli durum etiketleri.
+- Doğrulama: birim 43, uçtan uca 37 (iki temada axe 0 ihlal); yönetim sayfalarının tamamı ve açık
+  hızlı geçiş penceresi iki temada axe 0 ihlal; grafik renkleri her iki zeminde ≥ 3:1.
+
 ## Açık kararlar (sizden bilgi gerekecek)
 
 1. **Fiyatlandırma:** ✅ Karar: paketler (fiyat, para birimi, satışa açma/kapama) ve ödeme
