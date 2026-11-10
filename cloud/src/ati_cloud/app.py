@@ -27,6 +27,7 @@ from ati_cloud.admin.settings_api import create_admin_settings_router
 from ati_cloud.config import CloudSettings
 from ati_cloud.contact import create_contact_router
 from ati_cloud.db.migrate import load_migrations, pending
+from ati_cloud.guards import RequestGuard
 from ati_cloud.licensing.api import create_license_router
 from ati_cloud.licensing.service import Licensing
 from ati_cloud.payments.api import create_admin_payments_router, create_payments_router
@@ -67,6 +68,8 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
     )
     app.state.settings = cfg
     app.state.db = db
+    # Köken (CSRF), gövde boyutu ve biçimi: uygulama gövdeyi ayrıştırmadan önce (guards.py).
+    app.add_middleware(RequestGuard, web_origins=cfg.web_origins, admin_origins=cfg.admin_origins)
     # Web sitesi müşteri paneli: yalnızca kendi kökenimizden, çerezle (SameSite=Strict).
     app.add_middleware(
         CORSMiddleware,
