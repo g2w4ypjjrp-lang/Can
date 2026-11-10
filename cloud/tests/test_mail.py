@@ -33,6 +33,8 @@ class SmtpStub:
     def __init__(self) -> None:
         self.messages: list[tuple[list[str], bytes]] = []
         self.auth: list[str] = []
+        self.auth_reply = "235 ok"
+        self.mail_from_reply = "250 ok"
         self.loop = asyncio.new_event_loop()
         self.port = 0
         ready = threading.Event()
@@ -65,7 +67,9 @@ class SmtpStub:
                 writer.write(b"250-stub\r\n250 AUTH PLAIN LOGIN\r\n")
             elif upper.startswith("AUTH"):
                 self.auth.append(command)
-                send("235 ok")
+                send(self.auth_reply)
+            elif upper.startswith("MAIL FROM"):
+                send(self.mail_from_reply)
             elif upper.startswith("RCPT TO"):
                 if "reddet" in command:
                     send("550 no such user")
@@ -327,3 +331,142 @@ def test_smtp_errors_are_classified() -> None:
     sender.smtp = Busy()  # type: ignore[assignment]
     with pytest.raises(smtplib.SMTPDataError):
         sender.send(message)
+
+
+# --- Teşhis (ati-cloud-mail test) -------------------------------------------------------------
+
+
+def lines(steps: list[Any]) -> str:
+    return "\n".join(step.line() for step in steps)
+
+
+def mark_stuck(conn: psycopg.Connection, outbox_id: Any, error: str) -> None:
+    conn.execute(
+        "UPDATE email_outbox SET status = 'failed', attempts = %s, last_error = %s WHERE id = %s",
+        (MAX_ATTEMPTS, error, outbox_id),
+    )
+
+
+async def test_diagnosis_succeeds_and_requeues_stuck_mail(
+    dsn: str, smtp: SmtpStub, db: Database
+) -> None:
+    """Ayar düzelince teşhis deneme e-postası gönderir ve ayar hatası yüzünden takılmış
+    e-postaları yeniden kuyruğa alır; alıcı reddi ve süresi dolmuş bağlantı alınmaz."""
+    from ati_cloud.mail_check import diagnose
+
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        stuck = enqueue(
+            conn, "takildi@ornek.com", "account_exists", {"link": "https://x.test/giris"}
+        )
+        mark_stuck(conn, stuck, "SMTP 550: The canarslan.net.tr domain is not verified")
+        refused = enqueue(conn, "yok@ornek.com", "account_exists", {"link": "https://x.test/giris"})
+        mark_stuck(conn, refused, "alıcı reddedildi")
+    settings = settings_for(dsn, smtp.port)
+    sent, steps = await asyncio.to_thread(diagnose, settings, "yonetici@ornek.com")
+    text = lines(steps)
+    assert sent, text
+    assert "[HATA]" not in text.split("Kuyruk:")[0]
+    assert "Deneme e-postası sağlayıcıya teslim edildi" in text
+    assert "1 takılmış e-posta" in text
+    assert "re_deneme" not in text  # API anahtarı yazdırılmaz
+    assert smtp.messages[-1][0] == ["yonetici@ornek.com"]
+
+    assert (await process_once(db, settings))["sent"] == 1
+    with psycopg.connect(dsn) as conn:
+        assert state(conn, stuck)["status"] == "sent"
+        assert state(conn, refused)["status"] == "failed"
+
+
+async def test_diagnosis_finds_blocked_port_and_suggests_open_one(dsn: str, smtp: SmtpStub) -> None:
+    from ati_cloud.mail_check import diagnose
+
+    class Sock:
+        def close(self) -> None: ...
+
+    def connect(address: tuple[str, int], _timeout: float) -> Sock:
+        if address[1] == 2465:
+            return Sock()
+        raise TimeoutError("engelli")
+
+    settings = settings_for(dsn, 465)
+    sent, steps = await asyncio.to_thread(diagnose, settings, "a@ornek.com", connect=connect)
+    text = lines(steps)
+    assert not sent
+    assert "[HATA] 127.0.0.1:465 bağlantısı kurulamadı" in text
+    assert "Açık portlar: 2465" in text and "Port: 2465" in text
+
+
+async def test_diagnosis_explains_rejected_key_and_unverified_domain(
+    dsn: str, smtp: SmtpStub
+) -> None:
+    from ati_cloud.mail_check import diagnose
+
+    settings = settings_for(dsn, smtp.port)
+    smtp.auth_reply = "535 Invalid API key"
+    sent, steps = await asyncio.to_thread(diagnose, settings, "a@ornek.com")
+    assert not sent and "Oturum açılamadı (SMTP 535: Invalid API key)" in lines(steps)
+    assert "API Keys" in lines(steps)
+
+    smtp.auth_reply = "235 ok"
+    smtp.mail_from_reply = "550 The canarslan.net.tr domain is not verified"
+    sent, steps = await asyncio.to_thread(diagnose, settings, "a@ornek.com")
+    text = lines(steps)
+    assert not sent and "Gönderen adresi reddedildi (SMTP 550" in text
+    assert "'Verified' olmalı" in text
+
+
+async def test_unverified_sender_keeps_mail_retryable(
+    dsn: str, smtp: SmtpStub, db: Database
+) -> None:
+    """Gönderen alan adı doğrulanmamışsa (ayar hatası) e-posta kaybolmaz, yeniden denenir."""
+    smtp.mail_from_reply = "550 The canarslan.net.tr domain is not verified"
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        outbox_id = enqueue(
+            conn, "musteri@ornek.com", "account_exists", {"link": "https://x.test/giris"}
+        )
+    stats = await process_once(db, settings_for(dsn, smtp.port))
+    assert stats["retry"] == 1 and stats["failed"] == 0
+    with psycopg.connect(dsn) as conn:
+        row = state(conn, outbox_id)
+    assert row["status"] == "failed" and row["attempts"] == 1 and row["later"]
+    assert "domain is not verified" in row["error"]
+
+
+def test_config_errors_are_not_permanent() -> None:
+    from ati_cloud.mail import SmtpSender
+
+    class Raising:
+        def __init__(self, exc: Exception) -> None:
+            self.exc = exc
+
+        def send_message(self, _m: EmailMessage) -> None:
+            raise self.exc
+
+    sender = SmtpSender.__new__(SmtpSender)
+    sender.smtp = Raising(smtplib.SMTPDataError(550, b"The domain is not verified"))  # type: ignore[assignment]
+    with pytest.raises(smtplib.SMTPDataError):
+        sender.send(EmailMessage())
+    sender.smtp = Raising(smtplib.SMTPDataError(552, b"Message too large"))  # type: ignore[assignment]
+    with pytest.raises(PermanentError, match="552: Message too large"):
+        sender.send(EmailMessage())
+
+
+def test_cli_test_command_prints_steps(
+    dsn: str, smtp: SmtpStub, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from ati_cloud.mail import main
+
+    for key, value in {
+        "ATI_ENVIRONMENT": "test",
+        "ATI_DATABASE_URL": dsn,
+        "ATI_SMTP_HOST": "127.0.0.1",
+        "ATI_SMTP_PORT": str(smtp.port),
+        "ATI_SMTP_SECURITY": "none",
+        "ATI_SMTP_USERNAME": "resend",
+        "ATI_SMTP_PASSWORD": "re_deneme",
+    }.items():
+        monkeypatch.setenv(key, value)
+    assert main(["test", "--to", "yonetici@ornek.com"]) == 0
+    out = capsys.readouterr().out
+    assert "E-posta teşhisi → y***@ornek.com" in out
+    assert "Sonuç: e-posta gönderimi çalışıyor." in out

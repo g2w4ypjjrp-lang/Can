@@ -119,6 +119,20 @@ Kayıt doğrulama, parola sıfırlama ve "lisansınız hazır" e-postaları kuyr
    powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 eposta-dene -Eposta <adresiniz>
    ```
 
+   Komut her adımı `[ OK ]` ya da `[HATA]` ile yazar ve hatanın nedenini söyler:
+
+   | Satır | Neden ve çözüm |
+   |---|---|
+   | E-posta servisi kurulu değil | Sunucudaki kurulum eski: son ZIP + `kur.ps1` |
+   | Ayarlar eksik | `eposta-ayarla` hiç çalıştırılmamış |
+   | `…:465 bağlantısı kurulamadı` | VDS sağlayıcınız SMTP portunu engelliyor. Komut açık portu söyler (genelde 2465); `eposta-ayarla` → Port: `2465` |
+   | Oturum açılamadı (535) | API anahtarı yanlış/silinmiş: Resend → API Keys → yeni anahtar → `eposta-ayarla` |
+   | Gönderen adresi reddedildi / domain not verified | Resend → Domains → `canarslan.net.tr` **Verified** olmalı; DNS kayıtları Resend'in gösterdiğiyle aynı olmalı |
+
+   Ayar düzelip deneme e-postası gidince, bu yüzden takılmış son 3 günün e-postaları kendiliğinden
+   yeniden gönderilir. Gönderen alan adı doğrulanmamışken gelen hatalar artık e-postayı kaybettirmez;
+   düzelene kadar artan aralıklarla yeniden denenir (en çok 8 kez, ~1 gün).
+
 Not: Resend hesap verilerini ve gönderim kayıtlarını ABD'de tutar (e-postalar İrlanda'dan
 gönderilir). Müşteri e-posta adresleri bu nedenle yurt dışına aktarılır; KVKK aydınlatma metninde
 belirtilmelidir (hukukçu onayı).

@@ -217,10 +217,29 @@ class SmtpSender:
         except smtplib.SMTPRecipientsRefused as exc:
             raise PermanentError("alıcı reddedildi") from exc
         except smtplib.SMTPResponseException as exc:
-            if 500 <= exc.smtp_code < 600:
-                raise PermanentError(f"SMTP {exc.smtp_code}") from exc
+            # Gönderen/alan adı/anahtar sorunları ayar hatasıdır: düzeltilince gönderilsin diye
+            # kalıcı sayılmaz, artan beklemeyle yeniden denenir.
+            if 500 <= exc.smtp_code < 600 and not is_config_error(exc):
+                raise PermanentError(f"SMTP {exc.smtp_code}: {smtp_text(exc)}") from exc
             raise
         return str(message["Message-ID"])
+
+
+# Sağlayıcının hata metninde bu ifadeler geçiyorsa sorun alıcıda değil ayardadır.
+CONFIG_HINTS = ("domain", "verif", "sender", "from address", "api key", "not allowed", "testing")
+
+
+def smtp_text(exc: smtplib.SMTPResponseException) -> str:
+    raw = exc.smtp_error
+    text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+    return " ".join(text.split())[:200]
+
+
+def is_config_error(exc: smtplib.SMTPResponseException) -> bool:
+    if isinstance(exc, smtplib.SMTPSenderRefused):
+        return True
+    text = smtp_text(exc).lower()
+    return any(hint in text for hint in CONFIG_HINTS)
 
 
 SenderFactory = Callable[[CloudSettings], Any]
@@ -232,6 +251,12 @@ SenderFactory = Callable[[CloudSettings], Any]
 def _mask(address: str) -> str:
     name, _, domain = address.partition("@")
     return f"{name[:1]}***@{domain}"
+
+
+def _describe(exc: BaseException) -> str:
+    if isinstance(exc, smtplib.SMTPResponseException):
+        return f"SMTP {exc.smtp_code}: {smtp_text(exc)}"[:300]
+    return f"{type(exc).__name__}: {exc}"[:300]
 
 
 def _backoff(attempts: int) -> timedelta:
@@ -285,8 +310,7 @@ async def process_once(
         except Exception as exc:  # bağlantı/oturum açma hatası: tümü geçici hata
             log.warning("SMTP bağlantısı kurulamadı: %s", type(exc).__name__)
             for row, _mail in ready:
-                results.append((row["id"], "retry", None, f"{type(exc).__name__}: {exc}"[:300],
-                                row["attempts"]))  # fmt: skip
+                results.append((row["id"], "retry", None, _describe(exc), row["attempts"]))
 
     async with db.connection() as conn, conn.transaction():
         for outbox_id, state, message_id, error, attempts in results:
@@ -328,8 +352,7 @@ def _send_batch(
                 out.append((row["id"], "failed", None, str(exc), MAX_ATTEMPTS))
                 log.warning("kalıcı hata: %s → %s (%s)", row["template"], _mask(mail.to), exc)
             except (smtplib.SMTPException, OSError) as exc:
-                out.append((row["id"], "retry", None, f"{type(exc).__name__}: {exc}"[:300],
-                            row["attempts"]))  # fmt: skip
+                out.append((row["id"], "retry", None, _describe(exc), row["attempts"]))
                 log.warning("geçici hata: %s → %s", row["template"], _mask(mail.to))
     return out
 
@@ -354,26 +377,15 @@ async def run_forever(settings: CloudSettings, interval_s: float) -> None:
         await db.close()
 
 
-def send_test(settings: CloudSettings, to: str) -> None:
-    if not settings.smtp_host:
-        raise SystemExit("ATI_SMTP_HOST tanımlı değil")
-    mail = Mail(
-        to=to,
-        subject=f"Deneme e-postası — {SITE}",
-        text=_text("E-posta gönderimi çalışıyor", ["Bu bir deneme e-postasıdır."], None),
-        html=_html("E-posta gönderimi çalışıyor", ["Bu bir deneme e-postasıdır."], None, None),
-    )
-    with SmtpSender(settings) as sender:
-        sender.send(build_message(mail, settings))
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ati-cloud-mail", description="E-posta kuyruğu")
     sub = parser.add_subparsers(dest="command", required=True)
     runner = sub.add_parser("run", help="Kuyruğu sürekli işle")
     runner.add_argument("--interval", type=float, default=10.0)
     runner.add_argument("--once", action="store_true", help="Bir kez işle ve çık")
-    test = sub.add_parser("test", help="Ayarları denemek için tek e-posta gönder")
+    test = sub.add_parser(
+        "test", help="Adım adım teşhis: ayarlar, port, oturum, deneme e-postası, kuyruk"
+    )
     test.add_argument("--to", required=True)
     args = parser.parse_args(argv)
     logging.basicConfig(
@@ -381,9 +393,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     settings = CloudSettings()
     if args.command == "test":
-        send_test(settings, args.to)
-        print(f"Deneme e-postası gönderildi: {_mask(args.to)}")
-        return 0
+        from ati_cloud.mail_check import diagnose
+
+        print(f"E-posta teşhisi → {_mask(args.to)}")
+        sent, steps = diagnose(settings, args.to)
+        for step in steps:
+            print(step.line())
+        verdict = "e-posta gönderimi çalışıyor." if sent else "yukarıdaki HATA satırına bakın."
+        print("Sonuç: " + verdict)
+        return 0 if sent else 1
     if args.once:
 
         async def once() -> dict[str, int]:

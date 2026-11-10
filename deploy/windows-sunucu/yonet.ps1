@@ -137,7 +137,7 @@ switch ($Komut) {
     "eposta-ayarla" {
         Write-Host "E-posta gönderim ayarları (Resend için varsayılanları Enter ile kabul edin)."
         $sunucu = Sor "SMTP sunucusu" "smtp.resend.com"
-        $port = Sor "Port (465 = SSL, 587 = STARTTLS)" "465"
+        $port = Sor "Port (465 = SSL, 587 = STARTTLS; sağlayıcınız engelliyorsa 2465 = SSL, 2587 = STARTTLS)" "465"
         $kullanici = Sor "Kullanıcı adı" "resend"
         $gizli = Read-Host "API anahtarı / SMTP parolası (yazarken görünmez)" -AsSecureString
         $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($gizli)
@@ -157,9 +157,24 @@ switch ($Komut) {
     }
     "eposta-dene" {
         if (-not $Eposta) { throw "Kullanım: yonet.ps1 eposta-dene -Eposta <adresiniz>" }
+        $exe = "$Kok\uygulama\cloud\.venv\Scripts\ati-cloud-mail.exe"
+        # Sunucu eski sürümse e-posta servisi ve bu komut yoktur.
+        if (-not (Test-Path $exe) -or -not (Gorev-Var "Eposta")) {
+            Write-Host "[HATA] E-posta servisi kurulu değil: sunucudaki kurulum eski." -ForegroundColor Red
+            Write-Host "       Son ZIP'i indirip kur.ps1'i yeniden çalıştırın (ayarlar ve veriler korunur)."
+            exit 1
+        }
+        $gorev = Get-ScheduledTask -TaskPath "\ATI\" -TaskName "Eposta"
+        if ($gorev.State -eq "Running") {
+            Write-Host "[ OK ] E-posta servisi çalışıyor (zamanlanmış görev \ATI\Eposta)"
+        } else {
+            Write-Host "[HATA] E-posta servisi çalışmıyor (durum: $($gorev.State)). Başlatmak için: yonet.ps1 yeniden" -ForegroundColor Red
+        }
         Yukle-Env "bulut.env"
-        & "$Kok\uygulama\cloud\.venv\Scripts\ati-cloud-mail.exe" test --to $Eposta
-        if ($LASTEXITCODE -eq 0) { Write-Host "Gelen kutunuzu (ve istenmeyen klasörünü) kontrol edin." }
+        & $exe test --to $Eposta
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Son kayıtlar için: yonet.ps1 loglar -Servis eposta"
+        }
     }
     "yedek" {
         Start-ScheduledTask -TaskPath "\ATI\" -TaskName "Yedek"
