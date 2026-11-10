@@ -405,3 +405,33 @@ def test_enforce_requires_trusted_key() -> None:
         LicenseSettings(server_url="http://lisans.example.com")
     with pytest.raises(ValueError, match="Geçersiz kira anahtarı"):
         LicenseSettings(trusted_keys={"0000000000000000": base64.b64encode(b"k" * 32).decode()})
+
+
+def test_release_build_always_enforces_with_production_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Kurulum paketinde (PyInstaller) lisans zorunludur ve yalnızca canlı sunucunun anahtarı
+    güvenilir sayılır: ortam değişkeni ya da ayarla kapatılamaz, sahte anahtar eklenemez."""
+    import sys
+
+    from ati_engine.config import PRODUCTION_LICENSE_KEYS, EngineSettings
+
+    monkeypatch.setenv("ATI_LICENSE__ENFORCE", "false")
+    assert EngineSettings(data_dir=tmp_path).license.enforce is False  # kaynaktan çalıştırma
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    attacker = Ed25519PrivateKey.generate().public_key().public_bytes_raw()
+    settings = EngineSettings(
+        data_dir=tmp_path,
+        license=LicenseSettings(
+            enforce=False,
+            trusted_keys={
+                hashlib.sha256(attacker).hexdigest()[:16]: base64.b64encode(attacker).decode()
+            },
+        ),
+    )
+    assert settings.license.enforce is True
+    assert settings.license.trusted_keys == PRODUCTION_LICENSE_KEYS
+    # Gömülü anahtar biçim ve kimlik denetiminden geçer.
+    LicenseSettings(enforce=True, trusted_keys=PRODUCTION_LICENSE_KEYS)
+    assert settings.license.server_url == "https://api.canarslan.net.tr"

@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import ipaddress
+import sys
 from decimal import Decimal
 from pathlib import Path
 from typing import Literal, Self
@@ -133,13 +134,17 @@ class BinanceEndpoints(BaseModel):
     historical_data: str = "https://data.binance.vision"
     # Spot kullanıcı akışı: REST listenKey 2026-02-20'de kaldırıldı; WebSocket API aboneliği.
     spot_ws_api: str = "wss://ws-api.binance.com:443/ws-api/v3"
-    # Test ağı (2026-11-07 denetimi): futures test ağı REST'i ve /public akışı çalışıyor,
-    # /private akışı bağlantı kabul ediyor. Spot test ağı bu test ortamından coğrafi
-    # kısıtlama (HTTP 451) nedeniyle denenemedi; kullanıcının bilgisayarından doğrulanacak.
-    spot_testnet_rest: str = "https://testnet.binance.vision"
-    spot_testnet_ws_api: str = "wss://ws-api.testnet.binance.vision/ws-api/v3"
-    futures_testnet_rest: str = "https://testnet.binancefuture.com"
-    futures_testnet_ws_private: str = "wss://fstream.binancefuture.com/private"
+    # Test ortamı = Binance Demo Trading (sahte bakiye, gerçek piyasa verisi). Binance futures test
+    # ağını Demo Trading'e taşıdı: testnet.binancefuture.com sitesi demo.binance.com'a yönlenir ve
+    # yeni anahtarlar yalnızca demo.binance.com → API Yönetimi'nde oluşturulur. Adresler Binance
+    # belgelerinden (2026-10-30): USDⓈ-M "testnet" REST demo-fapi, akış demo-fstream; Spot Demo Mode
+    # REST demo-api, WebSocket API demo-ws-api. Eski test ağı anahtarı olan kullanıcı eski adresleri
+    # ATI_BINANCE__* ortam değişkenleriyle verebilir (testnet.binancefuture.com,
+    # testnet.binance.vision).
+    spot_testnet_rest: str = "https://demo-api.binance.com"
+    spot_testnet_ws_api: str = "wss://demo-ws-api.binance.com/ws-api/v3"
+    futures_testnet_rest: str = "https://demo-fapi.binance.com"
+    futures_testnet_ws_private: str = "wss://demo-fstream.binance.com/private"
 
 
 class AutoTradeSettings(BaseModel):
@@ -201,10 +206,26 @@ class RemoteSettings(BaseModel):
         return self.relay_url or self.public_relay_url
 
 
+# Canlı lisans sunucusunun (api.canarslan.net.tr) kira imza açık anahtarı. 2026-11-10'da
+# ``GET /v1/licenses/signing-key`` ile alındı; kimlik, anahtarın SHA-256 özetinin ilk 16
+# karakteridir (doğrulayıcı aşağıda). Sunucunun anahtarı değişirse yeni sürüm çıkarılmalıdır.
+PRODUCTION_LICENSE_KEYS = {"73301409473f0267": "fRiURwqgi6+JvVpB3ngv2LEGWExGhasGyK7z9kjY8VA="}
+
+
+def is_release_build() -> bool:
+    """Kurulum paketindeki (PyInstaller) motor mu? Kaynaktan çalıştırmada (geliştirme, test)
+    yanlıştır."""
+    return bool(getattr(sys, "frozen", False))
+
+
 class LicenseSettings(BaseModel):
     """Lisans (Aşama 15). Kira, buluttaki lisans servisinin Ed25519 anahtarıyla imzalanır;
-    güvenilir açık anahtar(lar) sürüme gömülür. Üretim anahtarı lisans servisi yayına alınınca
-    (G5) eklenir; o zamana kadar ``enforce`` kapalıdır ve lisans işlemleri engellemez."""
+    güvenilir açık anahtar(lar) sürüme gömülür.
+
+    Kurulum paketinde (``is_release_build``) lisans **her zaman zorunludur** ve yalnızca
+    ``PRODUCTION_LICENSE_KEYS`` güvenilir sayılır; ortam değişkeni ya da ayar dosyasıyla
+    kapatılamaz (bkz. ``EngineSettings._release_license``). Kaynaktan çalıştırmada (geliştirme,
+    testler) varsayılan kapalıdır."""
 
     server_url: str = "https://api.canarslan.net.tr"
     # kid -> base64 Ed25519 açık anahtarı (``ati-cloud-license public-key`` çıktısı).
@@ -452,6 +473,17 @@ class EngineSettings(BaseSettings):
     autotrade: AutoTradeSettings = Field(default_factory=AutoTradeSettings)
     remote: RemoteSettings = Field(default_factory=RemoteSettings)
     license: LicenseSettings = Field(default_factory=LicenseSettings)
+
+    @model_validator(mode="after")
+    def _release_license(self) -> Self:
+        """Kurulum paketinde lisans zorunluluğu ve güvenilir anahtar değiştirilemez: aksi hâlde
+        ortam değişkeniyle kapatılabilir ya da sahte bir lisans sunucusunun anahtarı
+        eklenebilirdi."""
+        if is_release_build():
+            self.license = self.license.model_copy(
+                update={"enforce": True, "trusted_keys": dict(PRODUCTION_LICENSE_KEYS)}
+            )
+        return self
 
     @property
     def paths(self) -> DataPaths:

@@ -80,7 +80,8 @@ test("gerçek hesap kilitli; test ağı anahtarı doğrulanmadan saklanmaz", asy
   await form.getByTestId("key-usdm_futures-api").fill(API_KEY);
   await form.getByTestId("key-usdm_futures-secret").fill("YanlisGizli0123456789abcdef");
   await form.getByTestId("key-usdm_futures-save").click();
-  await expect(form.getByTestId("key-usdm_futures-result")).toContainText("geçersiz");
+  await expect(form.getByTestId("key-usdm_futures-result")).toContainText("reddetti");
+  await expect(form.getByTestId("key-usdm_futures-result")).toContainText("demo.binance.com");
   await expect(form.getByTestId("key-usdm_futures-state")).toHaveText("Anahtar yok");
 
   await form.getByTestId("key-usdm_futures-api").fill(API_KEY);
@@ -191,4 +192,37 @@ test("telefondan kontrol: varsayılan kapalı, açılınca aktarma servisine ba�
   await expect(page.getByTestId("relay-state")).toHaveText("Kapalı");
   await expect(qr).toHaveCount(0);
   await expect(page.getByTestId("pair-start")).toBeDisabled();
+});
+
+test("lisans zorunluyken lisans girilmeden uygulama açılmaz; etkinleştirince açılır", async ({ page }) => {
+  // Uçtan uca motor kaynaktan çalışır (lisans zorunlu değil). Kurulum paketindeki zorunlu durum,
+  // motorun gerçek yanıtına "zorunlu" işareti eklenerek taklit edilir; etkinleştirme gerçektir.
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.route("**/v1/license", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), enforced: true } });
+  });
+  await page.goto(`/${HASH}`);
+  const gate = page.getByTestId("license-gate");
+  await expect(gate).toBeVisible();
+  await expect(gate.getByRole("heading", { name: "Lisansınızı etkinleştirin" })).toBeVisible();
+  await expect(page.getByTestId("nav-dashboard")).toHaveCount(0);
+  await expect(page.getByTestId("license-gate-stop")).toBeEnabled(); // acil durdurma her zaman
+
+  const input = page.getByTestId("license-gate-key");
+  await input.fill("ATI-0000-0000-0000-0000");
+  await page.getByTestId("license-gate-activate").click();
+  await expect(gate).toContainText("Lisans anahtarı geçersiz");
+  await input.fill("ati7xk9pq82mn45zr61");
+  await expect(input).toHaveValue("ATI-7XK9-PQ82-MN45-ZR61");
+  await page.getByTestId("license-gate-activate").click();
+  await expect(gate).toHaveCount(0);
+  await expect(page.getByTestId("top-state")).toBeVisible();
+
+  // Temizlik: bilgisayar lisanstan çıkarılınca kapı yeniden açılır.
+  await page.getByTestId("nav-settings").click();
+  await page.getByTestId("license-release").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Lisanstan çıkar" }).click();
+  await expect(gate).toBeVisible();
 });

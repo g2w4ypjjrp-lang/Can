@@ -29,6 +29,21 @@ kontrol), Ayarlar (işlem modu, test ağı anahtarı, lisans, denetim kaydı).
 Tasarım: koyu tema, web sitesiyle aynı marka renkleri (mavi → mor degrade), gruplu ve ikonlu menü
 (Genel / İşlem / Sistem), üst çubukta motor, işlem modu ve telefon durumu.
 
+## Lisans
+
+Kurulum paketinde lisans **zorunludur**: geçerli lisans yoksa uygulama yerine yalnızca "Lisansınızı
+etkinleştirin" ekranı açılır; motor da lisanssız yeni işlem açmaz. Acil durdurma bu ekranda da
+kullanılabilir; açık pozisyonların borsadaki stopları korunur. Lisans anahtarı müşteri panelinde
+(canarslan.net.tr/panel) görünür; yönetici, panelde **Lisanslar → Lisans üret** ile bir müşteri
+hesabına anahtar üretebilir. Kaynaktan çalıştırmada (geliştirme, testler) lisans zorunlu değildir.
+
+## Binance Demo Trading anahtarı
+
+Binance, test ağını Demo Trading'e taşıdı. Anahtar **demo.binance.com → API Management → Create API**
+ile oluşturulur (sahte bakiye, gerçek fiyatlar). Gerçek hesap anahtarı ve eski testnet.binance.vision
+anahtarı çalışmaz. Eski test ağı adresleri gerekirse `ATI_BINANCE__FUTURES_TESTNET_REST` vb. ile
+verilebilir.
+
 ## Telefondan kontrol
 
 1. **Telefon** ekranında "Telefondan kontrol" anahtarını açın. Varsayılan kapalıdır; açılmadan motor

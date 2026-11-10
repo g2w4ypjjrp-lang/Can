@@ -760,7 +760,7 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
 | Sahte kira / istek reddi | ✅ Değiştirilmiş kira, tanınmayan anahtar, başka bilgisayarın kirası reddedilir (motor); başkasının anahtarıyla imzalı aktivasyon, eski istek, tekrar oynatılmış yenileme reddedilir; sahte imzalı istek sayacı ilerletemez (bulut) |
 | Uçtan uca | ✅ Gerçek bulut API'si (PostgreSQL) + gerçek motor: etkinleştirme, işlem kapısı, yenileme, sunucuda dondurma → ret ve kapı kapanır, ikinci bilgisayar sınırı, bilgisayar değişikliği; CI'da ayrı iş. Masaüstü arayüzü (9 senaryo) ve web paneli (22 senaryo, anahtarı gösterme ve bilgisayar kaldırma dâhil) uçtan uca testleri geçti. |
 | Testler | Bulut 105 (19 lisans), motor 494 (20 lisans + telefon sınırı + uçtan uca), Swift 25 |
-| Lisans zorunluluğu | ⏸️ Kapalı: lisans sunucusu (api.canarslan.net.tr) yayına alınınca (G5) üretim kira anahtarı motor sürümüne gömülür ve `license.enforce` açılır. Aksi hâlde kurulu motorlar işlem açamazdı. |
+| Lisans zorunluluğu | ✅ Açık (kurulum paketinde): lisans sunucusu api.canarslan.net.tr yayında; üretim kira anahtarı (`73301409473f0267`) motora gömüldü. Kurulum paketinde zorunluluk ve güvenilir anahtar ortam değişkeni/ayarla değiştirilemez. Masaüstünde geçerli lisans yoksa yalnızca lisans ekranı açılır (acil durdurma her zaman erişilebilir). Sunucunun imza anahtarı değişirse yeni sürüm gerekir: `bulut.env` yedeği bu yüzden kritiktir. |
 
 ### Aşama 16 — Admin paneli ✅ (kod ve testler; yayın G5, canlı ödeme G3)
 

@@ -82,8 +82,8 @@ export function LicenseSection() {
           {s.last_error && s.valid && <div className="notice">{s.last_error}</div>}
           {!s.configured && (
             <div className="notice">
-              Lisans sunucusu ({s.server_url}) henüz yayında değil. Bu sürümde lisans gerekmez; sunucu yayına alındığında
-              (G5) etkinleştirme açılacak.
+              Bu geliştirici sürümünde lisans anahtarı tanımlı değil; lisans gerekmez. Kurulum paketinde lisans her zaman
+              zorunludur ({s.server_url}).
             </div>
           )}
           {s.configured && !s.valid && (

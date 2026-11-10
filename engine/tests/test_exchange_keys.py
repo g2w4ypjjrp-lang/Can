@@ -77,7 +77,8 @@ async def test_verify_key_against_exchange(exchange: FakeExchange) -> None:
     assert (await verify_key(good, Market.USDM_FUTURES)).ok
     bad = rest_client(exchange, secret="yanlis")
     check = await verify_key(bad, Market.USDM_FUTURES)
-    assert not check.ok and "geçersiz" in check.message
+    assert not check.ok and "reddetti" in check.message
+    assert "demo.binance.com" in check.message  # nereden oluşturulacağı söylenir
     assert exchange.signature_failures == 1
     await good.close()
     await bad.close()
@@ -139,3 +140,75 @@ async def test_testnet_mode_refuses_production_hosts(rest_url: str, ws_url: str)
             rest, mode=TradingMode.TESTNET, api_key="k", signer=HmacSigner("s"), ws_url=ws_url
         )
     await rest.close()
+
+
+def test_testnet_defaults_are_binance_demo_trading() -> None:
+    """Binance futures test ağını Demo Trading'e taşıdı; anahtarlar demo.binance.com'da
+    oluşturulur. Varsayılan test adresleri Demo Trading'dir ve test modu kilidinden geçer."""
+    from ati_engine.config import BinanceEndpoints
+
+    b = BinanceEndpoints()
+    assert b.futures_testnet_rest == "https://demo-fapi.binance.com"
+    assert b.futures_testnet_ws_private == "wss://demo-fstream.binance.com/private"
+    assert b.spot_testnet_rest == "https://demo-api.binance.com"
+    assert b.spot_testnet_ws_api == "wss://demo-ws-api.binance.com/ws-api/v3"
+    rest = BinanceRestClient(
+        b.futures_testnet_rest, budget=WeightBudget(100), api_key="k", signer=HmacSigner("s")
+    )
+    BinanceFuturesVenue(
+        rest,
+        mode=TradingMode.TESTNET,
+        api_key="k",
+        signer=HmacSigner("s"),
+        ws_url=b.futures_testnet_ws_private,
+    )
+    BinanceSpotVenue(
+        rest,
+        mode=TradingMode.TESTNET,
+        api_key="k",
+        signer=HmacSigner("s"),
+        ws_url=b.spot_testnet_ws_api,
+    )
+
+
+async def test_futures_user_stream_falls_back_to_classic_path() -> None:
+    """Akış sunucusu /private yolunu tanımıyorsa klasik /ws/<listenKey> yolu kullanılır ve
+    sonraki bağlantılarda önce o denenir."""
+    import websockets
+    from websockets.asyncio.server import ServerConnection, serve
+    from websockets.http11 import Request, Response
+
+    paths: list[str] = []
+
+    def only_classic(_conn: ServerConnection, request: Request) -> Response | None:
+        paths.append(request.path)
+        if request.path.startswith("/private/"):
+            return _conn.respond(404, "yok\n")
+        return None
+
+    async def handler(ws: ServerConnection) -> None:
+        await ws.wait_closed()
+
+    async with serve(handler, "127.0.0.1", 0, process_request=only_classic) as server:
+        port = server.sockets[0].getsockname()[1]
+        rest = BinanceRestClient(
+            "https://demo-fapi.binance.com",
+            budget=WeightBudget(100),
+            api_key="k",
+            signer=HmacSigner("s"),
+        )
+        venue = BinanceFuturesVenue(
+            rest,
+            mode=TradingMode.TESTNET,
+            api_key="k",
+            signer=HmacSigner("s"),
+            ws_url=f"ws://127.0.0.1:{port}/private",
+        )
+        ws = await venue._open_stream("anahtar1")
+        await ws.close()
+        assert paths == ["/private/ws/anahtar1", "/ws/anahtar1"]
+        ws = await venue._open_stream("anahtar2")  # çalışan yol önce denenir
+        await ws.close()
+        assert paths[-1] == "/ws/anahtar2" and len(paths) == 3
+        await rest.close()
+    assert isinstance(websockets.__version__, str)

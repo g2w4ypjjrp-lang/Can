@@ -137,6 +137,7 @@ class _BaseBinanceVenue:
         self._api_key = api_key
         self._signer = signer
         self._ws_url = ws_url.rstrip("/")
+        self._ws_classic = False  # Demo Trading: /private yolu yoksa klasik /ws yolu
         self.quote = quote_asset
         self._queue: asyncio.Queue[VenueEvent] = asyncio.Queue()
         self._stream_task: asyncio.Task[None] | None = None
@@ -700,12 +701,36 @@ class BinanceFuturesVenue(_BaseBinanceVenue):
             raise map_error(exc) from exc
         return str(data.get("listenKey", "")) if isinstance(data, dict) else ""
 
+    def _stream_urls(self, key: str) -> list[str]:
+        """Önce ayarlı adres (``.../private/ws/<key>``); sunucu bu yolu tanımıyorsa (ör. Demo
+        Trading akışında) klasik ``.../ws/<key>`` yolu denenir. Çalışan yol hatırlanır."""
+        urls = [f"{self._ws_url}/ws/{key}"]
+        if self._ws_url.endswith("/private"):
+            classic = f"{self._ws_url.removesuffix('/private')}/ws/{key}"
+            urls = [classic, urls[0]] if self._ws_classic else [urls[0], classic]
+        return urls
+
+    async def _open_stream(self, key: str) -> Any:
+        last: Exception | None = None
+        for url in self._stream_urls(key):
+            try:
+                ws = await websockets.connect(url, open_timeout=10, ping_interval=20)
+            except (websockets.exceptions.InvalidHandshake, OSError) as exc:
+                last = exc
+                continue
+            classic = not url.startswith(self._ws_url + "/")
+            if classic and not self._ws_classic:
+                logger.info("Futures kullanıcı akışı klasik /ws yoluyla bağlandı")
+            self._ws_classic = classic
+            return ws
+        assert last is not None  # noqa: S101 - en az bir adres denenir
+        raise last
+
     async def _stream_once(self, *, reconnected: bool) -> None:
         key = await self._listen_key("POST")
-        url = f"{self._ws_url}/ws/{key}"
         keepalive = asyncio.create_task(self._keepalive())
         try:
-            async with websockets.connect(url, open_timeout=10, ping_interval=20) as ws:
+            async with await self._open_stream(key) as ws:
                 self.stream_connected = True
                 if reconnected:
                     await self._queue.put(VenueEvent(kind="stream_reconnected"))

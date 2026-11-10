@@ -14,13 +14,14 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { useEvents, usePoll } from "./api/hooks";
-import type { StatusResponse } from "./api/types.gen";
+import type { LicenseStatusResponse, StatusResponse } from "./api/types.gen";
 import { Badge } from "./components/ui";
 import { MODE_LABELS, STATE_LABELS } from "./lib/format";
 import { Analysis } from "./pages/Analysis";
 import { Dashboard, stateTone } from "./pages/Dashboard";
 import { Markets } from "./pages/Markets";
 import { Opportunities } from "./pages/Opportunities";
+import { LicenseGate } from "./pages/LicenseGate";
 import { Performance } from "./pages/Performance";
 import { Phone, phoneSummary, type RemoteStatus } from "./pages/Phone";
 import { Risk } from "./pages/Risk";
@@ -74,6 +75,7 @@ export function App() {
   const [page, setPage] = useState(currentPage);
   const status = usePoll((c) => c.get<StatusResponse>("/v1/status"), 3000);
   const remote = usePoll((c) => c.get<RemoteStatus>("/v1/remote/status"), 5000);
+  const license = usePoll((c) => c.get<LicenseStatusResponse>("/v1/license"), 10_000);
   const { connected, toasts, dismiss } = useEvents();
 
   useEffect(() => {
@@ -85,6 +87,10 @@ export function App() {
   const s = status.data;
   const phone = phoneSummary(remote.data);
   const active = PAGES.find((p) => p.key === page) ?? PAGES[0]!;
+  // Lisans zorunluyken (kurulum paketinde her zaman) geçerli lisans yoksa yalnızca lisans ekranı.
+  if (license.data?.enforced && !license.data.valid) {
+    return <LicenseGate status={license.data} onChange={license.refresh} />;
+  }
   return (
     <div className="app">
       <aside className="sidebar">

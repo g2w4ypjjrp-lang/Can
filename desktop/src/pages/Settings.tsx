@@ -123,10 +123,12 @@ function KeyForm({
   };
 
   return (
-    <Card title={`Binance test ağı anahtarı — ${MARKET_LABELS[market]}`} testId={testId}>
+    <Card title={`Binance Demo Trading anahtarı — ${MARKET_LABELS[market]}`} testId={testId}>
       <p className="muted small">
-        {market === "usdm_futures" ? "testnet.binancefuture.com" : "testnet.binance.vision"} üzerinden oluşturulan test ağı
-        anahtarı. Anahtar doğrulanır ve bu bilgisayarda şifreli saklanır; ekranda yalnızca son 4 karakter görünür.
+        Sahte bakiyeyle, gerçek piyasa fiyatlarında çalışan Binance Demo Trading anahtarı. Oluşturmak için:{" "}
+        <b>demo.binance.com</b> → Binance hesabınızla giriş → <b>API Management</b> → <b>Create API</b>. Gerçek hesap
+        anahtarı burada çalışmaz. Anahtar doğrulanır ve bu bilgisayarda şifreli saklanır; ekranda yalnızca son 4
+        karakter görünür.
       </p>
       <div className="row">
         <Badge tone={info?.connected ? "ok" : info?.key_stored ? "warn" : "neutral"} testId={`${testId}-state`}>

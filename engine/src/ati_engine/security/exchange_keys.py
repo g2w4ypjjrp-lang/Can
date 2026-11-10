@@ -134,8 +134,28 @@ async def verify_key(rest: BinanceRestClient, market: Market) -> KeyCheck:
     except Exception as exc:
         code = getattr(exc, "code", None)
         if code in (-2014, -2015, -1022):
-            return KeyCheck(False, "Anahtar, imza veya IP izni geçersiz (Binance reddetti)")
-        return KeyCheck(False, f"Doğrulama yapılamadı: {type(exc).__name__}")
+            return KeyCheck(False, f"Binance anahtarı reddetti ({code}). {KEY_HELP}")
+        if code == -1021:
+            return KeyCheck(
+                False,
+                "Bilgisayarın saati Binance'ten farklı (-1021). Windows Ayarlar → Saat ve dil → "
+                "'Saati otomatik ayarla'yı açıp 'Şimdi eşitle'ye basın.",
+            )
+        if code is not None:
+            return KeyCheck(False, f"Binance hata verdi ({code}): {exc}")
+        return KeyCheck(
+            False,
+            f"Binance'e ulaşılamadı ({type(exc).__name__}). İnternet bağlantısını kontrol edin.",
+        )
+
+
+# Anahtar reddinin olası nedenleri (en sık görülenden başlayarak).
+KEY_HELP = (
+    "Anahtar demo.binance.com → API Yönetimi'nde (Demo Trading) oluşturulmalı; gerçek hesap "
+    "anahtarı ve eski testnet.binance.vision anahtarı burada çalışmaz. Gizli anahtarı eksiksiz "
+    "yapıştırın. Anahtara IP kısıtı koyduysanız bu bilgisayarın IP adresini ekleyin ya da kısıtı "
+    "kaldırın."
+)
 
 
 async def check_live_key_policy(
