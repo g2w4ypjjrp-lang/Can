@@ -1,0 +1,45 @@
+name: Windows (motor)
+
+# Motor üretimde Windows'ta çalışır: DPAPI kasası, dosya kilidi, olay döngüsü ve bellek ölçümü
+# burada doğrulanır. Windows dakikası ücretsiz kotadan 2 kat düştüğü için yalnızca motor ya da
+# ortak protokol değişince ve elle başlatılınca çalışır.
+on:
+  push:
+    branches-ignore: [ana]
+    paths:
+      - "engine/**"
+      - "shared/**"
+      - ".github/workflows/windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    # Testler ve dayanıklılık tek işte: her iş en az 1 dakika (Windows'ta 2) sayılır, kurulum bir
+    # kez yapılır.
+    name: Motor testleri ve dayanıklılık (Windows, Python 3.13)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked
+      # ruff platformdan bağımsızdır (Linux'ta çalışır); mypy Windows'a özel kod yollarını
+      # yalnızca Windows'ta denetler.
+      - run: uv run mypy
+      - run: uv run pytest
+      - name: Dayanıklılık (3 dk) — bellek, görev sayısı, olay döngüsü gecikmesi, acil durdurma
+        if: ${{ !cancelled() }}
+        # --debug-slow: olay döngüsünü 200 ms'den uzun tutan adım olursa adıyla yazılır.
+        run: uv run python scripts/soak.py --minutes 3 --sample-s 10 --debug-slow

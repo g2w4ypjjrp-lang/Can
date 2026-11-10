@@ -22,7 +22,7 @@ işlem platformu.
 **Durum:** 18 aşamanın tamamı kod ve testleriyle bitti. Yayın; onay kapılarına (G1–G6) ve
 sizden beklenen bilgilere bağlıdır: ödeme sağlayıcısı test hesabı, şirket bilgileri, hukukçu
 onayı, bulut sağlayıcısı (`docs/05`). Güvenlik taraması, sızma testi tarzı testler, yük testi,
-dayanıklılık testi ve felaket kurtarma tatbikatı CI'da her gönderimde çalışır.
+dayanıklılık testi ve felaket kurtarma tatbikatı CI'da çalışır (aşağıda "Otomatik testler").
 
 ## Belgeler
 
@@ -70,6 +70,25 @@ curl -H "Authorization: Bearer <belirteç>" http://127.0.0.1:<port>/v1/status
 curl -X POST -H "Authorization: Bearer <belirteç>" -H "Content-Type: application/json" \
      -d '{"reason":"test"}' http://127.0.0.1:<port>/v1/kill-switch/engage
 ```
+
+## Otomatik testler (GitHub Actions)
+
+Depo özel olduğu için GitHub Actions aylık **2.000 ücretsiz dakikayla** sınırlıdır. Windows
+makinesinde geçen 1 dakika kotadan 2, macOS makinesinde geçen 1 dakika 10 dakika düşer. Kota bitince
+işler hiç başlamadan (~2 sn) başarısız olur ve bir sonraki ay yenilenir (Settings → Billing and
+licensing → Usage). Kotayı korumak için:
+
+| İş akışı | Kendiliğinden (gönderimde) | Elle (**Actions → iş akışı → Run workflow**) |
+|---|---|---|
+| CI | Motor/bulut değişince: motor (Linux, Py 3.13), bulut, lisans uçtan uca, üretim bağımlılıklarıyla açılış | + Py 3.12, Linux dayanıklılık testi |
+| Windows (motor) | Motor değişince: Windows testleri + 3 dk dayanıklılık | Aynısı |
+| Masaüstü | Masaüstü/motor değişince: arayüz ve Rust kabuğu (Linux) | + **Windows kurulum paketi** (indirme dosyası) |
+| iOS | iOS değişince: çekirdek testleri (Linux) | + macOS uygulama ve arayüz testleri |
+| Web sitesi | Web/bulut değişince: birim, uçtan uca, axe, Lighthouse | + Docker üretim imajları |
+| Güvenlik taraması | Her gönderimde ve haftalık | Aynısı |
+
+`ana` dalı yalnızca testleri geçmiş işlemeye ileri sarılır; aynı işleme orada yeniden test
+edilmez.
 
 ## Lisans
 

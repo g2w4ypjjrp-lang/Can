@@ -2,10 +2,11 @@ name: Güvenlik taraması
 
 # Aşama 18: bağımlılık güvenlik açıkları (Python, npm, Rust) ve gizli bilgi taraması.
 # Her gönderimde ve haftalık çalışır: kod değişmese de yeni yayımlanan açıklar yakalanır.
+# Ücretsiz Actions kotasında her iş en az 1 dakika sayıldığından bağımlılık denetimleri tek işte
+# sırayla çalışır; biri başarısız olsa da diğerleri çalışır, iş sonunda başarısız sayılır.
 on:
   push:
-    branches: ["**"]
-  pull_request:
+    branches-ignore: [ana] # ana yalnızca test edilmiş işlemeye ileri sarılır
   schedule:
     - cron: "23 4 * * 1" # Pazartesi 07:23 (TSİ)
   workflow_dispatch:
@@ -31,57 +32,55 @@ jobs:
       - name: İzlenen dosyalar ve git geçmişi
         run: python3 scripts/secret_scan.py --history
 
-  python:
-    name: Python bağımlılıkları (${{ matrix.project }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [engine, cloud]
-    defaults:
-      run:
-        working-directory: ${{ matrix.project }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - name: Kilit dosyasındaki tüm paketler (geliştirme dahil)
-        run: uv export --locked --no-hashes --no-emit-project --all-groups -q > "$RUNNER_TEMP/requirements.txt"
-      - name: pip-audit (PyPI güvenlik açığı veritabanı)
-        run: uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/requirements.txt" --disable-pip --no-deps --progress-spinner off
-
-  npm:
-    name: npm bağımlılıkları (${{ matrix.project }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [web, desktop]
-    defaults:
-      run:
-        working-directory: ${{ matrix.project }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: npm audit (geliştirme araçları dahil, orta ve üzeri)
-        run: npm audit --audit-level=moderate
-
-  rust:
-    name: Rust bağımlılıkları (masaüstü kabuğu)
+  dependencies:
+    name: Bağımlılık güvenlik açıkları (Python, npm, Rust)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: pip-audit (motor; kilit dosyasındaki tüm paketler, geliştirme dahil)
+        working-directory: engine
+        run: |
+          uv export --locked --no-hashes --no-emit-project --all-groups -q > "$RUNNER_TEMP/engine-requirements.txt"
+          uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/engine-requirements.txt" --disable-pip --no-deps --progress-spinner off
+      - name: pip-audit (bulut; kilit dosyasındaki tüm paketler, geliştirme dahil)
+        if: ${{ !cancelled() }}
+        working-directory: cloud
+        run: |
+          uv export --locked --no-hashes --no-emit-project --all-groups -q > "$RUNNER_TEMP/cloud-requirements.txt"
+          uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/cloud-requirements.txt" --disable-pip --no-deps --progress-spinner off
+      - name: npm audit (web; geliştirme araçları dahil, orta ve üzeri)
+        if: ${{ !cancelled() }}
+        working-directory: web
+        run: npm audit --audit-level=moderate
+      - name: npm audit (masaüstü; geliştirme araçları dahil, orta ve üzeri)
+        if: ${{ !cancelled() }}
+        working-directory: desktop
+        run: npm audit --audit-level=moderate
+      # cargo-audit derlemesi ~6 dakika sürer; önbellek, denetim başarısız olsa da kaydedilir.
+      - name: cargo-audit önbelleği
+        id: cargo-audit-cache
+        if: ${{ !cancelled() }}
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cargo/bin/cargo-audit
           key: cargo-audit-0.22.2-${{ runner.os }}
-      - name: cargo-audit
-        run: command -v cargo-audit || cargo install cargo-audit --locked --version 0.22.2
+      - name: cargo-audit kurulumu
+        id: cargo-audit-install
+        if: ${{ !cancelled() && steps.cargo-audit-cache.outputs.cache-hit != 'true' }}
+        run: cargo install cargo-audit --locked --version 0.22.2
+      - name: cargo-audit önbelleğini kaydet
+        if: ${{ !cancelled() && steps.cargo-audit-install.outcome == 'success' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-0.22.2-${{ runner.os }}
       - name: cargo audit (RustSec)
+        if: ${{ !cancelled() }}
         working-directory: desktop/src-tauri
         # Yalnızca güvenlik açıkları işi düşürür. "unmaintained/unsound" uyarıları Tauri'nin
         # Linux GTK/D-Bus yığınından gelir ve Windows ürününe derlenmez (docs/06).

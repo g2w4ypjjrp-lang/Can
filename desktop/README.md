@@ -43,7 +43,9 @@ ATI_ENGINE_EXE=uv ATI_ENGINE_ARGS="run --project ../engine ati-engine" npx tauri
 
 ## Kurulum paketi
 
-CI (`.github/workflows/desktop.yml`, Windows işi) şu adımları izler:
+Kurulum paketi GitHub Actions'ta **elle** derlenir (Windows dakikası ücretsiz kotadan 2 kat
+düşer): **Actions → Masaüstü → Run workflow**. Windows işi (`.github/workflows/desktop.yml`) şu
+adımları izler:
 
 1. Motoru PyInstaller ile paketler (`engine/packaging/ati-engine.spec`, tek klasör).
 2. NSIS kurulum paketini derler. Kullanıcı başına kurulur, yönetici yetkisi istemez.

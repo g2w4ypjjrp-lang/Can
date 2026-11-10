@@ -137,6 +137,14 @@ belirtilmelidir (hukukçu onayı).
 
 ## İndirme dosyaları
 
+Kurulum dosyasını GitHub derler (ücretsiz kotadan ~25 dakika harcar, bu yüzden elle başlatılır):
+
+1. GitHub'da depo → **Actions** → soldan **Masaüstü** → sağda **Run workflow** → dal: `ana` →
+   yeşil **Run workflow**.
+2. ~15 dakika sonra çalıştırma yeşil olunca içine girin. Özet bölümünde sürüm, boyut (bayt) ve
+   SHA-256 yazar. Sayfanın altındaki **Artifacts** → `ati-windows-installer-unsigned` ZIP'ini
+   indirip açın.
+
 Windows kurulum dosyasını `C:\ATI\indir\` klasörüne **sürüm numaralı, değişmeyen bir adla**
 koyun (ör. `AI-Trading-Intelligence_0.12.0_x64-setup.exe`). Adresi
 `https://indir.canarslan.net.tr/AI-Trading-Intelligence_0.12.0_x64-setup.exe` olur. Sonra yönetim
@@ -157,5 +165,6 @@ yayınlayın. SHA-256'yı sunucuda şöyle alabilirsiniz:
 
 * **E-posta gönderimi:** yukarıdaki Resend adımları yapılana kadar e-postalar kuyrukta bekler
   (yönetici daveti etkilenmez).
-* **Kurulum dosyası:** GitHub Actions'ta derlenir; Actions çalışana kadar indirme sayfası
+* **Kurulum dosyası:** GitHub Actions'ta elle derlenir (yukarıda "İndirme dosyaları"). GitHub'ın
+  aylık ücretsiz dakikaları bittiyse kota yenilenince derlenir; o zamana kadar indirme sayfası
   "yakında" gösterir.

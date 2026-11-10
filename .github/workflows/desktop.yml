@@ -1,13 +1,15 @@
 name: Masaüstü
 
+# Arayüz ve Rust kabuğu testleri (Linux) masaüstü/motor değişince çalışır. Windows kurulum paketi
+# Windows dakikası harcadığı için yalnızca elle başlatılır: Actions → Masaüstü → Run workflow.
 on:
   push:
+    branches-ignore: [ana]
     paths:
       - "desktop/**"
       - "engine/**"
       - "shared/**"
       - ".github/workflows/desktop.yml"
-  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -85,6 +87,7 @@ jobs:
 
   windows:
     name: Windows kurulum paketi
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     needs: [ui, shell]
     defaults:
@@ -93,6 +96,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13" # testlerin çalıştığı sürüm (ci.yml, windows.yml)
       - name: Motoru paketle (PyInstaller)
         working-directory: engine
         run: |

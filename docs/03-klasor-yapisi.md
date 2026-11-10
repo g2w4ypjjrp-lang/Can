@@ -8,7 +8,8 @@ masaüstü motoru paketi bulut bağımlılıklarını taşımaz.
 ```text
 .
 ├── README.md                          ✅ Proje özeti, hızlı başlangıç, belge dizini
-├── .github/workflows/ci.yml           ✅ CI: motor (Windows + Linux, Py 3.12/3.13), bulut (PostgreSQL 16)
+├── .github/workflows/                 ✅ CI: motor ve bulut (Linux), Windows motor testleri, web, masaüstü,
+│                                            iOS, güvenlik taraması (ne zaman çalıştıkları: README)
 ├── docs/                              ✅ Mimari, teknoloji, şema, plan, güvenlik
 │
 ├── engine/                            ✅ İşlem motoru (Python) — Windows'ta çalışır

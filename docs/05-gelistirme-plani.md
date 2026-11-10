@@ -894,10 +894,10 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
   her motor ayrı istemci adresinden. CI'da duman testi çalışır.
 - **Motor dayanıklılık testi** (`engine/scripts/soak.py`): sahte piyasa/borsa/lisans
   sunucularıyla gerçek motor; API sürekli sorgulanır, olay akışı dinlenir. Ölçülenler: bellek,
-  Python yığını, görev sayısı, olay döngüsü gecikmesi, acil durdurma süresi. CI'da Windows ve
-  Linux'ta 3'er dakika çalışır. 24 saatlik tam test: `uv run python scripts/soak.py --hours 24`.
+  Python yığını, görev sayısı, olay döngüsü gecikmesi, acil durdurma süresi. CI'da motor her
+  değiştiğinde Windows'ta (`windows.yml`), elle başlatılınca Linux'ta 3 dakika çalışır. 24 saatlik tam test: `uv run python scripts/soak.py --hours 24`.
 - **Felaket kurtarma:**
-  - Bulut tatbikatı (`cloud/scripts/dr_drill.py`, CI'da her gönderimde): gerçek iş akışlarıyla
+  - Bulut tatbikatı (`cloud/scripts/dr_drill.py`, CI'da motor ya da bulut değişince): gerçek iş akışlarıyla
     doldurulmuş veritabanı → `pg_dump` → boş veritabanına `pg_restore` → iş sürekliliği
     doğrulaması.
   - Motor: `ati-engine backup` (çalışırken tutarlı yedek, bütünlük ve denetim zinciri

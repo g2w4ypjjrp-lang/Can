@@ -1,6 +1,9 @@
 // Lighthouse CI: herkese açık sayfaların performans, erişilebilirlik, en iyi uygulama ve SEO
 // denetimi (mobil öykünme, yavaşlatılmış ağ/işlemci). Raporlar yalnızca yerel dosyaya yazılır;
 // hiçbir yere yüklenmez. Önce `npm run build` gerekir.
+// Her sayfa şablonundan biri ölçülür: altı yasal metin aynı şablonla (LegalPage) üretilir, en uzunu
+// seçildi. Tüm sayfaların erişilebilirliği ayrıca axe ile uçtan uca testlerde (e2e/pages.spec.ts)
+// açık ve koyu temada denetlenir. Ücretsiz CI kotası için ölçüm sayısı sınırlı tutulur.
 const PAGES = [
   "/",
   "/ozellikler",
@@ -10,12 +13,7 @@ const PAGES = [
   "/iletisim",
   "/giris",
   "/kayit",
-  "/yasal/kullanim-kosullari",
   "/yasal/gizlilik",
-  "/yasal/risk-bildirimi",
-  "/yasal/on-bilgilendirme",
-  "/yasal/mesafeli-satis-sozlesmesi",
-  "/yasal/iptal-ve-iade",
 ];
 const PORT = 3200;
 

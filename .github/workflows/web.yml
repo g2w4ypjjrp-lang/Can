@@ -2,11 +2,11 @@ name: Web sitesi
 
 on:
   push:
+    branches-ignore: [ana]
     paths:
       - "web/**"
       - "cloud/**"
       - ".github/workflows/web.yml"
-  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -68,3 +68,54 @@ jobs:
             web/.lighthouseci/reports
           retention-days: 7
           if-no-files-found: ignore
+
+  containers:
+    # Docker imajları Render gibi kapsayıcı tabanlı sunucular içindir; Windows sunucusu bunları
+    # kullanmaz. Üretim bağımlılıklarıyla açılış her gönderimde ci.yml'de denetlenir.
+    name: Üretim imajları (web + bulut, duman testi)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ati_test
+          POSTGRES_PASSWORD: ati_test
+          POSTGRES_DB: ati_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ati_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DSN: postgresql://ati_test:ati_test@127.0.0.1:5432/ati_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: İmajları derle
+        run: |
+          docker build -t ati-cloud cloud/
+          docker build -t ati-web web/
+      # Yalnızca üretim bağımlılıklarıyla kurulmuş imajda süreçler açılmalı (geliştirme
+      # bağımlılığına yanlışlıkla dayanan kod burada yakalanır).
+      - name: Geçişler, API, aktarma servisi ve site (root olmayan kullanıcı)
+        run: |
+          docker run --rm --network host -e ATI_DATABASE_URL="$DSN" ati-cloud ati-cloud-migrate
+          docker run -d --name api --network host -e ATI_DATABASE_URL="$DSN" ati-cloud \
+            ati-cloud-api --host 127.0.0.1 --port 8000
+          docker run -d --name relay --network host ati-cloud ati-cloud-relay --host 127.0.0.1 --port 8765
+          docker run -d --name web --network host -e PORT=3000 -e ATI_PLANS_REVALIDATE_S=0 \
+            -e ATI_PUBLIC_API_URL=http://127.0.0.1:8000 -e ATI_PUBLIC_WEB_URL=http://127.0.0.1:3000 ati-web
+          wait_for() { for i in $(seq 1 60); do curl -fsS "$1" > /dev/null 2>&1 && return 0; sleep 1; done; return 1; }
+          wait_for http://127.0.0.1:8000/ready || { docker logs api; exit 1; }
+          wait_for http://127.0.0.1:8765/health || { docker logs relay; exit 1; }
+          wait_for http://127.0.0.1:3000/robots.txt || { docker logs web; exit 1; }
+          for path in / /indir /paketler /yonetim/giris; do
+            curl -fsS -o /dev/null "http://127.0.0.1:3000$path" || { docker logs web; exit 1; }
+          done
+          curl -fsS http://127.0.0.1:8000/v1/releases
+          curl -fsS http://127.0.0.1:3000/indir | grep -q "İndirme yakında açılacak"
+          test "$(docker exec api id -u)" != 0 && test "$(docker exec web id -u)" != 0
+          docker images --format '{{.Repository}} {{.Size}}' | grep ati-

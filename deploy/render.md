@@ -78,7 +78,7 @@ Turuncu buluta (Cloudflare vekili) geçmek istenirse önce bu ayarın değişmes
    → ad: `ati-indir`.
 2. Bucket → **Settings → Custom Domains → Connect Domain** → `indir.canarslan.net.tr`
    (DNS kaydını Cloudflare kendisi ekler).
-3. Kurulum dosyası hazır olunca (GitHub Actions → Masaüstü → Windows işi; iş özetinde sürüm,
+3. Kurulum dosyası hazır olunca (GitHub Actions → Masaüstü → Run workflow ile elle; iş özetinde sürüm,
    boyut ve SHA-256 yazar) dosyayı **sürüm numaralı, değişmeyen bir adla** yükleyin:
    `AI-Trading-Intelligence_0.12.0_x64-setup.exe`. Aynı ada başka dosya yüklemeyin.
 4. Yönetim paneli → **Sürümler** → adres

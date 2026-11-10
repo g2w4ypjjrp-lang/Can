@@ -47,7 +47,8 @@ Platformda dikkat edilecekler:
 
 ## İndirme dosyaları (indir.canarslan.net.tr)
 
-1. CI'daki **Masaüstü → Windows kurulum paketi** işi imzasız `*-setup.exe` dosyasını, yanında
+1. GitHub'da **Actions → Masaüstü → Run workflow** ile elle başlatılan **Windows kurulum paketi**
+   işi imzasız `*-setup.exe` dosyasını, yanında
    `.sha256` dosyasıyla üretir; iş özetinde sürüm, boyut (bayt) ve SHA-256 yazar.
 2. Dosya, sürüm numaralı ve **değişmeyen** bir adla indirme deposuna yüklenir (ör.
    `AI-Trading-Intelligence_0.12.0_x64-setup.exe`). Aynı ada farklı dosya yüklenmez; yeni sürüm yeni
