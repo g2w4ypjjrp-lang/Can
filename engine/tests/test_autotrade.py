@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from ati_engine.config import AutoTradeSettings, BinanceEndpoints, EngineSettings
+from ati_engine.core.events import TradeNotice
 from ati_engine.core.models import EngineState, Market, TradingMode
 from ati_engine.execution.auto import AutoTrader
 from ati_engine.execution.service import ExecutionService
@@ -103,7 +104,7 @@ async def test_signal_becomes_risk_sized_testnet_trade(
     service: tuple[ExecutionService, list[TradingMode]], exchange: FakeExchange, db: Database
 ) -> None:
     svc, mode = service
-    auto = trader(svc, mode)
+    auto = trader(svc, mode, trailing_runner=False)  # iki sabit hedef (iz süren stop ayrı test)
     await auto.on_opportunity(signal())
     assert auto.stats["opened"] == 1, auto.status()
     # Risk: 100.000 x %0,25 = 250; birim kayıp 2 + 100 x (0,0005 x 2 + 0,0005) = 2,15
@@ -191,3 +192,72 @@ async def test_gate_rejection_is_reported_not_retried(
     (entry,) = auto.status()["recent"]
     assert entry["result"] == "rejected" and "daily_halt" in entry["reasons"]
     assert "garanti değildir" in auto.status()["disclaimer"]
+
+
+async def test_trailing_runner_takes_half_at_1r_and_trails_the_rest(
+    service: tuple[ExecutionService, list[TradingMode]], exchange: FakeExchange
+) -> None:
+    svc, mode = service
+    auto = trader(svc, mode)  # varsayılan: iz süren stop açık (Futures)
+    await auto.on_opportunity(signal())
+    assert auto.stats["opened"] == 1, auto.status()
+    algos = active_algos(exchange)
+    assert ("STOP_MARKET", "98", "0") in algos
+    assert ("TAKE_PROFIT_MARKET", "102", "58.139") in algos  # yarısı 1R'de
+    assert not any(a[0] == "TAKE_PROFIT_MARKET" and a[1] == "104" for a in algos)
+    trailing = [r[2] for r in exchange.requests
+                if r[1] == "/fapi/v1/algoOrder" and r[2].get("type") == "TRAILING_STOP_MARKET"]  # fmt: skip
+    assert len(trailing) == 1
+    assert D(trailing[0]["callbackRate"]) == D("2.0")  # geri çekilme payı = 1R uzaklığı (%2)
+    assert D(trailing[0]["activatePrice"]) == D(102)  # 1R'de devreye girer
+
+
+def notice(action: str, pnl: str | None = None, symbol: str = "BTCUSDT") -> TradeNotice:
+    return TradeNotice(market="usdm_futures", mode="testnet", symbol=symbol, action=action,
+                       side="long", quantity="1", price="100", net_pnl=pnl)  # fmt: skip
+
+
+async def test_loss_streak_pauses_new_entries(
+    service: tuple[ExecutionService, list[TradingMode]], exchange: FakeExchange
+) -> None:
+    svc, mode = service
+    clock = [int(time.time() * 1000)]
+    auto = AutoTrader(
+        settings=AutoTradeSettings(enabled=True, max_consecutive_losses=2, loss_pause_minutes=60,
+                                   symbol_cooldown_s=0),
+        limits=svc.settings.risk,
+        service=svc,
+        trading_mode=lambda: mode[0],
+        clock=lambda: clock[0],
+    )  # fmt: skip
+    # Botun açmadığı pozisyonların sonucu sayılmaz.
+    await auto.on_trade_notice(notice("closed", "-5", symbol="ETHUSDT"))
+    assert auto.loss_streak == 0
+    for pnl in ("-3", "-4"):
+        auto._open_pnl[("usdm_futures", "BTCUSDT")] = D(0)
+        await auto.on_trade_notice(notice("closed", pnl))
+    assert auto.loss_streak == 2 and auto.paused_until_ms == clock[0] + 3_600_000
+    await auto.on_opportunity(signal(bar_open_time_ms=clock[0] - 3_600_000))
+    assert auto.skipped["kayıp_serisi_molası"] == 1 and auto.stats["opened"] == 0
+    assert auto.status()["loss_streak"] == 2 and auto.status()["results"]["losses"] == 2
+    # Mola bitince seri sıfırlanır ve bot yeniden girebilir.
+    clock[0] += 3_600_001
+    await auto.on_opportunity(signal(bar_open_time_ms=clock[0] - 3_600_000))
+    assert auto.stats["opened"] == 1 and auto.loss_streak == 0 and auto.paused_until_ms is None
+
+
+async def test_partial_close_is_summed_until_position_closes(
+    service: tuple[ExecutionService, list[TradingMode]], exchange: FakeExchange
+) -> None:
+    svc, mode = service
+    auto = trader(svc, mode)
+    await auto.on_opportunity(signal())
+    assert ("usdm_futures", "BTCUSDT") in auto._open_pnl
+    # İlk hedef kârla (pozisyon sürüyor) → sonuç henüz sayılmaz.
+    await auto.on_trade_notice(notice("closed", "10"))
+    assert auto.results == {"wins": 0, "losses": 0}
+    # Kalan kısım girişte (komisyonla hafif eksi) kapanır: toplam artı → kazanç.
+    exchange.futures_positions.pop("BTCUSDT", None)
+    svc.markets[Market.USDM_FUTURES].engine.positions.positions.pop("BTCUSDT", None)
+    await auto.on_trade_notice(notice("closed", "-0.5"))
+    assert auto.results == {"wins": 1, "losses": 0} and auto.loss_streak == 0

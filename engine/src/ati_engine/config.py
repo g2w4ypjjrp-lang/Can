@@ -161,6 +161,11 @@ class AutoTradeSettings(BaseModel):
     max_entries_per_hour: int = Field(default=4, ge=1, le=100)
     symbol_cooldown_s: float = Field(default=3600.0, ge=0)
     max_signal_age_s: float = Field(default=120.0, gt=0, le=3600)
+    # Futures: ilk hedefte yarısı alınır, kalan yarı sabit hedef yerine iz süren stopla taşınır.
+    trailing_runner: bool = True
+    # Art arda bu kadar zararlı pozisyondan sonra yeni giriş durur (0 = kapalı).
+    max_consecutive_losses: int = Field(default=3, ge=0, le=10)
+    loss_pause_minutes: int = Field(default=240, ge=15, le=2880)
 
 
 PUBLIC_RELAY_URL = "wss://relay.canarslan.net.tr"

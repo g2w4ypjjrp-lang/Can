@@ -97,6 +97,19 @@ export function Opportunities() {
                   </li>
                 ))}
               </ul>
+              {detail.data.market_context && <MarketContextView ctx={detail.data.market_context} />}
+              {(detail.data.patterns ?? []).length > 0 && (
+                <>
+                  <h4>Formasyonlar (bu mum)</h4>
+                  <ul className="reasons" data-testid="opportunity-patterns">
+                    {(detail.data.patterns ?? []).map((p, i) => (
+                      <li key={`${String(p.key)}-${i}`} className={p.direction === "short" ? "down" : undefined}>
+                        <b>{String(p.title)}</b> <span className="muted">{String(p.reason)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
               {detail.data.notes.length > 0 && (
                 <ul className="muted small">
                   {detail.data.notes.map((n) => (
@@ -111,5 +124,35 @@ export function Opportunities() {
       </div>
       <Disclaimer />
     </div>
+  );
+}
+
+const REGIME_TONE: Record<string, "ok" | "warn" | "bad" | "neutral" | "info"> = {
+  trend: "ok",
+  range: "info",
+  volatile: "bad",
+  mixed: "neutral",
+};
+
+/** Piyasa rejimi ve üst zaman dilimi trendi (puanın bağlamı). */
+function MarketContextView({ ctx }: { ctx: Record<string, unknown> }) {
+  const regime = String(ctx.regime ?? "mixed");
+  const htf = typeof ctx.htf_trend === "number" ? ctx.htf_trend : null;
+  const adx = typeof ctx.adx === "number" ? ctx.adx : null;
+  return (
+    <>
+      <h4>Piyasa bağlamı</h4>
+      <div className="row" data-testid="opportunity-context">
+        <Badge tone={REGIME_TONE[regime] ?? "neutral"}>{String(ctx.regime_title ?? regime)} piyasa</Badge>
+        <span className="muted small">
+          {adx !== null ? `ADX ${num(adx, 0)}` : "ADX ısınıyor"} · verimlilik {num(Number(ctx.efficiency ?? 0), 2)} · oynaklık sırası %
+          {num(Number(ctx.vol_rank ?? 0) * 100, 0)}
+        </span>
+      </div>
+      <p className="muted small">
+        {String(ctx.htf_label ?? "Üst zaman dilimi")} trend:{" "}
+        {htf === null ? "henüz hesaplanmadı" : `${htf > 0 ? "+" : ""}${num(htf, 2)} (${htf > 0.25 ? "yükseliş" : htf < -0.25 ? "düşüş" : "kararsız"})`}
+      </p>
+    </>
   );
 }

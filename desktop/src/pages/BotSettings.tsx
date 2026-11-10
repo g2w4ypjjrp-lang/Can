@@ -11,6 +11,9 @@ interface BotSettings {
   leverage: number;
   max_entries_per_hour: number;
   symbol_cooldown_s: number;
+  trailing_runner: boolean;
+  max_consecutive_losses: number;
+  loss_pause_minutes: number;
 }
 
 interface AutoTradeStatus {
@@ -18,9 +21,22 @@ interface AutoTradeStatus {
   settings: BotSettings;
   defaults: BotSettings;
   limits: { max_risk_per_trade_pct: string; max_leverage: number };
+  loss_streak?: number;
+  paused_until_ms?: number | null;
+  results?: { wins: number; losses: number };
 }
 
-type Form = { min_score: string; risk: string; leverage: string; per_hour: string; cooldown_min: string; markets: string[] };
+type Form = {
+  min_score: string;
+  risk: string;
+  leverage: string;
+  per_hour: string;
+  cooldown_min: string;
+  markets: string[];
+  trailing: boolean;
+  losses: string;
+  pause_min: string;
+};
 
 function toForm(s: BotSettings): Form {
   return {
@@ -30,6 +46,9 @@ function toForm(s: BotSettings): Form {
     per_hour: String(s.max_entries_per_hour),
     cooldown_min: String(Math.round(s.symbol_cooldown_s / 60)),
     markets: s.markets,
+    trailing: s.trailing_runner,
+    losses: String(s.max_consecutive_losses),
+    pause_min: String(s.loss_pause_minutes),
   };
 }
 
@@ -68,6 +87,9 @@ export function BotSettingsCard() {
       max_entries_per_hour: Number(form.per_hour),
       symbol_cooldown_s: Number(form.cooldown_min) * 60,
       markets: form.markets,
+      trailing_runner: form.trailing,
+      max_consecutive_losses: Number(form.losses),
+      loss_pause_minutes: Number(form.pause_min),
     });
     if (result) {
       setForm(toForm(result.settings));
@@ -128,6 +150,41 @@ export function BotSettingsCard() {
             <small>Spot'ta yalnızca alış (long) yapılır.</small>
           </fieldset>
         </div>
+        <h4>Pozisyon yönetimi</h4>
+        <label className="row" style={{ gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={form.trailing}
+            onChange={(e) => setForm({ ...form, trailing: e.target.checked })}
+            data-testid="bot-trailing"
+          />
+          <span>
+            Kârı iz süren stopla koştur (Futures)
+            <small className="muted" style={{ display: "block" }}>
+              Pozisyonun yarısı 1R'de alınır, zarar durdur girişe çekilir; kalan yarı sabit hedef yerine fiyatı izleyen stopla
+              taşınır. Kapalıysa ikinci yarı sabit hedefte kapanır.
+            </small>
+          </span>
+        </label>
+        <div className="grid-2">
+          <Field label="Art arda kayıp sınırı" hint="Bu kadar zararlı pozisyondan sonra bot yeni işleme mola verir. 0 = kapalı.">
+            <input type="number" min={0} max={10} step={1} value={form.losses} onChange={set("losses")} data-testid="bot-losses" />
+          </Field>
+          <Field label="Mola süresi (dakika)" hint="15–2880">
+            <input type="number" min={15} max={2880} step={15} value={form.pause_min} onChange={set("pause_min")} data-testid="bot-pause" />
+          </Field>
+        </div>
+        {(s.loss_streak ?? 0) > 0 || s.paused_until_ms ? (
+          <p className={s.paused_until_ms ? "notice" : "muted small"} data-testid="bot-streak">
+            Art arda kayıp: {s.loss_streak ?? 0}
+            {s.paused_until_ms ? ` · bot ${new Date(s.paused_until_ms).toLocaleTimeString("tr-TR")} saatine kadar molada` : ""}
+          </p>
+        ) : null}
+        {s.results && s.results.wins + s.results.losses > 0 ? (
+          <p className="muted small" data-testid="bot-results">
+            Bu oturumda bot pozisyonları: {s.results.wins} kârlı, {s.results.losses} zararlı kapandı.
+          </p>
+        ) : null}
         <div className="row">
           <button type="submit" className="primary" disabled={save.pending} data-testid="bot-save">
             Kaydet

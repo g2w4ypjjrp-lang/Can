@@ -99,14 +99,30 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
+    id: "bot-nasil-karar-verir",
+    title: "Bot nasıl karar verir?",
+    lead: "Her mum kapanışında 16 strateji, formasyonlar, piyasa rejimi ve üst zaman dilimi birlikte değerlendirilip 0–100 arası bir fırsat puanı hesaplanır. Puan bir göstergedir, kâr garantisi değildir.",
+    steps: [
+      "Göstergeler ve stratejiler: EMA, RSI, MACD, Bollinger, Ichimoku, VWAP, destek/direnç, hacim, funding ve açık pozisyon gibi 14 klasik kural.",
+      "Formasyonlar: yutan mum, çekiç, sabah/akşam yıldızı gibi mum formasyonları ile ikili dip/tepe, omuz-baş-omuz, üçgen ve bayrak kırılımları.",
+      "Piyasa rejimi: trend, yatay ya da aşırı oynak piyasa ayırt edilir; trendde trend stratejileri, yatayda dönüş stratejileri öne çıkar, aşırı oynaklıkta puan düşer.",
+      "Üst zaman dilimi: 1 saatlik sinyal 4 saatlik trendle karşılaştırılır; büyük trende karşı işlemde puan düşürülür.",
+      "Kendini ayarlama: her stratejinin sanal yarışmadaki sonuçlarına göre puandaki ağırlığı saatte bir güncellenir (en az 10 işlemden sonra, 0,4–1,4 arası).",
+      "Risk kapısı: puan eşiği geçse bile her işlem zarar durdur, kaldıraç, günlük zarar ve pozisyon sınırlarından geçmek zorundadır.",
+    ],
+    notes: ["Her fırsatın gerekçesi Fırsatlar ekranında bileşen bileşen görünür; stratejilerin ağırlıkları Strateji performansı ekranındadır."],
+  },
+  {
     id: "bot-ayarlari",
     title: "Bot (otomatik işlem) ayarları",
     lead: "Bot, puanı eşik üstündeki fırsatlarda yalnızca Demo Trading'de işlem açar. Ayarları Spot / Futures işlemler ekranındaki \"Bot ayarları\" kartından değiştirebilirsiniz.",
     steps: [
       "En düşük fırsat puanı (50–100): yükseldikçe daha az ama daha seçici işlem açılır.",
       "İşlem başına risk: zarar durdurda kaybedilecek pay. Risk sınırının üstüne çıkamaz.",
-      "Kaldıraç, saatte en fazla giriş, aynı sembolde bekleme süresi ve piyasaları seçin; Kaydet'e basın.",
-      "Beğenmezseniz \"Varsayılana dön\" ile ilk ayarlara dönebilirsiniz.",
+      "Kaldıraç, saatte en fazla giriş, aynı sembolde bekleme süresi ve piyasaları seçin.",
+      "İz süren stop (Futures): yarısı 1R'de alınır, zarar durdur girişe çekilir, kalan yarı fiyatı izleyen stopla taşınır.",
+      "Art arda kayıp sınırı: belirlenen sayıda zararlı pozisyondan sonra bot yeni işleme mola verir.",
+      "Kaydet'e basın; beğenmezseniz \"Varsayılana dön\" ile ilk ayarlara dönebilirsiniz.",
     ],
     notes: [
       "Her işlem yine risk kapısından geçer ve zarar durdur zorunludur.",

@@ -29,7 +29,7 @@ from ati_engine.api.server import bind_socket, build_server, create_app
 from ati_engine.backtest.service import BacktestService
 from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus, OverflowPolicy
-from ati_engine.core.events import Alert, Heartbeat
+from ati_engine.core.events import Alert, Heartbeat, TradeNotice
 from ati_engine.core.models import EngineState, Market, Severity
 from ati_engine.core.supervisor import RestartPolicy, TaskSupervisor
 from ati_engine.exchange.endpoints import endpoints_for
@@ -377,6 +377,7 @@ class Engine:
         )
         runtime.autotrader = autotrader
         runtime.bus.subscribe(OpportunityScored, autotrader.on_opportunity, name="autotrader")
+        runtime.bus.subscribe(TradeNotice, autotrader.on_trade_notice, name="autotrader-results")
 
         async def connect() -> None:
             try:

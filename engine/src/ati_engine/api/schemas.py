@@ -910,6 +910,9 @@ class AutoTradeSettingsUpdate(BaseModel):
     leverage: int | None = Field(default=None, ge=1)
     max_entries_per_hour: int | None = Field(default=None, ge=1, le=20)
     symbol_cooldown_s: float | None = Field(default=None, ge=60, le=86_400)
+    trailing_runner: bool | None = None
+    max_consecutive_losses: int | None = Field(default=None, ge=0, le=10)
+    loss_pause_minutes: int | None = Field(default=None, ge=15, le=2880)
 
 
 # --- Lisans (Aşama 15) ---------------------------------------------------------------------------

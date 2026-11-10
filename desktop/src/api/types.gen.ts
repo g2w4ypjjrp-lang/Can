@@ -1101,7 +1101,13 @@ export interface OpportunityDetail {
   disclaimer: string;
   interval: string;
   market: Market;
+  market_context?: {
+    [k: string]: unknown;
+  } | null;
   notes: string[];
+  patterns?: {
+    [k: string]: unknown;
+  }[];
   penalties: ScorePenaltyInfo[];
   price: number;
   raw_score: number;

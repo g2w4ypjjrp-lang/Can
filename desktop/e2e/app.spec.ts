@@ -288,11 +288,19 @@ test("bot ayarları: risk sınırı aşılamaz, kaydedilir ve varsayılana döne
   await card.getByTestId("bot-risk").fill("0,4");
   await card.getByTestId("bot-min-score").fill("85");
   await card.getByTestId("bot-market-spot").check();
+  await expect(card.getByTestId("bot-trailing")).toBeChecked(); // varsayılan: iz süren stop açık
+  await card.getByTestId("bot-trailing").uncheck();
+  await card.getByTestId("bot-losses").fill("2");
+  await card.getByTestId("bot-pause").fill("120");
   await card.getByTestId("bot-save").click();
   await expect(card.getByTestId("bot-message")).toContainText("Kaydedildi");
   await page.reload();
-  await expect(page.getByTestId("bot-settings").getByTestId("bot-min-score")).toHaveValue("85");
-  await expect(page.getByTestId("bot-settings").getByTestId("bot-market-spot")).toBeChecked();
+  const saved = page.getByTestId("bot-settings");
+  await expect(saved.getByTestId("bot-min-score")).toHaveValue("85");
+  await expect(saved.getByTestId("bot-market-spot")).toBeChecked();
+  await expect(saved.getByTestId("bot-trailing")).not.toBeChecked();
+  await expect(saved.getByTestId("bot-losses")).toHaveValue("2");
+  await expect(saved.getByTestId("bot-pause")).toHaveValue("120");
   await page.getByTestId("bot-settings").getByTestId("bot-reset").click();
   await expect(page.getByTestId("bot-settings").getByTestId("bot-min-score")).toHaveValue("70");
 });

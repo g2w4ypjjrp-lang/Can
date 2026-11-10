@@ -370,6 +370,39 @@ async def test_futures_trailing_stop(db: Database) -> None:
     await engine.stop()
 
 
+async def test_runner_trails_after_first_target_from_current_price(db: Database) -> None:
+    """Bot düzeni: yarısı ilk hedefte, kalan yarı iz süren stopla. İlk hedef dolunca zarar durdur
+    girişe çekilir ve iz süren stop etkinleştirme fiyatı olmadan (hemen) yeniden kurulur."""
+    engine, venue = await make_engine(db)
+    await venue.on_price("BTCUSDT", D(100))
+    await engine.open(
+        futures_intent(
+            stop_loss=D(95),
+            take_profits=(TakeProfit(D(105), D("0.5")),),
+            trailing_callback_pct=D(2),
+            trailing_activation=D(105),
+        )
+    )
+    await tick(engine, venue, "BTCUSDT", "105.5")  # ilk hedef doldu
+    position = engine.positions.positions["BTCUSDT"]
+    assert position.quantity == D(1)
+    orders = await venue.open_orders()
+    assert [o.type for o in orders if o.type is OrderType.TRAILING_STOP_MARKET] == [
+        OrderType.TRAILING_STOP_MARKET
+    ]
+    stops = [o.trigger_price for o in orders if o.type is OrderType.STOP_MARKET]
+    assert stops == [D(100)]  # zarar durdur girişte
+    rebuilt = [r.request for r in venue._resting.values() if r.request is not None
+               and r.request.type is OrderType.TRAILING_STOP_MARKET]  # fmt: skip
+    assert [r.activation_price for r in rebuilt] == [None]  # hemen, güncel fiyattan
+    for price in ("108", "112"):
+        await tick(engine, venue, "BTCUSDT", price)
+    assert "BTCUSDT" in engine.positions.positions
+    await tick(engine, venue, "BTCUSDT", "109.7")  # 112'den %2 geri çekilme: 109,76
+    assert "BTCUSDT" not in engine.positions.positions
+    await engine.stop()
+
+
 async def test_manual_close_cancels_protection(db: Database) -> None:
     engine, venue = await make_engine(db)
     await venue.on_price("BTCUSDT", D(100))

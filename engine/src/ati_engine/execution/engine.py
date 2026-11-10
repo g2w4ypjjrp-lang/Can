@@ -500,9 +500,11 @@ class TradingEngine:
                     quantity=qty,
                     reduce_only=True,
                     callback_rate=intent.trailing_callback_pct,
+                    # İlk hedef dolduktan sonra (fiyat etkinleştirme seviyesini geçmiştir) iz
+                    # süren stop hemen, güncel fiyattan başlar; aksi halde borsa emri reddeder.
                     activation_price=(
                         self._tp_price(info, intent.trailing_activation, direction)
-                        if intent.trailing_activation is not None
+                        if intent.trailing_activation is not None and managed.tp_filled == 0
                         else None
                     ),
                     purpose="trailing_stop",

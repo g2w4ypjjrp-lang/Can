@@ -23,10 +23,11 @@ import logging
 import time
 from collections import Counter, deque
 from collections.abc import Callable
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 from typing import Any
 
 from ati_engine.config import AutoTradeSettings, RiskLimits
+from ati_engine.core.events import TradeNotice
 from ati_engine.core.models import Market, TradingMode
 from ati_engine.execution.approval import RiskRejected
 from ati_engine.execution.engine import TakeProfit, TradeIntent
@@ -47,6 +48,9 @@ EDITABLE = (
     "leverage",
     "max_entries_per_hour",
     "symbol_cooldown_s",
+    "trailing_runner",
+    "max_consecutive_losses",
+    "loss_pause_minutes",
 )
 
 
@@ -90,6 +94,11 @@ class AutoTrader:
         self.skipped: Counter[str] = Counter()
         self.stats = {"signals": 0, "opened": 0, "rejected": 0, "failed": 0}
         self.recent: deque[dict[str, Any]] = deque(maxlen=50)
+        # Kayıp serisi: botun açtığı pozisyonların kapanış sonuçları (kısmi kapanışlar toplanır).
+        self._open_pnl: dict[tuple[str, str], Decimal] = {}
+        self.loss_streak = 0
+        self.paused_until_ms: int | None = None
+        self.results = {"wins": 0, "losses": 0}
 
     def _skip(self, reason: str) -> None:
         self.skipped[reason] += 1
@@ -104,6 +113,11 @@ class AutoTrader:
             return self._skip("piyasa")
         if event.score < self.cfg.min_score:
             return self._skip("puan")
+        if self.paused_until_ms is not None:
+            if self._clock() < self.paused_until_ms:
+                return self._skip("kayıp_serisi_molası")
+            self.paused_until_ms = None
+            self.loss_streak = 0
         if event.direction not in ("long", "short"):
             return self._skip("yön")
         if event.market is Market.SPOT and event.direction == "short":
@@ -163,9 +177,35 @@ class AutoTrader:
         else:
             if managed.state == "open":
                 self.stats["opened"] += 1
+                self._open_pnl[(event.market.value, event.symbol)] = Decimal(0)
             entry.update(result=managed.state, filled=str(managed.filled_qty))
         self.recent.appendleft(entry)
         return None
+
+    async def on_trade_notice(self, notice: TradeNotice) -> None:
+        """Botun açtığı pozisyonların sonucu: kısmi kapanışlar toplanır, pozisyon tamamen
+        kapanınca kazanç/kayıp sayılır. Art arda ``max_consecutive_losses`` kayıpta mola."""
+        key = (notice.market, notice.symbol)
+        if notice.action != "closed" or key not in self._open_pnl:
+            return
+        self._open_pnl[key] += Decimal(notice.net_pnl or "0")
+        execution = self.service.markets.get(Market(notice.market))
+        if execution is not None and notice.symbol in execution.engine.positions.positions:
+            return  # kısmi kapanış (ör. ilk hedef); pozisyon sürüyor
+        pnl = self._open_pnl.pop(key)
+        if pnl < 0:
+            self.results["losses"] += 1
+            self.loss_streak += 1
+            limit = self.cfg.max_consecutive_losses
+            if limit and self.loss_streak >= limit and self.paused_until_ms is None:
+                self.paused_until_ms = self._clock() + self.cfg.loss_pause_minutes * 60_000
+                logger.warning(
+                    "Art arda kayıp: bot yeni girişlere mola verdi",
+                    extra={"streak": self.loss_streak, "minutes": self.cfg.loss_pause_minutes},
+                )
+        else:
+            self.results["wins"] += 1
+            self.loss_streak = 0
 
     async def _intent(
         self, event: OpportunityScored, execution: Any, info: Any
@@ -200,8 +240,22 @@ class AutoTrader:
             return None
         one_r = price * (1 + direction * stop_pct)
         take_profits: tuple[TakeProfit, ...]
+        trailing: Decimal | None = None
+        activation: Decimal | None = None
         if target_pct > stop_pct * Decimal("1.2"):
-            take_profits = (TakeProfit(one_r, Decimal("0.5")), TakeProfit(target, Decimal("0.5")))
+            if self.cfg.trailing_runner and event.market is Market.USDM_FUTURES:
+                # Yarısı 1R'de alınır; kalan yarı iz süren stopla taşınır (geri çekilme payı
+                # 1R uzaklığı kadar, %0,2-%5 arası). Zarar durdur ilk hedeften sonra girişe çekilir.
+                take_profits = (TakeProfit(one_r, Decimal("0.5")),)
+                trailing = min(max(stop_pct * 100, Decimal("0.2")), Decimal(5)).quantize(
+                    Decimal("0.1"), rounding=ROUND_DOWN
+                )
+                activation = one_r
+            else:
+                take_profits = (
+                    TakeProfit(one_r, Decimal("0.5")),
+                    TakeProfit(target, Decimal("0.5")),
+                )
         else:
             take_profits = (TakeProfit(target, Decimal(1)),)
         return TradeIntent(
@@ -213,6 +267,8 @@ class AutoTrader:
             reference_price=price,
             stop_loss=stop,
             take_profits=take_profits,
+            trailing_callback_pct=trailing,
+            trailing_activation=activation,
             leverage=self.cfg.leverage if event.market is Market.USDM_FUTURES else None,
             reason=f"otomatik: puan {event.score:.0f}; " + "; ".join(event.reasons[:3]),
             strategy_id=None,
@@ -235,6 +291,9 @@ class AutoTrader:
             "stats": dict(self.stats),
             "skipped": dict(self.skipped),
             "entries_last_hour": len(self._entries),
+            "loss_streak": self.loss_streak,
+            "paused_until_ms": self.paused_until_ms,
+            "results": dict(self.results),
             "recent": list(self.recent),
             "disclaimer": "Test ağı işlemleridir; gerçek para kullanılmaz. Sonuçlar garanti "
             "değildir ve gelecekteki performansı göstermez.",
