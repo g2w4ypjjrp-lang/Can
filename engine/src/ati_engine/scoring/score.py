@@ -23,11 +23,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from ati_engine.analysis.context import MarketContext
 from ati_engine.analysis.features import Snapshot
 from ati_engine.analysis.patterns import Pattern
 from ati_engine.history.levels import Level
 from ati_engine.scoring.costs import CostBreakdown, CostModel
 from ati_engine.strategies.base import ModelView, StrategySignal
+from ati_engine.strategies.library import ALL_STRATEGIES
 
 DEFAULT_WEIGHTS: dict[str, float] = {
     "strategies": 0.30,
@@ -38,7 +40,22 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "orderbook": 0.05,
     "similarity": 0.10,
     "model": 0.10,
+    "htf": 0.10,
 }
+
+# Rejime göre strateji kategorilerinin çarpanı: trendde trend/kırılım, yatayda ortalamaya dönüş
+# stratejileri öne çıkar. Listede olmayan kategori (ve karışık rejim) 1 kabul edilir.
+REGIME_FACTORS: dict[str, dict[str, float]] = {
+    "trend": {"trend": 1.25, "breakout": 1.2, "momentum": 1.1, "mean_reversion": 0.6},
+    "range": {
+        "trend": 0.6,
+        "breakout": 0.8,
+        "momentum": 0.9,
+        "mean_reversion": 1.25,
+        "pattern": 1.1,
+    },
+}
+CATEGORY = {s.name: s.category for s in ALL_STRATEGIES}
 
 TITLES = {
     "strategies": "Strateji uzlaşısı",
@@ -49,6 +66,7 @@ TITLES = {
     "orderbook": "Emir defteri dengesi",
     "similarity": "Tarihsel benzerlik",
     "model": "Makine öğrenmesi modeli",
+    "htf": "Üst zaman dilimi trendi",
 }
 
 DISCLAIMER = (
@@ -123,6 +141,7 @@ class Opportunity:
     disclaimer: str = DISCLAIMER
     notes: list[str] = field(default_factory=list)
     patterns: list[dict[str, Any]] = field(default_factory=list)  # bu mumdaki formasyonlar
+    market_context: dict[str, Any] | None = None  # rejim ve üst zaman dilimi
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -144,6 +163,7 @@ class ScoreInputs:
     similarity: SimilarityContext | None = None
     model: ModelView | None = None
     patterns: Sequence[Pattern] = ()
+    context: MarketContext | None = None
 
 
 class OpportunityScorer:
@@ -170,12 +190,22 @@ class OpportunityScorer:
         out: dict[str, tuple[float | None, str]] = {}
 
         if x.signals:
-            total = sum(sig.direction * sig.strength for sig in x.signals)
+            regime = x.context.regime if x.context is not None else None
+            factors = REGIME_FACTORS.get(regime or "", {})
+            total = sum(
+                sig.direction * sig.strength * factors.get(CATEGORY.get(sig.strategy, ""), 1.0)
+                for sig in x.signals
+            )
             longs = sum(1 for sig in x.signals if sig.direction > 0)
             shorts = len(x.signals) - longs
+            note = ""
+            if regime == "trend":
+                note = "; trend rejimi: trend ve kırılım stratejileri öne çıkarıldı"
+            elif regime == "range":
+                note = "; yatay rejim: ortalamaya dönüş stratejileri öne çıkarıldı"
             out["strategies"] = (
                 math.tanh(total / 1.5),
-                f"{len(x.signals)} strateji sinyal verdi ({longs} long, {shorts} short)",
+                f"{len(x.signals)} strateji sinyal verdi ({longs} long, {shorts} short){note}",
             )
         else:
             out["strategies"] = (0.0, "Bu mumda hiçbir strateji sinyal vermedi")
@@ -239,6 +269,15 @@ class OpportunityScorer:
             )
         else:
             out["model"] = (None, "eğitilmiş model yok")
+
+        ctx = x.context
+        if ctx is not None and ctx.htf_trend is not None:
+            out["htf"] = (
+                _clamp(ctx.htf_trend),
+                f"{ctx.htf_label} trend {ctx.htf_trend:+.2f} ({ctx.htf_detail})",
+            )
+        else:
+            out["htf"] = (None, "üst zaman dilimi verisi henüz yok")
         return out
 
     # --- Puan ---------------------------------------------------------------------------
@@ -337,6 +376,25 @@ class OpportunityScorer:
                         f"24 saatlik hacim {volume:,.0f} USDT",
                     )
                 )
+            ctx = x.context
+            if ctx is not None and ctx.regime == "volatile":
+                penalties.append(
+                    Penalty(
+                        "regime",
+                        "Aşırı oynaklık",
+                        round(raw * 0.15, 2),
+                        f"oynaklık son dönemin en yüksek %5'inde ({ctx.detail})",
+                    )
+                )
+            if ctx is not None and ctx.htf_trend is not None and ctx.htf_trend * d <= -0.5:
+                penalties.append(
+                    Penalty(
+                        "htf",
+                        "Üst zaman dilimine karşı",
+                        round(raw * 0.2, 2),
+                        f"{ctx.htf_label} trend {ctx.htf_trend:+.2f}, işlem yönünün tersi",
+                    )
+                )
             if len(available) < 4:
                 penalties.append(
                     Penalty(
@@ -374,6 +432,7 @@ class OpportunityScorer:
             target_pct=round(target_pct, 4) if direction else None,
             notes=notes,
             patterns=[p.to_dict() for p in x.patterns],
+            market_context=x.context.to_dict() if x.context is not None else None,
         )
         opportunity.calibration = self._calibration_for(final)
         return opportunity

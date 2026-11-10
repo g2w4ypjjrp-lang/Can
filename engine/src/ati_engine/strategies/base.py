@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
+from ati_engine.analysis.context import MarketContext
 from ati_engine.analysis.features import Snapshot
 from ati_engine.analysis.patterns import Pattern
 from ati_engine.history.levels import Level
@@ -37,6 +38,7 @@ class StrategyView:
     levels: tuple[Level, ...] = ()
     model: ModelView | None = None
     patterns: tuple[Pattern, ...] = ()  # bu mumda tamamlanan formasyonlar
+    context: MarketContext | None = None  # rejim ve üst zaman dilimi trendi
 
 
 @dataclass(frozen=True)

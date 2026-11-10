@@ -2200,11 +2200,32 @@
         "market": {
           "$ref": "#/$defs/Market"
         },
+        "market_context": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Market Context"
+        },
         "notes": {
           "items": {
             "type": "string"
           },
           "title": "Notes",
+          "type": "array"
+        },
+        "patterns": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Patterns",
           "type": "array"
         },
         "penalties": {

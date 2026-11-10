@@ -621,6 +621,7 @@ class OpportunityDetail(BaseModel):
     notes: list[str]
     disclaimer: str
     patterns: list[dict[str, Any]] = Field(default_factory=list)  # bu mumdaki formasyonlar
+    market_context: dict[str, Any] | None = None  # rejim ve üst zaman dilimi trendi
 
 
 class StrategyInfo(BaseModel):

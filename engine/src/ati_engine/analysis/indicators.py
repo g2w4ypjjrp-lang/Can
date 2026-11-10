@@ -120,6 +120,50 @@ class ATR:
 
 
 @dataclass(frozen=True)
+class ADXValue:
+    adx: float
+    plus_di: float
+    minus_di: float
+
+
+class ADX:
+    """Wilder ADX: trendin gücü (yönü değil). 25 üstü güçlü trend, 20 altı zayıf/yatay kabul
+    edilir. +DI / -DI yönü gösterir. İlk değer yaklaşık ``2 * period`` mumdan sonra gelir."""
+
+    def __init__(self, period: int = 14) -> None:
+        self._tr = WilderAverage(period)
+        self._plus = WilderAverage(period)
+        self._minus = WilderAverage(period)
+        self._dx = WilderAverage(period)
+        self._prev: tuple[float, float, float] | None = None
+        self.value: ADXValue | None = None
+
+    def update(self, high: float, low: float, close: float) -> ADXValue | None:
+        if self._prev is None:
+            self._prev = (high, low, close)
+            return None
+        prev_high, prev_low, prev_close = self._prev
+        self._prev = (high, low, close)
+        up, down = high - prev_high, prev_low - low
+        plus_dm = up if up > down and up > 0 else 0.0
+        minus_dm = down if down > up and down > 0 else 0.0
+        tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+        s_tr = self._tr.update(tr)
+        s_plus = self._plus.update(plus_dm)
+        s_minus = self._minus.update(minus_dm)
+        if s_tr is None or s_plus is None or s_minus is None or s_tr <= 0:
+            return self.value
+        plus_di = 100 * s_plus / s_tr
+        minus_di = 100 * s_minus / s_tr
+        total = plus_di + minus_di
+        dx = 100 * abs(plus_di - minus_di) / total if total > 0 else 0.0
+        adx = self._dx.update(dx)
+        if adx is not None:
+            self.value = ADXValue(adx, plus_di, minus_di)
+        return self.value
+
+
+@dataclass(frozen=True)
 class MACDValue:
     macd: float
     signal: float

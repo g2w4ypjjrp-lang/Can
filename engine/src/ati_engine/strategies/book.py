@@ -11,6 +11,7 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from ati_engine.analysis.context import MarketContext, MarketContextTracker
 from ati_engine.analysis.features import Bar, FeatureEngine, FuturesContext, Snapshot
 from ati_engine.analysis.patterns import Pattern, detect_patterns
 from ati_engine.history.levels import Level, find_levels
@@ -28,6 +29,7 @@ class BookUpdate:
     levels: tuple[Level, ...]
     model: ModelView | None = None
     patterns: tuple[Pattern, ...] = ()
+    context: MarketContext | None = None
 
 
 class StrategyBook:
@@ -42,6 +44,7 @@ class StrategyBook:
         self.market = market
         self.symbol = symbol
         self.engine = FeatureEngine()
+        self.context = MarketContextTracker()
         self.strategies = strategies_for(market)
         self.prev: Snapshot | None = None
         self.levels: tuple[Level, ...] = ()
@@ -63,6 +66,7 @@ class StrategyBook:
             return None  # aynı veya eski mum (ısınma ile canlı akışın çakışması)
         self.last_open_ms = bar.open_time_ms
         features = self.engine.update(bar, futures)
+        context = self.context.update(bar.open_time_ms, bar.open, bar.high, bar.low, bar.close)
         self._bars.append((bar.open_time_ms, bar.open, bar.high, bar.low, bar.close, bar.volume))
         snapshot = self.engine.snapshot
         if features is None or snapshot is None:
@@ -100,6 +104,7 @@ class StrategyBook:
             levels=self.levels,
             model=model_view,
             patterns=patterns,
+            context=context,
         )
         signals: list[StrategySignal] = []
         for strategy in self.strategies:
@@ -115,4 +120,6 @@ class StrategyBook:
             if signal is not None:
                 signals.append(signal)
         self.prev = snapshot
-        return BookUpdate(snapshot, features, tuple(signals), self.levels, model_view, patterns)
+        return BookUpdate(
+            snapshot, features, tuple(signals), self.levels, model_view, patterns, context
+        )

@@ -241,7 +241,7 @@ def test_score_breakdown_adds_up_exactly() -> None:
     assert 0 <= opp.score <= 100
     assert sum(c.weight for c in opp.components) == pytest.approx(1.0, abs=1e-3)
     unavailable = {c.key for c in opp.components if not c.available}
-    assert unavailable == {"similarity", "model"}
+    assert unavailable == {"similarity", "model", "htf"}  # bağlam verilmedi
     assert {p.key for p in opp.penalties} >= {"cost"}
     assert opp.stop_price < opp.price < opp.target_price
     assert opp.reward_risk == pytest.approx(
@@ -501,7 +501,7 @@ async def test_opportunity_api(tmp_path: Path) -> None:
             body = detail.json()
             assert body["source"] == "history"
             assert body["bar_open_time_ms"] == int(rows[-1][0])
-            assert len(body["components"]) == 8
+            assert len(body["components"]) == 9  # 8 bileşen + üst zaman dilimi
             similarity = next(c for c in body["components"] if c["key"] == "similarity")
             if body["direction"] != "none":
                 # Depoda 1500 mum var: benzer geçmiş dönemler bulunur ve puana katılır.
