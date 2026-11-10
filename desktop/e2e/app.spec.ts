@@ -40,6 +40,7 @@ test("bütün ekranlar açılır", async ({ page }) => {
     "performance",
     "risk",
     "strategies",
+    "phone",
     "settings",
     "dashboard",
   ]) {
@@ -163,4 +164,31 @@ test("lisans: yazım hatası yakalanır, geçerli anahtar etkinleşir, bilgisaya
   await license.getByTestId("license-release").click();
   await page.getByRole("dialog").getByRole("button", { name: "Lisanstan çıkar" }).click();
   await expect(license.getByTestId("license-state")).toHaveText("Etkin değil");
+});
+
+test("telefondan kontrol: varsayılan kapalı, açılınca aktarma servisine bağlanır ve QR üretir", async ({ page }) => {
+  await open(page);
+  await expect(page.getByTestId("top-phone")).toHaveText("Telefon kapalı");
+  await page.getByTestId("phone-mini").click();
+  await expect(page.getByTestId("page-phone")).toBeVisible();
+  const toggle = page.getByTestId("remote-toggle");
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByTestId("relay-state")).toHaveText("Kapalı");
+  await expect(page.getByTestId("pair-start")).toBeDisabled();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("relay-state")).toHaveText("Bağlı");
+  await expect(page.getByTestId("top-phone")).toHaveText("Telefon: eşleştirin");
+  await page.getByTestId("pair-start").click();
+  const qr = page.getByTestId("pair-qr");
+  await expect(qr.getByRole("img", { name: "Eşleştirme QR kodu" })).toBeVisible();
+  await expect(page.getByTestId("pair-remaining")).toContainText("tek kullanımlık");
+  await expect(page.getByTestId("devices")).toHaveCount(0); // henüz eşli telefon yok (boş durum)
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByTestId("relay-state")).toHaveText("Kapalı");
+  await expect(qr).toHaveCount(0);
+  await expect(page.getByTestId("pair-start")).toBeDisabled();
 });

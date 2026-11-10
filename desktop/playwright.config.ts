@@ -7,6 +7,7 @@ import { defineConfig, devices } from "@playwright/test";
 export const ENGINE_PORT = 47999;
 export const ENGINE_TOKEN = "e2e-belirtec-0123456789";
 const UI_PORT = 4173;
+const RELAY_PORT = 47998;
 
 export default defineConfig({
   testDir: "e2e",
@@ -26,7 +27,16 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } }],
   webServer: [
     {
-      command: `uv run --project ../engine python ../engine/tests/e2e_backend.py --port ${ENGINE_PORT} --token ${ENGINE_TOKEN} --origin http://127.0.0.1:${UI_PORT}`,
+      // Gerçek aktarma servisi (bulut): "Telefondan kontrol" açılınca motor buna bağlanır.
+      command: `uv run --project ../cloud ati-cloud-relay --host 127.0.0.1 --port ${RELAY_PORT}`,
+      url: `http://127.0.0.1:${RELAY_PORT}/health`,
+      timeout: 180_000,
+      reuseExistingServer: false,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+    {
+      command: `uv run --project ../engine python ../engine/tests/e2e_backend.py --port ${ENGINE_PORT} --token ${ENGINE_TOKEN} --origin http://127.0.0.1:${UI_PORT} --relay ws://127.0.0.1:${RELAY_PORT}`,
       url: `http://127.0.0.1:${ENGINE_PORT}/v1/health`,
       timeout: 120_000,
       reuseExistingServer: false,

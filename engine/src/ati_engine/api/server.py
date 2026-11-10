@@ -75,6 +75,7 @@ from ati_engine.api.schemas import (
     PositioningInfo,
     PredictionResponse,
     ReadinessInfo,
+    RemoteToggle,
     RiskEventInfo,
     ScannerStatsInfo,
     ScannerTopResponse,
@@ -122,13 +123,14 @@ from ati_engine.licensing.manager import LicenseManager, LicenseRejected, Licens
 from ati_engine.market.service import MarketDataService
 from ati_engine.ml.registry import ModelError
 from ati_engine.paper.competition import LIVE_CANDIDATE, PaperCompetition
-from ati_engine.remote.service import RemoteService
+from ati_engine.remote.service import REMOTE_ENABLED_KEY, RemoteService
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
 from ati_engine.scanner.scanner import MarketScanner, row_dict
 from ati_engine.scoring.live import OpportunityEngine, top_reasons
 from ati_engine.scoring.score import Opportunity
 from ati_engine.security.exchange_keys import LiveKeysLocked
+from ati_engine.storage.settings_store import SettingsStore
 from ati_engine.strategies.library import ALL_STRATEGIES
 from ati_engine.whales.radar import WhaleRadar
 
@@ -1244,13 +1246,33 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
     async def remote_status(_: Auth) -> dict[str, Any]:
         return await remote_or_404().status()
 
+    @app.post("/v1/remote/enabled")
+    async def remote_enable(body: RemoteToggle, _: Auth) -> dict[str, Any]:
+        """Telefondan kontrolü aç/kapat. Seçim saklanır; motor yeniden başlayınca da geçerlidir.
+        Telefondan yapılabilecekler sınırlıdır (acil durdurma, bot durdur/başlat, pozisyon
+        kapatma); yeni işlem açma ve para çekme yoktur."""
+        service = remote_or_404()
+        if body.enabled:
+            service.start()
+        else:
+            await service.disable()
+        await SettingsStore(runtime.db).set(REMOTE_ENABLED_KEY, body.enabled)
+        await runtime.audit.record(
+            actor=LOCAL_ACTOR,
+            action="remote.enabled" if body.enabled else "remote.disabled",
+            details={"relay_url": service.relay_url},
+        )
+        return await service.status()
+
     @app.post("/v1/remote/pairing")
     async def remote_pairing(_: Auth) -> dict[str, Any]:
         service = remote_or_404()
-        if not service.relay_url:
+        if not service.enabled or not service.relay_url:
+            raise HTTPException(status_code=409, detail="Önce telefondan kontrolü açın")
+        if not service.connected:
             raise HTTPException(
                 status_code=409,
-                detail="Aktarma servisi adresi ayarlanmamış (bulut dağıtımı G5 onayını bekliyor)",
+                detail="Aktarma servisine henüz bağlanılamadı; internet bağlantısını kontrol edin",
             )
         payload, expires = service.pairing.start(service.relay_url)
         await runtime.audit.record(actor=LOCAL_ACTOR, action="remote.pairing_started")

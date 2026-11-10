@@ -158,11 +158,28 @@ class AutoTradeSettings(BaseModel):
     max_signal_age_s: float = Field(default=120.0, gt=0, le=3600)
 
 
+PUBLIC_RELAY_URL = "wss://relay.canarslan.net.tr"
+
+
+def _check_relay(value: str) -> str:
+    if value.startswith("wss://"):
+        return value.rstrip("/")
+    loopback = ("ws://127.0.0.1", "ws://localhost", "ws://[::1]")
+    if value.startswith(loopback):  # yalnızca yerel test için şifresiz
+        return value.rstrip("/")
+    raise ValueError("Aktarma servisi adresi wss:// ile başlamalı")
+
+
 class RemoteSettings(BaseModel):
     """Uzaktan kontrol (Aşama 13): telefon ↔ aktarma servisi ↔ motor, uçtan uca imzalı.
-    Aktarma servisi adresi verilmeden kapalıdır (servis dağıtımı G5 onayına bağlı)."""
+
+    Kullanıcı masaüstü uygulamasında "Telefondan kontrol"ü açana kadar kapalıdır; seçim motor
+    veritabanında saklanır. ``relay_url`` verilirse o servis kullanılır ve kullanıcı kapatmadıkça
+    açık başlar (kendi aktarma servisi, testler). Verilmezse açıldığında ``public_relay_url``
+    kullanılır. Aktarma servisi komut üretemez; yalnızca şifreli ve imzalı iletileri taşır."""
 
     relay_url: str | None = None
+    public_relay_url: str = PUBLIC_RELAY_URL
     snapshot_interval_s: float = Field(default=15.0, ge=2, le=600)
     max_clock_skew_s: float = Field(default=120.0, ge=10, le=600)
     pairing_ttl_s: float = Field(default=300.0, ge=30, le=3600)
@@ -172,12 +189,16 @@ class RemoteSettings(BaseModel):
     def _secure_relay(cls, value: str | None) -> str | None:
         if value is None or value == "":
             return None
-        if value.startswith("wss://"):
-            return value.rstrip("/")
-        loopback = ("ws://127.0.0.1", "ws://localhost", "ws://[::1]")
-        if value.startswith(loopback):  # yalnızca yerel test için şifresiz
-            return value.rstrip("/")
-        raise ValueError("Aktarma servisi adresi wss:// ile başlamalı")
+        return _check_relay(value)
+
+    @field_validator("public_relay_url")
+    @classmethod
+    def _secure_public_relay(cls, value: str) -> str:
+        return _check_relay(value)
+
+    @property
+    def effective_relay_url(self) -> str:
+        return self.relay_url or self.public_relay_url
 
 
 class LicenseSettings(BaseModel):

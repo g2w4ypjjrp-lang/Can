@@ -57,7 +57,7 @@ from ati_engine.remote.runtime_bridge import (
     build_snapshot,
     subscribe_notifications,
 )
-from ati_engine.remote.service import RemoteService
+from ati_engine.remote.service import REMOTE_ENABLED_KEY, RemoteService
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.safety.kill_switch import KillSwitch
@@ -263,8 +263,9 @@ class Engine:
     @staticmethod
     async def _start_remote(runtime: EngineRuntime) -> None:
         """Uzaktan kontrol: motor kimliği (Ed25519) ve şifreleme anahtarı kasada kalıcıdır.
-        Aktarma servisi adresi ayarlanmışsa servise giden bağlantı açılır; yoksa yalnızca
-        eşleştirme ekranı kapalıdır."""
+        Kullanıcı masaüstünde "Telefondan kontrol"ü açtıysa (seçim ``remote.enabled`` olarak
+        saklanır) aktarma servisine bağlantı açılır. Seçim yoksa yalnızca ayarlarda açıkça
+        ``relay_url`` verilmişse açık başlar."""
         cfg = runtime.settings.remote
         stored = await runtime.vault.get("remote.engine_key")
         if stored is None:
@@ -283,7 +284,7 @@ class Engine:
             db=runtime.db,
             identity=identity,
             kx=kx,
-            relay_url=cfg.relay_url,
+            relay_url=cfg.effective_relay_url,
             executors=build_executors(runtime),
             snapshot=lambda: build_snapshot(runtime),
             snapshot_interval_s=cfg.snapshot_interval_s,
@@ -293,14 +294,10 @@ class Engine:
         )
         runtime.remote = service
         subscribe_notifications(runtime, service)
-        if cfg.relay_url:
-            runtime.supervisor.spawn(
-                "remote-relay",
-                service.run,
-                RestartPolicy(
-                    max_restarts=50, window_s=3600, backoff_initial_s=2, backoff_max_s=60
-                ),
-            )
+        chosen = await SettingsStore(runtime.db).get(REMOTE_ENABLED_KEY)
+        enabled = cfg.relay_url is not None if chosen is None else bool(chosen)
+        if enabled:
+            service.start()
 
     @staticmethod
     def _start_execution(runtime: EngineRuntime) -> None:

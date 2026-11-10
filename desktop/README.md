@@ -23,8 +23,25 @@ Genel bakış (motor durumu, acil durdurma, bot başlat/durdur, hazırlık koşu
 coinler, anormal hareketler), Fırsatlar (açıklanabilir puan ve gerekçeler), Balina radarı,
 Grafik ve AI analiz (mum grafiği, destek/direnç, trend, model tahmini), Spot/Futures işlemler
 (test ağı pozisyonları, emirler, yeni işlem formu, kapatma), Kâr/zarar ve geçmiş, Risk (sınırlar,
-karar günlüğü, risk olayları), Strateji performansı, Ayarlar (işlem modu, test ağı anahtarı,
-denetim kaydı).
+karar günlüğü, risk olayları), Strateji performansı, Telefon (QR ile iPhone eşleştirme, telefondan
+kontrol), Ayarlar (işlem modu, test ağı anahtarı, lisans, denetim kaydı).
+
+Tasarım: koyu tema, web sitesiyle aynı marka renkleri (mavi → mor degrade), gruplu ve ikonlu menü
+(Genel / İşlem / Sistem), üst çubukta motor, işlem modu ve telefon durumu.
+
+## Telefondan kontrol
+
+1. **Telefon** ekranında "Telefondan kontrol" anahtarını açın. Varsayılan kapalıdır; açılmadan motor
+   hiçbir dış servise bağlanmaz. Seçim saklanır, yeniden başlatmada geçerlidir.
+2. Motor şifreli aktarma servisine (`wss://relay.canarslan.net.tr`) bağlanır. **QR kodu göster** →
+   iPhone uygulamasında "Bilgisayarı eşleştir" ile okutun. Kod 5 dakika geçerli, tek kullanımlıktır;
+   eşleşme ekranda kendiliğinden görünür.
+3. Telefondan yapılabilenler: durum ve pozisyonları görme, acil durdurma, botu durdurma; Face ID ile
+   botu başlatma, pozisyon kapatma, acil durdurmayı kaldırma. Yeni işlem açma, ayar değiştirme ve para
+   çekme telefondan yapılamaz.
+
+Kapatınca bağlantı kesilir ve bekleyen kod geçersizleşir; eşli telefonlar silinmez ("Eşleştirmeyi
+kaldır" ile tek tek kaldırılır). Kendi aktarma servisi için motor ayarı: `ATI_REMOTE__RELAY_URL`.
 
 ## Geliştirme
 

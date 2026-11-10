@@ -862,6 +862,12 @@ class DecisionInfo(BaseModel):
     reason: str | None = None
 
 
+class RemoteToggle(BaseModel):
+    """Telefondan kontrolü aç/kapat (masaüstü uygulaması)."""
+
+    enabled: bool
+
+
 class AutoTradeRequest(BaseModel):
     enabled: bool
 

@@ -62,6 +62,10 @@ REJECTION_MESSAGES = {
 }
 
 
+# Kullanıcının "Telefondan kontrol" seçimi (ayarlar tablosu).
+REMOTE_ENABLED_KEY = "remote.enabled"
+
+
 class RemoteService:
     def __init__(
         self,
@@ -106,6 +110,9 @@ class RemoteService:
         self._ws: Any = None
         self._send_lock = asyncio.Lock()
         self._stop = asyncio.Event()
+        # Kullanıcı "Telefondan kontrol"ü açtıysa aktarma bağlantısı bu görevde çalışır.
+        self.enabled = False
+        self._task: asyncio.Task[None] | None = None
 
     # --- Aktarma bağlantısı -----------------------------------------------------------------
 
@@ -130,11 +137,38 @@ class RemoteService:
                 await asyncio.wait_for(self._stop.wait(), timeout=backoff)
             backoff = min(backoff * 2, 60.0)
 
+    def start(self) -> None:
+        """Aktarma bağlantısını arka planda açar (zaten açıksa bir şey yapmaz)."""
+        if not self.relay_url:
+            raise ValueError("Aktarma servisi adresi yok")
+        self.enabled = True
+        if self._task is not None and not self._task.done():
+            return
+        self._stop = asyncio.Event()
+        self._task = asyncio.create_task(self.run(), name="remote-relay")
+
+    async def disable(self) -> None:
+        """Telefondan kontrolü kapatır: bağlantı kesilir, bekleyen eşleştirme kodu geçersizleşir.
+        Eşleşmiş telefonlar silinmez; yeniden açılınca aynı telefonlar bağlanabilir."""
+        self.enabled = False
+        self.pairing.session = None
+        await self.stop()
+
     async def stop(self) -> None:
         self._stop.set()
         if self._ws is not None:
             with contextlib.suppress(Exception):
                 await self._ws.close()
+        task, self._task = self._task, None
+        if task is not None and not task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=5)
+            except (TimeoutError, asyncio.CancelledError):
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task
+        self.connected = False
+        self.online.clear()
 
     async def _session(self) -> None:
         if self.relay_url is None:
@@ -363,7 +397,7 @@ class RemoteService:
     async def status(self) -> dict[str, Any]:
         devices = await self.registry.all()
         return {
-            "enabled": self.relay_url is not None,
+            "enabled": self.enabled,
             "relay_url": self.relay_url,
             "connected": self.connected,
             "engine_id": self.identity.engine_id,

@@ -30,6 +30,7 @@ from ati_engine.config import (
     LicenseSettings,
     LocalApiSettings,
     MarketDataSettings,
+    RemoteSettings,
 )
 from fake_binance import FakeBinance
 from fake_exchange import FakeExchange
@@ -70,6 +71,10 @@ async def main(args: argparse.Namespace) -> int:
                 trusted_keys={licensing.kid: licensing.public_key},
                 fingerprint_override="e2e-bilgisayar",
             ),
+            # Telefondan kontrol: "aç" denince yerel (gerçek) aktarma servisine bağlanır.
+            remote=RemoteSettings(public_relay_url=args.relay)
+            if args.relay
+            else RemoteSettings(public_relay_url="ws://127.0.0.1:9"),
         )
         engine = Engine(settings)
         task = asyncio.create_task(engine.run())
@@ -98,6 +103,7 @@ def parse() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=47999)
     parser.add_argument("--token", default="e2e-belirtec-0123456789")
     parser.add_argument("--origin", action="append", default=["http://127.0.0.1:4173"])
+    parser.add_argument("--relay", default=None, help="aktarma servisi (ws://127.0.0.1:<port>)")
     return parser.parse_args()
 
 

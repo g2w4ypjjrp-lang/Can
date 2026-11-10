@@ -220,7 +220,8 @@ async def test_pair_and_control_through_real_relay(stack: Stack, relay_url: str)
     await attacker.ws.close()
 
 
-async def test_pairing_disabled_without_relay(tmp_path: Path) -> None:
+async def test_phone_control_off_by_default(tmp_path: Path) -> None:
+    """Kullanıcı açmadan hiçbir bağlantı kurulmaz (genel aktarma servisine bile)."""
     settings = EngineSettings(
         data_dir=tmp_path / "data", log_to_console=False, api=LocalApiSettings(port=0)
     )
@@ -234,7 +235,83 @@ async def test_pairing_disabled_without_relay(tmp_path: Path) -> None:
     ) as http:
         status = (await http.get("/v1/remote/status")).json()
         assert status["enabled"] is False and len(status["engine_id"]) == 32
+        assert status["connected"] is False
+        assert status["relay_url"] == "wss://relay.canarslan.net.tr"
         response = await http.post("/v1/remote/pairing")
-        assert response.status_code == 409 and "G5" in response.json()["detail"]
+        assert response.status_code == 409 and "açın" in response.json()["detail"]
+    engine.runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=15)
+
+
+async def _start_engine(data_dir: Path, remote: RemoteSettings) -> tuple[Engine, asyncio.Task[int]]:
+    engine = Engine(
+        EngineSettings(
+            data_dir=data_dir, log_to_console=False, api=LocalApiSettings(port=0), remote=remote
+        )
+    )
+    task = asyncio.create_task(engine.run())
+    await asyncio.wait_for(engine.ready.wait(), timeout=15)
+    return engine, task
+
+
+async def _wait_connected(http: httpx.AsyncClient, expected: bool) -> dict[str, Any]:
+    for _ in range(150):
+        status: dict[str, Any] = (await http.get("/v1/remote/status")).json()
+        if status["connected"] is expected:
+            return status
+        await asyncio.sleep(0.1)
+    raise AssertionError(f"bağlantı durumu {expected} olmadı")
+
+
+async def test_phone_control_is_opt_in_and_toggles_from_desktop(
+    tmp_path: Path, relay_url: str
+) -> None:
+    """Varsayılan kapalı. Masaüstünden açılınca (genel aktarma servisi adresiyle) bağlanır, QR
+    üretilir ve telefon eşleşir; kapatılınca bağlantı kesilir, QR üretilemez. Seçim saklanır."""
+    remote = RemoteSettings(public_relay_url=relay_url, snapshot_interval_s=2)
+    engine, task = await _start_engine(tmp_path / "data", remote)
+    assert engine.runtime is not None
+    async with httpx.AsyncClient(
+        base_url=f"http://127.0.0.1:{engine.bound_port}",
+        headers={"Authorization": f"Bearer {engine.runtime.api_token}"},
+    ) as http:
+        status = (await http.get("/v1/remote/status")).json()
+        assert status["enabled"] is False and status["connected"] is False
+        assert status["relay_url"] == relay_url
+        refused = await http.post("/v1/remote/pairing")
+        assert refused.status_code == 409
+
+        on = await http.post("/v1/remote/enabled", json={"enabled": True})
+        assert on.status_code == 200 and on.json()["enabled"] is True
+        await _wait_connected(http, True)
+        qr = json.loads((await http.post("/v1/remote/pairing")).json()["qr"])
+        phone = await Phone.connect(relay_url, DeviceSim("Can'ın iPhone'u"), qr)
+        await phone.send(phone.sim.pair_request(qr))
+        paired = await phone.next("pair_result")
+        assert paired["ok"] and paired["name"] == "Can'ın iPhone'u"
+        await phone.ws.close()
+
+        off = await http.post("/v1/remote/enabled", json={"enabled": False})
+        assert off.json()["enabled"] is False
+        await _wait_connected(http, False)
+        assert (await http.post("/v1/remote/pairing")).status_code == 409
+        assert len((await http.get("/v1/remote/status")).json()["devices"]) == 1  # silinmez
+
+        actions = [e["action"] for e in (await http.get("/v1/audit")).json()]
+        assert "remote.enabled" in actions and "remote.disabled" in actions
+
+        assert (await http.post("/v1/remote/enabled", json={"enabled": True})).status_code == 200
+    engine.runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=15)
+
+    # Yeniden başlatma: açık seçimi korunur ve kendiliğinden bağlanır.
+    engine, task = await _start_engine(tmp_path / "data", remote)
+    assert engine.runtime is not None
+    async with httpx.AsyncClient(
+        base_url=f"http://127.0.0.1:{engine.bound_port}",
+        headers={"Authorization": f"Bearer {engine.runtime.api_token}"},
+    ) as http:
+        status = await _wait_connected(http, True)
+        assert status["enabled"] is True
     engine.runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=15)
