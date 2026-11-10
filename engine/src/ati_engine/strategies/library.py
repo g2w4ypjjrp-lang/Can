@@ -1,4 +1,4 @@
-"""Bağımsız strateji kütüphanesi (14 strateji).
+"""Bağımsız strateji kütüphanesi (16 strateji).
 
 Her strateji klasik ve yaygın bilinen bir kuralı uygular; parametreler sabittir ve sonuçları
 Aşama 8 backtest'i ile Aşama 9 sanal yarışmasında ayrı ayrı ölçülür. Hiçbir stratejinin kârlı
@@ -487,6 +487,79 @@ class ModelEdge:
         )
 
 
+class CandlePattern:
+    name = "candle_pattern"
+    title = "Mum formasyonları"
+    description = (
+        "Yutan mum, çekiç / kayan yıldız, sabah / akşam yıldızı, üç beyaz asker / üç kara karga. "
+        "Dönüş formasyonları yalnızca önceki hareketin tersine (en az 1 ATR) sayılır; destek veya "
+        "direnç üzerinde oluşursa güçlenir. Zarar durdur formasyonun uç noktasının ötesindedir."
+    )
+    markets = BOTH
+    category = "pattern"
+
+    def evaluate(self, view: StrategyView) -> StrategySignal | None:
+        found = [p for p in view.patterns if p.kind == "candle"]
+        if not found:
+            return None
+        best = max(found, key=lambda p: p.strength)
+        s = view.now
+        stop_atr = (
+            clamp(abs(s.close - best.stop_price) / s.atr, 0.8, 3.0)
+            if best.stop_price is not None and s.atr > 0
+            else 1.5
+        )
+        return StrategySignal(
+            self.name,
+            best.direction,
+            best.strength,
+            best.reason,
+            stop_atr=stop_atr,
+            target_atr=max(2.0, stop_atr * 2.0),
+            tags=(best.key,),
+        )
+
+
+class ChartPattern:
+    name = "chart_pattern"
+    title = "Grafik formasyonları"
+    description = (
+        "İkili dip / tepe, omuz-baş-omuz (ve tersi), yükselen / alçalan / simetrik üçgen ve "
+        "boğa / ayı bayrağı; yalnızca kesinleşmiş dönüş noktalarıyla ve boyun çizgisi ya da "
+        "sınır bu mumda kırıldığında. Hedef, formasyon yüksekliği kadar (ölçülen hareket)."
+    )
+    markets = BOTH
+    category = "pattern"
+
+    def evaluate(self, view: StrategyView) -> StrategySignal | None:
+        found = [p for p in view.patterns if p.kind == "chart"]
+        if not found:
+            return None
+        best = max(found, key=lambda p: p.strength)
+        s = view.now
+        if s.atr <= 0:
+            return None
+        stop_atr = (
+            clamp(abs(s.close - best.stop_price) / s.atr, 0.8, 3.5)
+            if best.stop_price is not None
+            else 1.5
+        )
+        target_atr = (
+            clamp(abs(best.target_price - s.close) / s.atr, 1.5, 8.0)
+            if best.target_price is not None
+            else 3.0
+        )
+        return StrategySignal(
+            self.name,
+            best.direction,
+            best.strength,
+            best.reason,
+            stop_atr=stop_atr,
+            target_atr=target_atr,
+            tags=(best.key,),
+        )
+
+
 ALL_STRATEGIES: tuple[Strategy, ...] = (
     EmaTrend(),
     MacdMomentum(),
@@ -502,6 +575,8 @@ ALL_STRATEGIES: tuple[Strategy, ...] = (
     FundingContrarian(),
     OpenInterestTrend(),
     ModelEdge(),
+    CandlePattern(),
+    ChartPattern(),
 )
 
 

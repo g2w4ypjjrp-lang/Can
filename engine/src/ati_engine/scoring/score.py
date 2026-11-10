@@ -24,6 +24,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from ati_engine.analysis.features import Snapshot
+from ati_engine.analysis.patterns import Pattern
 from ati_engine.history.levels import Level
 from ati_engine.scoring.costs import CostBreakdown, CostModel
 from ati_engine.strategies.base import ModelView, StrategySignal
@@ -121,6 +122,7 @@ class Opportunity:
     calibration: dict[str, Any] | None = None
     disclaimer: str = DISCLAIMER
     notes: list[str] = field(default_factory=list)
+    patterns: list[dict[str, Any]] = field(default_factory=list)  # bu mumdaki formasyonlar
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -141,6 +143,7 @@ class ScoreInputs:
     book: BookContext | None = None
     similarity: SimilarityContext | None = None
     model: ModelView | None = None
+    patterns: Sequence[Pattern] = ()
 
 
 class OpportunityScorer:
@@ -370,6 +373,7 @@ class OpportunityScorer:
             reward_risk=round(rr, 3) if rr is not None and direction else None,
             target_pct=round(target_pct, 4) if direction else None,
             notes=notes,
+            patterns=[p.to_dict() for p in x.patterns],
         )
         opportunity.calibration = self._calibration_for(final)
         return opportunity

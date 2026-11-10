@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
 from ati_engine.analysis.features import Snapshot
+from ati_engine.analysis.patterns import Pattern
 from ati_engine.history.levels import Level
 
 MarketKind = Literal["spot", "usdm_futures"]
@@ -35,6 +36,7 @@ class StrategyView:
     prev: Snapshot | None
     levels: tuple[Level, ...] = ()
     model: ModelView | None = None
+    patterns: tuple[Pattern, ...] = ()  # bu mumda tamamlanan formasyonlar
 
 
 @dataclass(frozen=True)
@@ -53,7 +55,7 @@ class Strategy(Protocol):
     title: str
     description: str
     markets: tuple[MarketKind, ...]
-    category: str  # trend | momentum | mean_reversion | breakout | flow | futures | model
+    category: str  # trend | momentum | mean_reversion | breakout | pattern | flow | futures | model
 
     def evaluate(self, view: StrategyView) -> StrategySignal | None: ...
 

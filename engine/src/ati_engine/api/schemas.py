@@ -620,6 +620,7 @@ class OpportunityDetail(BaseModel):
     calibration: dict[str, Any] | None
     notes: list[str]
     disclaimer: str
+    patterns: list[dict[str, Any]] = Field(default_factory=list)  # bu mumdaki formasyonlar
 
 
 class StrategyInfo(BaseModel):

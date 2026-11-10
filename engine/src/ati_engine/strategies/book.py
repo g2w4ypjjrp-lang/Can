@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from ati_engine.analysis.features import Bar, FeatureEngine, FuturesContext, Snapshot
+from ati_engine.analysis.patterns import Pattern, detect_patterns
 from ati_engine.history.levels import Level, find_levels
 from ati_engine.strategies.base import MarketKind, ModelView, StrategySignal, StrategyView
 from ati_engine.strategies.library import strategies_for
@@ -26,6 +27,7 @@ class BookUpdate:
     signals: tuple[StrategySignal, ...]
     levels: tuple[Level, ...]
     model: ModelView | None = None
+    patterns: tuple[Pattern, ...] = ()
 
 
 class StrategyBook:
@@ -82,6 +84,14 @@ class StrategyBook:
                 model_view = None
         else:
             model_view = model
+        try:
+            patterns = detect_patterns(self._bars, snapshot.atr, self.levels)
+        except Exception as exc:  # formasyon hatası stratejileri durdurmaz
+            self.errors += 1
+            logger.warning(
+                "Formasyon taraması başarısız", extra={"symbol": self.symbol, "error": repr(exc)}
+            )
+            patterns = ()
         view = StrategyView(
             market=self.market,
             symbol=self.symbol,
@@ -89,6 +99,7 @@ class StrategyBook:
             prev=self.prev,
             levels=self.levels,
             model=model_view,
+            patterns=patterns,
         )
         signals: list[StrategySignal] = []
         for strategy in self.strategies:
@@ -104,4 +115,4 @@ class StrategyBook:
             if signal is not None:
                 signals.append(signal)
         self.prev = snapshot
-        return BookUpdate(snapshot, features, tuple(signals), self.levels, model_view)
+        return BookUpdate(snapshot, features, tuple(signals), self.levels, model_view, patterns)
