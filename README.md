@@ -12,12 +12,17 @@ işlem platformu.
 
 | Bileşen | Klasör | Teknoloji | Durum |
 |---|---|---|---|
-| İşlem motoru (kullanıcının Windows bilgisayarında) | [`engine/`](engine/) | Python 3.12+, asyncio | ✅ Çekirdek, Binance veri motoru, coin tarayıcı, balina radarı, tarihsel veri, grafik analizi, göstergeler, model, 14 strateji, fırsat puanı, backtest, sanal işlem yarışması, test ağı emir yürütme, risk kapısı ve risk bekçisi, test ağında otomatik işlem; gerçek hesap G1/G2 onayına kadar kilitli (Aşama 1-11); lisans kirası ve işlem kapısı (Aşama 15) |
-| Bulut servisi: lisans, hesap, ödeme, aktarma | [`cloud/`](cloud/) | FastAPI, PostgreSQL 16 | ✅ Şema + iskelet (Aşama 1), aktarma servisi (Aşama 13), müşteri hesapları ve iletişim API'si (Aşama 14), lisans sistemi (Aşama 15), yönetici API'si (Aşama 16), ödeme ve lisans teslimi: PayTR, iyzico, test simülatörü (Aşama 17); dağıtım G5, canlı ödeme G3 onayı bekliyor |
+| İşlem motoru (kullanıcının Windows bilgisayarında) | [`engine/`](engine/) | Python 3.12+, asyncio | ✅ Çekirdek, Binance veri motoru, coin tarayıcı, balina radarı, tarihsel veri, grafik analizi, göstergeler, model, 14 strateji, fırsat puanı, backtest, sanal işlem yarışması, test ağı emir yürütme, risk kapısı ve risk bekçisi, test ağında otomatik işlem; gerçek hesap G1/G2 onayına kadar kilitli (Aşama 1-11); lisans kirası ve işlem kapısı (Aşama 15); yedekleme/geri yükleme ve dayanıklılık testi (Aşama 18) |
+| Bulut servisi: lisans, hesap, ödeme, aktarma | [`cloud/`](cloud/) | FastAPI, PostgreSQL 16 | ✅ Şema + iskelet (Aşama 1), aktarma servisi (Aşama 13), müşteri hesapları ve iletişim API'si (Aşama 14), lisans sistemi (Aşama 15), yönetici API'si (Aşama 16), ödeme ve lisans teslimi: PayTR, iyzico, test simülatörü (Aşama 17), istek koruması, yük testi ve felaket kurtarma tatbikatı (Aşama 18); dağıtım G5, canlı ödeme G3 onayı bekliyor |
 | Paylaşılan protokol | [`shared/protocol/`](shared/protocol/) | JSON Schema | ✅ |
 | Windows masaüstü uygulaması | [`desktop/`](desktop/) | Tauri 2, React, TypeScript | ✅ 10 ekran, motor gözetmeni, NSIS kurulum paketi (imzasız; kod imzalama G6 onayı bekliyor) (Aşama 12) |
-| iOS uygulaması | [`ios/`](ios/) | Swift, SwiftUI | ✅ Eşleştirme, özet, acil durdurma, bot, pozisyonlar (Face ID), sinyaller, bildirimler; uçtan uca imzalı komutlar (Aşama 13). Cihaza kurulum Apple hesabı (G6) bekliyor |
+| iOS uygulaması | [`ios/`](ios/) | Swift, SwiftUI | ✅ Eşleştirme, özet, acil durdurma, bot, pozisyonlar (Face ID), sinyaller, bildirimler; uçtan uca imzalı komutlar (Aşama 13), uçtan uca şifreli mesajlar (Aşama 18). Cihaza kurulum Apple hesabı (G6) bekliyor |
 | Web sitesi ve paneller | [`web/`](web/) | Next.js, TypeScript, Tailwind | ✅ Tanıtım sayfaları, paketler, hesap (kayıt/giriş/parola sıfırlama), müşteri paneli, SSS, iletişim, yasal taslaklar; axe 0 ihlal, Lighthouse 97-100 (Aşama 14). Yönetim paneli: paketler/fiyatlar, lisanslar, müşteriler, ödeme ayarları, yöneticiler; TOTP zorunlu (Aşama 16). Satın alma, sonuç sayfası, siparişler, iade, mesafeli satış/ön bilgilendirme taslakları (Aşama 17). Alan adı: canarslan.net.tr ([`deploy/`](deploy/)) |
+
+**Durum:** 18 aşamanın tamamı kod ve testleriyle bitti. Yayın; onay kapılarına (G1–G6) ve
+sizden beklenen bilgilere bağlıdır: ödeme sağlayıcısı test hesabı, şirket bilgileri, hukukçu
+onayı, bulut sağlayıcısı (`docs/05`). Güvenlik taraması, sızma testi tarzı testler, yük testi,
+dayanıklılık testi ve felaket kurtarma tatbikatı CI'da her gönderimde çalışır.
 
 ## Belgeler
 

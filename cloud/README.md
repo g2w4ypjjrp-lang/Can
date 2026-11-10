@@ -99,6 +99,26 @@ uv run ati-cloud-payments maintain --reconcile-minutes 10 --expire-hours 24   # 
 Ayarlar: `ATI_PUBLIC_API_URL` (sağlayıcının dönüş/bildirim adresi; üretimde HTTPS). Üretimde test
 modunda satış açılmaz; canlı ödeme `ATI_PAYMENTS_LIVE_ALLOWED=true` (G3) ve panelde canlı mod ister.
 
+## Güvenlik, yük ve felaket kurtarma (Aşama 18)
+
+* **İstek koruması** (`src/ati_cloud/guards.py`): uygulama gövdeyi ayrıştırmadan önce köken
+  (CSRF), 256 KB gövde sınırı, UTF-8 ve JSON derinliği denetlenir.
+* **Sızma testi tarzı testler** (`tests/test_pentest.py`): her rota bir güvenlik sınıfına
+  atanmak zorundadır; IDOR, enjeksiyon, toplu atama, CORS, çerez bayrakları.
+* **Yük testi** (gerçek sunucular, PostgreSQL; CI'da `--quick`):
+
+  ```bash
+  uv run python scripts/load_test.py --engines 200 --renewals 5 --concurrency 50
+  ```
+
+* **Felaket kurtarma tatbikatı** (`pg_dump` → `pg_restore` → iş sürekliliği; CI'da her gönderimde):
+
+  ```bash
+  uv run python scripts/dr_drill.py
+  ```
+
+* `ATI_DATABASE_POOL_MAX`: süreç başına bağlantı havuzu (varsayılan 10).
+
 ## Geçişler (migrations)
 
 ```bash

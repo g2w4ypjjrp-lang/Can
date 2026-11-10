@@ -19,6 +19,8 @@ class CloudSettings(BaseSettings):
 
     environment: Literal["development", "test", "staging", "production"] = "development"
     database_url: SecretStr
+    # Süreç başına veritabanı bağlantı havuzu (yük testine göre ayarlanır; docs/05 Aşama 18).
+    database_pool_max: int = Field(default=10, ge=2, le=100)
     # Web sitesi (Aşama 14): oturum çerezini kullanan istekler yalnızca bu kökenlerden kabul edilir.
     web_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     public_web_url: str = "http://localhost:3000"

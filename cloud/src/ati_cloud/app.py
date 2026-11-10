@@ -51,7 +51,7 @@ Settings = Annotated[CloudSettings, Depends(get_settings)]
 
 def create_app(settings: CloudSettings | None = None) -> FastAPI:
     cfg = settings or CloudSettings()
-    db = Database(cfg.database_url.get_secret_value())
+    db = Database(cfg.database_url.get_secret_value(), max_size=cfg.database_pool_max)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:

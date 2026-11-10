@@ -26,6 +26,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from ati_engine import __version__
 
@@ -99,6 +100,121 @@ def _cmd_verify_audit(args: argparse.Namespace) -> int:
         return 3
 
     return asyncio.run(_verify())
+
+
+def _settings_for(args: argparse.Namespace) -> Any:
+    from ati_engine.config import EngineSettings
+
+    overrides: dict[str, object] = {}
+    if getattr(args, "data_dir", None):
+        overrides["data_dir"] = Path(args.data_dir)
+    return EngineSettings(**overrides)  # type: ignore[arg-type]
+
+
+def _cmd_backup(args: argparse.Namespace) -> int:
+    """Motor veritabanının tutarlı yedeği (motor çalışırken de alınabilir)."""
+    import time as _time
+
+    from ati_engine.storage.audit import AuditLog
+    from ati_engine.storage.database import Database
+
+    settings = _settings_for(args)
+    source = Path(settings.paths.database)
+    if not source.exists():
+        print(f"Veritabanı bulunamadı: {source}", file=sys.stderr)
+        return 2
+    folder = Path(args.output_dir) if args.output_dir else source.parent / "backups"
+    target = folder / f"engine-{_time.strftime('%Y%m%d-%H%M%S')}.db"
+
+    async def _backup() -> int:
+        db = Database(source)
+        await db.open()
+        try:
+            size = await db.backup(target)
+        finally:
+            await db.close()
+        copy = Database(target)
+        await copy.open()
+        try:
+            audit = await AuditLog(copy).verify()
+        finally:
+            await copy.close()
+        if not audit.ok:
+            print(f"Yedekteki denetim zinciri kırık ({audit.broken_at_id})", file=sys.stderr)
+            return 3
+        old = sorted(folder.glob("engine-*.db"))[: -args.keep] if args.keep > 0 else []
+        for path in old:
+            path.unlink(missing_ok=True)
+        print(
+            f"Yedek: {target} ({size / 2**20:.1f} MB, denetim kaydı {audit.checked} kayıt sağlam)"
+        )
+        return 0
+
+    return asyncio.run(_backup())
+
+
+def _cmd_restore(args: argparse.Namespace) -> int:
+    """Yedeği geri yükler. Motor çalışıyorsa reddedilir; mevcut veritabanı silinmez, yanına
+    taşınır. Şifreli kasa (API anahtarları, uzaktan kontrol ve lisans anahtarları) Windows'ta
+    kullanıcıya bağlı DPAPI ile korunur: başka bilgisayarda/kullanıcıda geri yüklenen yedekte bu
+    gizli bilgiler çözülemez; yeniden girilmeleri (eşleştirme, lisans etkinleştirme) gerekir."""
+    import contextlib
+    import shutil
+    import sqlite3
+    import tempfile
+    import time as _time
+
+    from ati_engine.storage.audit import AuditLog
+    from ati_engine.storage.database import Database
+    from ati_engine.system.single_instance import AlreadyRunningError, SingleInstanceLock
+
+    settings = _settings_for(args)
+    backup = Path(args.source)
+    if not backup.is_file():
+        print(f"Yedek bulunamadı: {backup}", file=sys.stderr)
+        return 2
+    lock = SingleInstanceLock(settings.paths.lock_file)
+    try:
+        lock.acquire()
+    except AlreadyRunningError:
+        print("Motor çalışıyor; geri yüklemeden önce kapatın.", file=sys.stderr)
+        return 4
+    try:
+        with tempfile.TemporaryDirectory(prefix="ati-geri-yukleme-") as tmp:
+            # Yedeğin kendisine dokunulmaz: geçici kopyası denetlenir ve o kopya yüklenir.
+            candidate = Path(tmp) / "aday.db"
+            shutil.copy2(backup, candidate)
+
+            async def _check() -> bool:
+                db = Database(candidate)
+                try:
+                    await db.open()
+                    result = await db.fetchone("PRAGMA integrity_check")
+                    audit = await AuditLog(db).verify()
+                except (sqlite3.DatabaseError, RuntimeError):
+                    return False
+                finally:
+                    with contextlib.suppress(sqlite3.DatabaseError):
+                        await db.close()
+                return bool(result and result[0] == "ok" and audit.ok)
+
+            if not asyncio.run(_check()):
+                print("Yedek bozuk veya denetim zinciri kırık; geri yüklenmedi.", file=sys.stderr)
+                return 3
+            target = Path(settings.paths.database)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                stamp = _time.strftime("%Y%m%d-%H%M%S")
+                kept = target.with_name(f"{target.name}.geri-yukleme-oncesi-{stamp}")
+                target.replace(kept)
+                print(f"Mevcut veritabanı saklandı: {kept}")
+            for suffix in ("-wal", "-shm"):
+                Path(str(target) + suffix).unlink(missing_ok=True)
+            shutil.copy2(candidate, target)
+        print(f"Geri yüklendi: {backup} → {target}")
+        return 0
+    finally:
+        lock.release()
 
 
 def _cmd_history_sync(args: argparse.Namespace) -> int:
@@ -546,6 +662,17 @@ def build_parser() -> argparse.ArgumentParser:
     verify = sub.add_parser("verify-audit", help="Denetim kaydı zincirini doğrula")
     verify.add_argument("--data-dir")
     verify.set_defaults(func=_cmd_verify_audit)
+
+    backup = sub.add_parser("backup", help="Veritabanını yedekle (motor çalışırken de olur)")
+    backup.add_argument("--data-dir")
+    backup.add_argument("--output-dir", help="Varsayılan: <veri klasörü>/backups")
+    backup.add_argument("--keep", type=int, default=14, help="Saklanacak son yedek sayısı")
+    backup.set_defaults(func=_cmd_backup)
+
+    restore = sub.add_parser("restore", help="Yedeği geri yükle (motor kapalıyken)")
+    restore.add_argument("source", help="Yedek dosyası")
+    restore.add_argument("--data-dir")
+    restore.set_defaults(func=_cmd_restore)
 
     history = sub.add_parser("history-sync", help="Binance arşivinden tarihsel mumları eşitle")
     history.add_argument("--data-dir")

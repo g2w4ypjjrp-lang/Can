@@ -66,6 +66,20 @@ dosyalara **yazılmaz**; bulut sağlayıcısının gizli bilgi deposundan ortam 
 * Üretimde test modunda satış açılmaz; canlı ödeme `ATI_PAYMENTS_LIVE_ALLOWED=true` (G3) ve
   panelde canlı mod gerektirir.
 
+## Yedekleme ve felaket kurtarma (G5 sırasında ayarlanır)
+
+* Yönetilen PostgreSQL'de otomatik günlük yedek + zaman noktasına geri dönüş (PITR) açılır;
+  en az 30 gün saklanır ve başka bir bölgeye kopyalanır.
+* Gizli bilgiler (`ATI_LICENSE_KEK`, `ATI_LICENSE_PEPPER`, `ATI_LEASE_SIGNING_KEY`,
+  `ATI_ADMIN_SECRET_KEK`) yedeklerden **ayrı** gizli bilgi deposunda tutulur. Yedek bu anahtarlar
+  olmadan lisans anahtarlarını açamaz; anahtarlar kaybedilirse yedek de işe yaramaz. İkisi de
+  ayrı ayrı korunmalıdır.
+* Geri yükleme adımları `cloud/scripts/dr_drill.py`'deki tatbikatla aynıdır: `pg_restore` →
+  `ati-cloud-migrate --check` → aynı gizli bilgilerle API'yi başlat → `/ready` → lisans kira
+  yenileme ve denetim zinciri doğrulaması (`audit_log_verify()`). Tatbikat CI'da her gönderimde
+  çalışır; canlı ortamda üç ayda bir gerçek yedekle tekrarlanmalı.
+* Ödeme bakımı için zamanlanmış görev: `ati-cloud-payments maintain` (10 dakikada bir).
+
 ## Masaüstü ve iPhone
 
 Masaüstü motorunun aktarma adresi (`remote.relay_url`) aktarma servisi yayına alındığında

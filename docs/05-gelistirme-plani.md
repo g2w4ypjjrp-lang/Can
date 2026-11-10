@@ -41,7 +41,7 @@ kısıtı).
 | 15 | Lisans sistemi | ✅ **Tamamlandı** (kod + testler; zorunluluk G5 ile) |
 | 16 | Admin paneli | ✅ **Tamamlandı** (kod + testler; yayın G5, canlı ödeme G3) |
 | 17 | Ödeme sistemi | ✅ **Tamamlandı** (kod + testler; sağlayıcı test ortamı denemesi test hesabı bilgileriyle, canlı ödeme G3) |
-| 18 | Güvenlik ve performans testleri | ⏭️ Sıradaki |
+| 18 | Güvenlik ve performans testleri | ✅ **Tamamlandı** (dış sızma testi ve 24 saatlik Windows testi yayın öncesi; G5/G6) |
 
 ### Aşama 1 — Sistem mimarisi ✅
 
@@ -868,10 +868,54 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
 | Sağlayıcının test ortamında uçtan uca satın alma | ⏸️ PayTR test mağazası veya iyzico sandbox bilgileri girildiğinde yapılacak. Bilgiler admin panelinden test modunda girilir; kod değişikliği gerekmez. |
 | Canlı ödeme | ⏸️ G3 |
 
-### Aşama 18 — Güvenlik ve performans testleri
-Tehdit modeli gözden geçirme, bağımlılık taraması (SCA), statik analiz, sızma testi,
-yük testi (aktarma servisi, lisans uç noktaları), motorun 24+ saatlik dayanıklılık testi,
-felaket kurtarma (veritabanı yedeği geri yükleme) tatbikatı.
+### Aşama 18 — Güvenlik ve performans testleri ✅
+
+**Çıktılar (uygulandı):**
+
+- **Bağımlılık ve gizli bilgi taraması** (`.github/workflows/security.yml`). Her gönderimde ve
+  haftalık çalışır:
+  - `pip-audit` (motor, bulut), `npm audit` (web, masaüstü), `cargo audit` (masaüstü kabuğu);
+  - depo ve tüm git geçmişinde gizli bilgi taraması (`scripts/secret_scan.py`, harici araçsız,
+    kendi kendini sınar).
+  - Sonuç: 0 açık, 0 gizli bilgi. Lighthouse CI aracındaki 16 bulgu araç güncellenerek giderildi.
+- **Statik analiz:** Python'da ruff güvenlik kuralları (bandit eşdeğeri `S`) ve mypy, Rust'ta
+  `clippy -D warnings`, TypeScript'te sıkı tip denetimi. Depo özel olduğundan GitHub CodeQL
+  (Advanced Security gerektirir) kullanılmadı.
+- **Sızma testi tarzı testler:**
+  - Bulut (13 test): her rota bir güvenlik sınıfına atanmak zorunda; sınıf kuralları tüm
+    rotalarda otomatik sınanır; başka müşterinin kaynağına erişim (IDOR); SQL enjeksiyonu;
+    toplu atama; bozuk ve aşırı büyük girdi; CORS; çerez bayrakları; hata yanıtlarında iç bilgi.
+  - Motor yerel API'si (5 test): 60'tan fazla rotanın tamamında belirteç, DNS yeniden bağlama
+    ve CORS denetimi.
+  - Testler gerçek açıklar buldu (`docs/06` §6). İstek koruması eklendi: `cloud/guards.py`.
+- **Uçtan uca şifreleme** (iOS ↔ motor): P-256 ECDH + HKDF + AES-256-GCM. Protokol:
+  `shared/protocol/remote-v1.md`.
+- **Yük testi** (`cloud/scripts/load_test.py`): gerçek sunucular alt süreç olarak, PostgreSQL,
+  her motor ayrı istemci adresinden. CI'da duman testi çalışır.
+- **Motor dayanıklılık testi** (`engine/scripts/soak.py`): sahte piyasa/borsa/lisans
+  sunucularıyla gerçek motor; API sürekli sorgulanır, olay akışı dinlenir. Ölçülenler: bellek,
+  Python yığını, görev sayısı, olay döngüsü gecikmesi, acil durdurma süresi. CI'da Windows ve
+  Linux'ta 3'er dakika çalışır. 24 saatlik tam test: `uv run python scripts/soak.py --hours 24`.
+- **Felaket kurtarma:**
+  - Bulut tatbikatı (`cloud/scripts/dr_drill.py`, CI'da her gönderimde): gerçek iş akışlarıyla
+    doldurulmuş veritabanı → `pg_dump` → boş veritabanına `pg_restore` → iş sürekliliği
+    doğrulaması.
+  - Motor: `ati-engine backup` (çalışırken tutarlı yedek, bütünlük ve denetim zinciri
+    doğrulaması, son 14 yedek) ve `ati-engine restore` (motor kapalıyken; mevcut veritabanı
+    saklanır; bozuk yedek reddedilir).
+
+**Kabul kriterleri ve sonuçlar:**
+
+| Kriter | Sonuç |
+|---|---|
+| Tehdit modeli gözden geçirme | ✅ `docs/06`: varlık/tehdit tablosu güncellendi, Aşama 18 bulguları (8 gerçek hata) ve kalan riskler |
+| Bağımlılık taraması (SCA) | ✅ 0 bilinen açık (Python, npm, Rust). Rust'ta 5 bilgi uyarısı Tauri'nin Linux GTK/D-Bus yığınından; Windows ürününe derlenmez |
+| Gizli bilgi taraması | ✅ İzlenen dosyalar ve tüm git geçmişi: 0 bulgu (tarayıcı öz sınaması geçer) |
+| Sızma testi (otomatik) | ✅ Bulut 13 + motor 5 test; bulunan 4 açık düzeltildi. Bulut toplamı 160, motor 508 test (+2 platforma özel) |
+| Yük testi | ✅ 4 çekirdek, tek API süreci: 200 motor eşzamanlı etkinleştirme p95 251 ms; 1.000 kira yenileme saniyede 299, p95 461 ms (50 eşzamanlı); herkese açık okumalar p95 372 ms; aktarma 50 motor + 50 telefon, 1.000 gidiş-dönüş, p95 7,7 ms; **0 hata**. Kira yenileme 6 saatte bir yapıldığından tek süreç kapasitesi ihtiyacın çok üzerinde. İlk çalıştırma soğuk başlangıç hatasını buldu (düzeltildi) |
+| Motor dayanıklılığı | ✅ 20 dakika (Linux): bellek ve görev sayısı sabit, olay döngüsü gecikmesi p99 < 10 ms, 0 API hatası, acil durdurma ~16 ms. CI'da her gönderimde Windows + Linux 3 dk. ⏸️ 24 saatlik test hedef Windows bilgisayarda (komut hazır) |
+| Felaket kurtarma tatbikatı | ✅ Bulut: 31 tablo, satır sayıları aynı; denetim zinciri sağlam ve son özet aynı; değiştirilemezlik tetikleyicileri çalışıyor; sayaçlar devam ediyor; motor aynı anahtarla kira yeniliyor; müşteri oturumu ve tam anahtar erişimi yerinde; yanlış KEK ile anahtarlar açılamıyor. Motor: 5 test (çalışırken yedek, çalışırken geri yükleme reddi, geri yükleme, eski yedeklerin temizlenmesi, bozuk yedek reddi) |
+| Dış sızma testi | ⏸️ Canlı ortam kurulunca (G5) bağımsız bir ekiple önerilir |
 
 ## Açık kararlar (sizden bilgi gerekecek)
 

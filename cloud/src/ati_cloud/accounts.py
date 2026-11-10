@@ -17,6 +17,7 @@ Güvenlik kuralları:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import secrets
 import time
@@ -74,17 +75,28 @@ def password_problem(password: str, email: str) -> str | None:
 
 
 class Database:
-    """Bağlantı havuzu; ilk istekte açılır."""
+    """Bağlantı havuzu; ilk istekte açılır.
 
-    def __init__(self, dsn: str) -> None:
-        self._pool = AsyncConnectionPool(dsn, min_size=1, max_size=10, open=False)
+    Açılış kilitlidir: yeniden başlatmadan hemen sonra aynı anda gelen ilk istekler havuzu birlikte
+    açmaya çalışırsa psycopg_pool ``wait()`` içinde hata verir (yük testinde 500 olarak görüldü).
+    """
+
+    def __init__(self, dsn: str, max_size: int = 10) -> None:
+        self._pool = AsyncConnectionPool(dsn, min_size=1, max_size=max_size, open=False)
         self._opened = False
+        self._open_lock = asyncio.Lock()
+
+    async def _ensure_open(self) -> None:
+        if self._opened:
+            return
+        async with self._open_lock:
+            if not self._opened:
+                await self._pool.open(wait=True, timeout=10)
+                self._opened = True
 
     @asynccontextmanager
     async def connection(self) -> AsyncIterator[psycopg.AsyncConnection[dict[str, Any]]]:
-        if not self._opened:
-            await self._pool.open(wait=True, timeout=10)
-            self._opened = True
+        await self._ensure_open()
         async with self._pool.connection() as conn:
             conn.row_factory = dict_row  # type: ignore[assignment]
             yield conn  # type: ignore[misc]

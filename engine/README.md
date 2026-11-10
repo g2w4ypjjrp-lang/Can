@@ -22,6 +22,32 @@ uv run ati-engine verify-audit --data-dir ./.data
 uv run ati-engine export-protocol-schema --output ../shared/protocol/engine-local-api.schema.json
 ```
 
+## Yedekleme ve geri yükleme (Aşama 18)
+
+```bash
+uv run ati-engine backup --data-dir ./.data            # çalışırken de olur; son 14 yedek tutulur
+uv run ati-engine restore ./.data/backups/engine-YYYYMMDD-HHMMSS.db --data-dir ./.data
+```
+
+* Yedek SQLite çevrimiçi yedekleme API'siyle tutarlı alınır; bütünlük ve denetim zinciri
+  doğrulanır. Geri yükleme motor kapalıyken yapılır, mevcut veritabanı silinmez (yanına
+  taşınır), bozuk yedek reddedilir.
+* Şifreli kasa (API anahtarları, uzaktan kontrol ve lisans anahtarları) Windows'ta kullanıcıya
+  bağlı DPAPI ile korunur. Başka bilgisayarda veya kullanıcıda geri yüklenen yedekte bu gizli
+  bilgiler çözülemez: API anahtarı yeniden girilir, telefon yeniden eşleştirilir, lisans
+  yeniden etkinleştirilir. İşlem geçmişi, ayarlar ve denetim kaydı korunur.
+* Tarihsel mum verisi (DuckDB) yedeğe dahil değildir; Binance arşivinden yeniden indirilir.
+
+## Dayanıklılık testi (Aşama 18)
+
+```bash
+uv run python scripts/soak.py --minutes 3                    # CI (Windows + Linux)
+uv run python scripts/soak.py --hours 24 --json soak.json    # hedef Windows bilgisayarda tam test
+```
+
+Sahte piyasa/borsa/lisans sunucularıyla gerçek motor. Bellek, Python yığını, görev sayısı, olay
+döngüsü gecikmesi, API hataları ve acil durdurma süresi ölçülür; eşik aşılırsa çıkış kodu 1.
+
 ## Piyasa verisi (Aşama 2)
 
 Motor açılışta Binance Spot ve USDⓈ-M Futures'taki tüm işlem gören USDT paritelerini keşfeder

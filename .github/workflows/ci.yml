@@ -70,6 +70,32 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run pytest
+      - name: Yük testi (duman; lisans uç noktaları ve aktarma servisi, gerçek sunucular)
+        run: uv run python scripts/load_test.py --quick
+      - name: Felaket kurtarma tatbikatı (pg_dump → pg_restore → iş sürekliliği)
+        run: |
+          pg_dump --version
+          uv run python scripts/dr_drill.py
+
+  soak:
+    name: Motor dayanıklılık (${{ matrix.os }}, 3 dk)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked
+      - name: Bellek, görev sayısı, olay döngüsü gecikmesi, API hataları, acil durdurma süresi
+        run: uv run python scripts/soak.py --minutes 3 --sample-s 10
 
   license-e2e:
     name: Lisans uçtan uca (motor + bulut API + PostgreSQL 16)
