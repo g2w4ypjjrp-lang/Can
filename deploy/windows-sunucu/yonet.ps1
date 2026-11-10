@@ -15,7 +15,7 @@
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("durum", "baslat", "durdur", "yeniden", "davet", "loglar", "yedek", "eposta-ayarla", "eposta-dene", "guncelleme-anahtari", "surum-hazirla")]
+    [ValidateSet("durum", "baslat", "durdur", "yeniden", "davet", "loglar", "yedek", "eposta-ayarla", "eposta-dene", "guncelleme-anahtari", "surum-hazirla", "yedek-bulut-ayarla", "yedek-bulut-dene")]
     [string]$Komut,
     [string]$Eposta,
     [string]$Dosya,
@@ -236,6 +236,43 @@ switch ($Komut) {
         Write-Host $imza
         Set-Clipboard -Value $imza -ErrorAction SilentlyContinue
         Write-Host "(İmza panoya da kopyalandı.)"
+    }
+    "yedek-bulut-ayarla" {
+        Write-Host "Sunucu dışı yedek (Cloudflare R2 ya da başka S3 uyumlu depo)."
+        Write-Host "Cloudflare -> R2 -> Create bucket (ör. ati-yedek); R2 -> Manage API tokens -> Create API token"
+        Write-Host "(izin: Object Read & Write, yalnızca bu bucket). Hesap kimliğiniz R2 sayfasının sağında yazar."
+        $hesap = Sor "Cloudflare hesap kimliği (Account ID)" ""
+        if (-not $hesap) { throw "Hesap kimliği gerekli" }
+        $bucket = Sor "Bucket adı" "ati-yedek"
+        $erisim = Sor "Access Key ID" ""
+        $gizli = Read-Host "Secret Access Key (yazarken görünmez)" -AsSecureString
+        $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($gizli)
+        try { $parola = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+        finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+        if ([string]::IsNullOrWhiteSpace($erisim) -or [string]::IsNullOrWhiteSpace($parola)) { throw "Anahtarlar boş olamaz" }
+        Yukle-Env "bulut.env"
+        $yeni = @{
+            ATI_OFFSITE_ENDPOINT = "https://$hesap.r2.cloudflarestorage.com"; ATI_OFFSITE_BUCKET = $bucket
+            ATI_OFFSITE_ACCESS_KEY = $erisim.Trim(); ATI_OFFSITE_SECRET_KEY = $parola.Trim()
+        }
+        if (-not $env:ATI_OFFSITE_ENCRYPTION_KEY) {
+            $yeni.ATI_OFFSITE_ENCRYPTION_KEY = (& "$Kok\uygulama\cloud\.venv\Scripts\ati-cloud-offsite.exe" new-key).Trim()
+            Write-Host "Yeni şifreleme anahtarı üretildi (bulut.env içinde)."
+        }
+        Env-Guncelle "bulut.env" $yeni
+        $parola = $null
+        Write-Host "Kaydedildi. Her gece yedek şifrelenip bu depoya da yüklenir." -ForegroundColor Green
+        Write-Host "ÖNEMLİ: bulut.env dosyasının bir kopyasını sunucu dışında saklayın; şifreleme anahtarı olmadan yedek açılamaz."
+        Write-Host "Cloudflare R2 -> bucket -> Settings -> Object lifecycle rules: 30 gün sonra silme kuralı ekleyin."
+        Write-Host "Hemen denemek için: yonet.ps1 yedek-bulut-dene"
+    }
+    "yedek-bulut-dene" {
+        Yukle-Env "bulut.env"
+        if (-not $env:ATI_OFFSITE_BUCKET) { throw "Önce: yonet.ps1 yedek-bulut-ayarla" }
+        $son = Get-ChildItem "$Kok\yedekler" -Filter "ati-*.dump" | Sort-Object Name -Descending | Select-Object -First 1
+        if (-not $son) { throw "Henüz yerel yedek yok: önce yonet.ps1 yedek" }
+        & "$Kok\uygulama\cloud\.venv\Scripts\ati-cloud-offsite.exe" upload $son.FullName
+        if ($LASTEXITCODE -eq 0) { Write-Host "Sunucu dışı yedek çalışıyor." -ForegroundColor Green }
     }
     "yedek" {
         Start-ScheduledTask -TaskPath "\ATI\" -TaskName "Yedek"

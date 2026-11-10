@@ -68,6 +68,11 @@ if ($Servis -eq "yedek") {
     if ($LASTEXITCODE -ne 0) { Gunluk "yedek başarısız ($LASTEXITCODE)"; exit 1 }
     Gunluk "yedek alındı: $dosya ($([math]::Round((Get-Item $dosya).Length / 1KB)) KB)"
     Get-ChildItem $klasor -Filter "ati-*.dump" | Sort-Object Name -Descending | Select-Object -Skip 14 | Remove-Item -Force
+    # Sunucu dışı kopya (yonet.ps1 yedek-bulut-ayarla ile açılır): şifrelenip R2/S3'e yüklenir.
+    if ($env:ATI_OFFSITE_BUCKET) {
+        $cikti = & "$Scripts\ati-cloud-offsite.exe" upload $dosya 2>&1
+        if ($LASTEXITCODE -eq 0) { Gunluk "sunucu dışı yedek: $cikti" } else { Gunluk "sunucu dışı yedek BAŞARISIZ: $cikti"; exit 2 }
+    }
     exit 0
 }
 

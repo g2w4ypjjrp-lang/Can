@@ -206,13 +206,54 @@ paneli → **Sürümler**'de bu adres, SHA-256 ve boyutla taslak ekleyip doğrul
 yayınlayın. SHA-256'yı sunucuda şöyle alabilirsiniz:
 `(Get-FileHash C:\ATI\indir\<dosya> -Algorithm SHA256).Hash.ToLower()`.
 
+## Sunucu dışı yedek (Cloudflare R2, ücretsiz katman)
+
+Gece yedeği (03:30) sunucuda tutulur; sunucu kaybına karşı şifrelenmiş bir kopyası R2'ye de
+yüklenebilir. Şifreleme sunucuda yapılır, Cloudflare içeriği okuyamaz.
+
+1. Cloudflare → **R2** → (ilk kez ise ücretsiz planı etkinleştirin) → **Create bucket**: `ati-yedek`.
+2. Bucket → **Settings → Object lifecycle rules**: "30 gün sonra sil" kuralı ekleyin.
+3. R2 → **Manage API tokens → Create API token**: izin **Object Read & Write**, yalnızca
+   `ati-yedek`. Access Key ID ve Secret Access Key'i not alın (Secret bir kez gösterilir).
+4. Sunucuda:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 yedek-bulut-ayarla
+   powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 yedek
+   powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 yedek-bulut-dene
+   ```
+
+5. **`bulut.env` dosyasını sunucu dışında saklayın** (şifreli USB, parola yöneticisi). Yedeği açan
+   anahtar ve lisans imza anahtarı oradadır; o olmadan yedek açılamaz.
+
+**Geri yükleme** (yeni sunucu): `bulut.env`'i `C:\ATI\ayarlar`'a koyun, R2'den son
+`.dump.enc` dosyasını indirin, sonra:
+
+```powershell
+cd C:\ATI\uygulama\cloud
+# bulut.env değişkenleri yüklüyken (yonet.ps1 ile aynı oturumda):
+.\.venv\Scripts\ati-cloud-offsite.exe decrypt ati-YYYYMMDD-HHMM.dump.enc ati.dump
+& "C:\Program Files\PostgreSQL\16\bin\pg_restore.exe" --no-owner --clean --if-exists -d $env:ATI_DATABASE_URL ati.dump
+```
+
+## Kesinti izleme (ücretsiz)
+
+Sunucu kapanırsa haberiniz olsun: lisans yenilemeleri 72 saatten uzun aksarsa müşterilerin
+uygulaması yeni işlem açamaz. **UptimeRobot** (ücretsiz, 5 dakikada bir denetim):
+
+1. uptimerobot.com'da hesap açın → **Add New Monitor** → tür **HTTP(s)**.
+2. Üç izleyici ekleyin:
+   * `https://canarslan.net.tr` (site)
+   * `https://api.canarslan.net.tr/ready` (lisans ve hesap API'si; veritabanı dahil)
+   * `https://relay.canarslan.net.tr/health` (telefon aktarma servisi)
+3. Uyarı kanalı olarak e-postanızı (ve isterseniz Telegram'ı) seçin.
+
 ## Güvenlik notları
 
 * Windows Update açık kalsın. Yönetici parolası güçlü olsun; mümkünse RDP'yi yalnızca kendi IP
   adresinize açın.
 * Veritabanı ve iç servisler (8000, 8765, 3000, 5432) yalnızca 127.0.0.1'i dinler; dışarıya kapalı.
-* Yedekler aynı sunucuda durur. Sunucu kaybına karşı `C:\ATI\yedekler` klasörünü düzenli olarak
-  başka bir yere kopyalayın.
+* Yedekler sunucuda durur; sunucu kaybına karşı "Sunucu dışı yedek" bölümündeki R2 kopyasını açın.
 * Canlı ödeme kapalıdır (`ATI_PAYMENTS_LIVE_ALLOWED=false`); açmak ayrı onay (G3) ister.
 
 ## Henüz bağlı olmayanlar
