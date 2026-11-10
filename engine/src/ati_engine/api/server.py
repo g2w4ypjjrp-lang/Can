@@ -38,6 +38,7 @@ from ati_engine.api.schemas import (
     BacktestRequest,
     CandlesResponse,
     CheckInfo,
+    CrashToggle,
     DecisionInfo,
     ErrorResponse,
     ExecutionCloseRequest,
@@ -102,6 +103,7 @@ from ati_engine.api.schemas import (
     TrendBreakInfo,
     TrendLineInfo,
     TrendResponse,
+    UiError,
     WhaleAlertInfo,
     WhaleStatsInfo,
     WhaleSummaryResponse,
@@ -125,6 +127,7 @@ from ati_engine.licensing.manager import LicenseManager, LicenseRejected, Licens
 from ati_engine.market.service import MarketDataService
 from ati_engine.ml.registry import ModelError
 from ati_engine.notify.telegram import TelegramError, TelegramNotifier
+from ati_engine.observability.crash import CrashReporter
 from ati_engine.paper.competition import LIVE_CANDIDATE, PaperCompetition
 from ati_engine.remote.service import REMOTE_ENABLED_KEY, RemoteService
 from ati_engine.runtime import EngineRuntime
@@ -1237,6 +1240,33 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             details={"enabled": body.enabled, "environment": "testnet"},
         )
         return trader.status()
+
+    # --- Hata raporları (isteğe bağlı) --------------------------------------------------------
+
+    def crash_or_404() -> CrashReporter:
+        if runtime.crash is None:
+            raise HTTPException(status_code=404, detail="Hata raporu servisi etkin değil")
+        return runtime.crash
+
+    @app.get("/v1/crash-reports")
+    async def crash_status(_: Auth) -> dict[str, Any]:
+        return crash_or_404().status()
+
+    @app.post("/v1/crash-reports/enabled")
+    async def crash_toggle(body: CrashToggle, _: Auth) -> dict[str, Any]:
+        reporter = crash_or_404()
+        await reporter.set_enabled(body.enabled)
+        await runtime.audit.record(
+            actor=LOCAL_ACTOR,
+            action="crash_reports.enabled" if body.enabled else "crash_reports.disabled",
+            details={},
+        )
+        return reporter.status()
+
+    @app.post("/v1/crash-reports/ui")
+    async def crash_ui(body: UiError, _: Auth) -> dict[str, bool]:
+        queued = crash_or_404().capture("desktop-ui", body.error_type, body.message, body.stack)
+        return {"queued": queued}
 
     # --- Telegram bildirimleri ------------------------------------------------------------------
 

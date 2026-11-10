@@ -96,6 +96,30 @@ test("indirim kuponu oluşturulur, listelenir ve kapatılır", async () => {
   await expect(page.getByRole("alert").filter({ hasText: "Bu kod zaten var" })).toBeVisible();
 });
 
+test("uygulama hata raporu ayıklanmış olarak görünür ve durumu değiştirilir", async () => {
+  const response = await page.request.post("http://127.0.0.1:8100/v1/crash-reports", {
+    data: {
+      app: "engine", version: "0.4.0", os: "Windows 11", component: "ati_engine.market",
+      error_type: "TimeoutError", message: "zaman aşımı: kisi@example.com",
+      stack: 'File "C:\\Users\\Ad Soyad\\x.py", line 3, in run', fingerprint: "ab".repeat(16),
+    },
+  });
+  expect(response.status()).toBe(202);
+  await page.goto("/yonetim");
+  await page.getByRole("link", { name: "Hata raporları" }).click();
+  const card = page.getByTestId("crash-abababab");
+  await expect(card).toContainText("TimeoutError");
+  await expect(card).toContainText("<e-posta>");
+  await expect(card).not.toContainText("kisi@example.com");
+  await card.getByText("Kod satırları").click();
+  await expect(card.locator("pre")).toContainText("<kullanici>");
+  await expect(card.locator("pre")).not.toContainText("Ad Soyad");
+  await expect(page.getByTestId("crash-status-abababab")).toHaveText("Yeni");
+  await noAxeViolations(page);
+  await card.getByLabel("TimeoutError durumu").selectOption("fixed");
+  await expect(page.getByTestId("crash-status-abababab")).toHaveText("Düzeltildi");
+});
+
 test("lisans üretilir, dondurulur, tam anahtar TOTP ile gösterilir", async () => {
   await sql("INSERT INTO customers (email, password_hash, email_verified_at) VALUES ('alici@example.com', $1, now())", [ARGON2]);
   await page.goto("/yonetim/lisanslar");

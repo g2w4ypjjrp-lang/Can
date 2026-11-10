@@ -875,6 +875,20 @@ class TelegramDiscover(BaseModel):
     bot_token: str | None = Field(default=None, max_length=100)
 
 
+class CrashToggle(BaseModel):
+    """İsteğe bağlı hata raporlarını aç/kapat."""
+
+    enabled: bool
+
+
+class UiError(BaseModel):
+    """Masaüstü arayüzünde yakalanan hata (rapor açıksa ayıklanıp gönderilir)."""
+
+    message: str = Field(max_length=2000)
+    stack: str = Field(default="", max_length=20000)
+    error_type: str = Field(default="Error", max_length=120)
+
+
 class RemoteToggle(BaseModel):
     """Telefondan kontrolü aç/kapat (masaüstü uygulaması)."""
 

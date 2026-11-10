@@ -16,6 +16,7 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 import { useEvents, usePoll } from "./api/hooks";
 import type { LicenseStatusResponse, StatusResponse } from "./api/types.gen";
+import { ErrorBoundary, useGlobalErrorReports } from "./components/ErrorBoundary";
 import { Badge } from "./components/ui";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { MODE_LABELS, STATE_LABELS } from "./lib/format";
@@ -82,6 +83,7 @@ export function App() {
   const remote = usePoll((c) => c.get<RemoteStatus>("/v1/remote/status"), 5000);
   const license = usePoll((c) => c.get<LicenseStatusResponse>("/v1/license"), 10_000);
   const { connected, toasts, dismiss } = useEvents();
+  useGlobalErrorReports();
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -181,7 +183,9 @@ export function App() {
           </div>
         </header>
         <UpdateBanner />
-        <NavContext.Provider value={setPage}>{active.render()}</NavContext.Provider>
+        <NavContext.Provider value={setPage}>
+          <ErrorBoundary key={active.key}>{active.render()}</ErrorBoundary>
+        </NavContext.Provider>
       </main>
       <div className="toasts" aria-live="polite">
         {toasts.map((t) => (

@@ -26,6 +26,7 @@ from ati_cloud.admin.manage import create_admin_manage_router
 from ati_cloud.admin.settings_api import create_admin_settings_router
 from ati_cloud.config import CloudSettings
 from ati_cloud.contact import create_contact_router
+from ati_cloud.crash import create_admin_crash_router, create_crash_router
 from ati_cloud.db.migrate import load_migrations, pending
 from ati_cloud.guards import RequestGuard
 from ati_cloud.licensing.api import create_license_router
@@ -97,6 +98,8 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
     app.include_router(create_releases_router(db))
     app.include_router(create_site_router(db))
     app.include_router(create_admin_releases_router(admin))
+    app.include_router(create_crash_router(db))
+    app.include_router(create_admin_crash_router(admin))
 
     @app.get("/health")
     async def health() -> dict[str, str]:

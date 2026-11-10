@@ -110,6 +110,19 @@ export const HELP_TOPICS: HelpTopic[] = [
     notes: ["Yürüyen pencere (örneklem dışı) sonuçları aşırı uyumu yakalamaya yardım eder; sonuçlar geleceği garanti etmez."],
   },
   {
+    id: "hata-raporlari",
+    title: "Hata raporları",
+    lead: "İsteğe bağlıdır ve varsayılan olarak kapalıdır. Açarsanız hataları daha hızlı düzeltebiliriz.",
+    steps: [
+      "Uygulamada Ayarlar → Hata raporları bölümünde \"Hata raporlarını aç\"a basın.",
+      "Bir hata oluştuğunda kısa bir teknik rapor otomatik gönderilir; hiçbir şey yapmanız gerekmez.",
+    ],
+    notes: [
+      "Gönderilmeyenler: adınız, e-postanız, kullanıcı klasörünüz, IP adresiniz, lisans ve borsa anahtarlarınız, bakiye ve işlem bilgileri.",
+      "Aynı hata saatte bir kez, toplamda saatte en çok 10 rapor gönderilir.",
+    ],
+  },
+  {
     id: "guncelleme",
     title: "Güncellemeler",
     lead: "Yeni sürüm çıkınca uygulamanın üstünde \"Yeni sürüm hazır\" şeridi görünür.",

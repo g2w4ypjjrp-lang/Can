@@ -23,8 +23,10 @@ Send = Callable[[Message], Awaitable[None]]
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-# Çerezsiz, imzayla kimliği doğrulanan uç noktalar (köken denetimi yok).
+# Çerezsiz, imzayla kimliği doğrulanan uç noktalar (köken denetimi yok). Hata raporu çerez
+# kullanmaz ve kimseye ait veri değiştirmez (masaüstü motoru gönderir; IP başına sınırlı).
 MACHINE_PREFIXES = (
+    "/v1/crash-reports",
     "/v1/licenses/activate",
     "/v1/licenses/renew",
     "/v1/licenses/deactivate",

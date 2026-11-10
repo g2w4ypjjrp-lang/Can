@@ -49,6 +49,7 @@ from ati_engine.market.orderbook import OrderBook, SyncState
 from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT, MarketDataService
 from ati_engine.ml.registry import ModelRegistry
 from ati_engine.notify.telegram import TelegramNotifier
+from ati_engine.observability.crash import CrashLogHandler, CrashReporter
 from ati_engine.observability.logging import configure_logging
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.paper.competition import PaperCompetition
@@ -97,6 +98,7 @@ class Engine:
         self.settings = settings
         self.runtime: EngineRuntime | None = None
         self.bound_port: int | None = None
+        self._crash_handler: CrashLogHandler | None = None
         self._lock = SingleInstanceLock(settings.paths.lock_file)
         self._ready = asyncio.Event()
 
@@ -191,6 +193,7 @@ class Engine:
             await self._start_license(runtime)
             await self._start_remote(runtime)
             await self._start_telegram(runtime)
+            await self._start_crash_reports(runtime)
 
             supervisor.spawn("loop-lag-monitor", loop_monitor.run)
             supervisor.spawn(
@@ -238,6 +241,9 @@ class Engine:
                 return 1
             return 0
         finally:
+            if self._crash_handler is not None:
+                logging.getLogger().removeHandler(self._crash_handler)
+                self._crash_handler = None
             await self._shutdown(server, server_task, supervisor, bus, db)
 
     @staticmethod
@@ -275,6 +281,21 @@ class Engine:
         runtime.telegram = notifier
         runtime.supervisor.spawn(
             "telegram", notifier.run, RestartPolicy(max_restarts=20, window_s=3600)
+        )
+
+    async def _start_crash_reports(self, runtime: EngineRuntime) -> None:
+        """İsteğe bağlı hata raporları (varsayılan kapalı; kullanıcı Ayarlar'dan açar)."""
+        reporter = CrashReporter(
+            store=SettingsStore(runtime.db),
+            url=runtime.settings.notify.crash_report_url,
+            version=__version__,
+        )
+        await reporter.load()
+        runtime.crash = reporter
+        self._crash_handler = CrashLogHandler(reporter)
+        logging.getLogger().addHandler(self._crash_handler)
+        runtime.supervisor.spawn(
+            "crash-reports", reporter.run, RestartPolicy(max_restarts=20, window_s=3600)
         )
 
     @staticmethod

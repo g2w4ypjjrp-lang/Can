@@ -264,3 +264,16 @@ test("telegram bildirimi: biçim denetimi, kayıtlı anahtar ipucu, kapalı baş
   await card.getByTestId("telegram-discover").click();
   await expect(card).toContainText("geçerli bir bot anahtarı");
 });
+
+test("hata raporları varsayılan kapalı; ne gönderildiği açıklanır, açılıp kapatılır", async ({ page }) => {
+  await open(page, "settings");
+  const card = page.getByTestId("crash-reports");
+  await expect(card.getByTestId("crash-state")).toHaveText("Kapalı");
+  await expect(card).toContainText("Gönderilmeyen");
+  await expect(card).toContainText("lisans anahtarınız");
+  await card.getByTestId("crash-toggle").click();
+  await expect(card.getByTestId("crash-state")).toHaveText("Açık");
+  await expect(card.getByTestId("crash-sent")).toContainText("Bu oturumda gönderilen: 0");
+  await card.getByTestId("crash-toggle").click();
+  await expect(card.getByTestId("crash-state")).toHaveText("Kapalı");
+});

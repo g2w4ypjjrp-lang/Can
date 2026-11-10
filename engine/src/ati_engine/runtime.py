@@ -19,6 +19,7 @@ from ati_engine.history.service import HistoryService
 from ati_engine.licensing.manager import LicenseManager
 from ati_engine.market.service import MarketDataService
 from ati_engine.notify.telegram import TelegramNotifier
+from ati_engine.observability.crash import CrashReporter
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.paper.competition import PaperCompetition
 from ati_engine.remote.service import RemoteService
@@ -57,6 +58,7 @@ class EngineRuntime:
     remote: RemoteService | None = None
     license: LicenseManager | None = None
     telegram: TelegramNotifier | None = None
+    crash: CrashReporter | None = None
     version: str = __version__
     started_monotonic: float = field(default_factory=time.monotonic)
     shutdown_requested: asyncio.Event = field(default_factory=asyncio.Event)

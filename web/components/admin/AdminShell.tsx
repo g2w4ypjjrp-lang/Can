@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  Bug,
   Download,
   Inbox,
   KeyRound,
@@ -39,6 +40,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/yonetim/lisanslar": KeyRound,
   "/yonetim/mesajlar": Inbox,
   "/yonetim/surumler": Download,
+  "/yonetim/hatalar": Bug,
   "/yonetim/yoneticiler": ShieldCheck,
   "/yonetim/denetim": ScrollText,
   "/yonetim/ayarlar": Settings,

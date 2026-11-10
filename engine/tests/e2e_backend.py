@@ -30,6 +30,7 @@ from ati_engine.config import (
     LicenseSettings,
     LocalApiSettings,
     MarketDataSettings,
+    NotifySettings,
     RemoteSettings,
 )
 from fake_binance import FakeBinance
@@ -71,6 +72,8 @@ async def main(args: argparse.Namespace) -> int:
                 trusted_keys={licensing.kid: licensing.public_key},
                 fingerprint_override="e2e-bilgisayar",
             ),
+            # Hata raporları testte açılsa da gerçek sunucuya gitmez.
+            notify=NotifySettings(crash_report_url="http://127.0.0.1:9/v1/crash-reports"),
             # Telefondan kontrol: "aç" denince yerel (gerçek) aktarma servisine bağlanır.
             remote=RemoteSettings(public_relay_url=args.relay)
             if args.relay

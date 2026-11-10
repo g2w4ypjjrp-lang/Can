@@ -219,9 +219,18 @@ def is_release_build() -> bool:
 
 
 class NotifySettings(BaseModel):
-    """Bildirimler. Telegram adresi yalnızca testlerde değiştirilir."""
+    """Bildirimler. Telegram adresi yalnızca testlerde değiştirilir. Hata raporları kullanıcı
+    açarsa ``crash_report_url`` adresine gönderilir (varsayılan kapalı)."""
 
     telegram_api: str = "https://api.telegram.org"
+    crash_report_url: str = "https://api.canarslan.net.tr/v1/crash-reports"
+
+    @field_validator("crash_report_url")
+    @classmethod
+    def _secure_crash(cls, value: str) -> str:
+        if value.startswith(("https://", "http://127.0.0.1", "http://localhost")):
+            return value
+        raise ValueError("Hata raporu adresi https:// ile başlamalı")
 
     @field_validator("telegram_api")
     @classmethod

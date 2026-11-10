@@ -3,6 +3,7 @@ import { useAction, usePoll } from "../api/hooks";
 import type { AuditEntry, Market, StatusResponse, TestnetKeyResponse, TradingModeResponse } from "../api/types.gen";
 import { Badge, Card, DataTable, ErrorBox, Field } from "../components/ui";
 import { MARKET_LABELS, MODE_LABELS, time } from "../lib/format";
+import { CrashReportsSection } from "./CrashReports";
 import { LicenseSection } from "./License";
 import { TelegramSection } from "./Telegram";
 
@@ -80,6 +81,8 @@ export function Settings() {
       </div>
 
       <TelegramSection />
+
+      <CrashReportsSection />
 
       <Card title="Denetim kaydı (son işlemler)">
         <ErrorBox error={audit.error} />

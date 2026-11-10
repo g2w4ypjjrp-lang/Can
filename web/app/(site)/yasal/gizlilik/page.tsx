@@ -89,6 +89,13 @@ export default function PrivacyPage() {
         durumu, pozisyon sembolleri, kâr/zarar özeti, uyarılar) içerir; API anahtarı ve hesap bakiyesi ayrıntısı
         içermez. Aktarma servisi mesajları saklamaz, yalnızca yönlendirir.
       </p>
+      <p>
+        <strong>Hata raporları (isteğe bağlı, varsayılan kapalı):</strong> Masaüstü uygulamasında Ayarlar → Hata
+        raporları seçeneğini açarsanız, bir hata oluştuğunda uygulama sürümü, işletim sistemi sürümü, hata türü ve
+        kişisel bilgilerden ayıklanmış hata mesajı ile kod satırları gönderilir. Adınız, e-postanız, kullanıcı
+        klasörünüz, IP adresiniz, lisans anahtarınız, borsa anahtarlarınız, bakiye ve işlem bilgileriniz gönderilmez;
+        sunucu raporla birlikte IP adresi saklamaz. Seçeneği istediğiniz zaman kapatabilirsiniz.
+      </p>
 
       <h2>5. Çerezler</h2>
       <p>
