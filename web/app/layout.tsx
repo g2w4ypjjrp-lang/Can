@@ -2,8 +2,12 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
+
 import { ApiProvider } from "@/components/ApiContext";
 import { runtimeConfig } from "@/lib/config";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 import "./globals.css";
 
@@ -22,17 +26,21 @@ const baseMetadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#111723" },
+    { media: "(prefers-color-scheme: light)", color: "#f6f7fb" },
+    { media: "(prefers-color-scheme: dark)", color: "#05070e" },
   ],
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // İstek başlığını okumak sayfayı dinamik yapar: CSP nonce'u her istekte yenidir (proxy.ts).
-  await headers();
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   const { publicApiUrl } = runtimeConfig();
   return (
-    <html lang="tr">
+    // data-theme, boyamadan önce tema betiğiyle eklenir (sunucu çıktısında yok).
+    <html lang="tr" suppressHydrationWarning>
+      <head>
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="flex min-h-screen flex-col font-sans">
         <a
           href="#icerik"

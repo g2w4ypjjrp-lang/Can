@@ -1,9 +1,10 @@
 import Link from "next/link";
 
-import { LogoMark } from "@/components/Logo";
+import { LogoMark, Wordmark } from "@/components/Logo";
 import { MobileMenu } from "@/components/MobileMenu";
 import { NavLinks, type NavItem } from "@/components/NavLinks";
-import { Container } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { Container, LinkButton } from "@/components/ui";
 
 const NAV: NavItem[] = [
   { href: "/ozellikler", label: "Özellikler" },
@@ -14,32 +15,31 @@ const NAV: NavItem[] = [
 ];
 
 const navLink =
-  "rounded-full px-3.5 py-2 text-sm font-medium text-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-accent";
-const navActive = "bg-surface-2 text-fg";
+  "rounded-full px-3.5 py-1.5 text-sm font-medium text-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-accent-text";
+const navActive = "bg-surface-3 text-fg shadow-sm";
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-30 border-b border-border/70 bg-bg/85 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-glass-border bg-glass-strong backdrop-blur-xl backdrop-saturate-150">
       <Container className="flex h-16 items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2.5 rounded-md focus-visible:outline-2 focus-visible:outline-accent">
-          <LogoMark />
-          <span className="text-[15px] font-semibold tracking-tight text-fg">
-            AI Trading <span className="text-accent-text">Intelligence</span>
-          </span>
+        <Link href="/" className="flex items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-accent-text">
+          <LogoMark className="h-8 w-8" />
+          <Wordmark />
         </Link>
-        <nav aria-label="Ana menü" className="hidden items-center gap-1 rounded-full border border-border bg-surface/60 p-1 md:flex">
+        <nav aria-label="Ana menü" className="hidden items-center gap-0.5 rounded-full border border-border bg-surface/70 p-1 shadow-sm lg:flex">
           <NavLinks items={NAV} linkClass={navLink} activeClass={navActive} />
         </nav>
-        <div className="hidden items-center gap-2 md:flex">
-          <Link href="/giris" className="rounded-full px-3.5 py-2 text-sm font-medium text-fg hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent">
+        <div className="hidden items-center gap-2 lg:flex">
+          <ThemeToggle />
+          <Link
+            href="/giris"
+            className="rounded-full px-3.5 py-2 text-sm font-medium text-fg transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent-text"
+          >
             Giriş yap
           </Link>
-          <Link
-            href="/kayit"
-            className="rounded-full bg-fg px-4 py-2 text-sm font-semibold text-bg shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
+          <LinkButton href="/kayit" size="sm" className="px-4 py-2">
             Hesap oluştur
-          </Link>
+          </LinkButton>
         </div>
         <MobileMenu items={[...NAV, { href: "/giris", label: "Giriş yap" }, { href: "/kayit", label: "Hesap oluştur" }]} />
       </Container>

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 
+import { CalendarClock, Check, Infinity as InfinityIcon, Sparkles } from "lucide-react";
+
 import { RiskNotice } from "@/components/RiskNotice";
-import { Card, Container, LinkButton, Notice, PageHeader } from "@/components/ui";
+import { Badge, Container, IconTile, LinkButton, Notice, PageHeader } from "@/components/ui";
 import { deviceLabel, durationLabel, formatPrice } from "@/lib/format";
 import { fetchPlans, groupPlans } from "@/lib/plans";
 
@@ -24,49 +26,72 @@ export default async function PlansPage() {
         title="Paketler"
         lead="Lisanslar süreye ve aynı anda kullanılabilecek bilgisayar sayısına göre ayrılır. Her pakette tüm özellikler ve iPhone uygulaması bulunur."
       />
-      <Container className="py-12">
+      <Container className="py-14">
         {onSale ? (
           <>
             {trial ? (
-              <Card className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-                <div>
-                  <h2 className="text-xl font-semibold text-fg">{trial.name}</h2>
-                  <p className="mt-1 text-muted">
-                    {durationLabel(trial.duration_days)} boyunca {deviceLabel(trial.device_limit)}; tüm özellikler, sanal işlem ve test ağı.
-                  </p>
+              <div className="gradient-border mb-10 flex flex-col justify-between gap-6 rounded-3xl p-7 shadow-lift md:flex-row md:items-center">
+                <div className="flex items-start gap-4">
+                  <IconTile icon={Sparkles} tone="violet" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-fg">{trial.name}</h2>
+                    <p className="mt-1 text-muted">
+                      {durationLabel(trial.duration_days)} boyunca {deviceLabel(trial.device_limit)}; tüm özellikler, sanal işlem ve test ağı.
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <p className="text-2xl font-bold text-fg">{formatPrice(trial.price_minor, trial.currency)}</p>
+                <div className="flex items-center gap-5">
+                  <p className="text-3xl font-semibold tracking-tight text-fg">{formatPrice(trial.price_minor, trial.currency)}</p>
                   <LinkButton href={`/satin-al?paket=${encodeURIComponent(trial.code)}`}>Denemeyi başlat</LinkButton>
                 </div>
-              </Card>
+              </div>
             ) : null}
-            <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" aria-label="Paket seçenekleri">
-              {groups.map((group) => (
-                <Card as="li" key={group.key}>
-                  <h2 className="text-xl font-semibold text-fg">{durationLabel(group.durationDays)}</h2>
-                  <p className="mt-1 text-sm text-muted">
-                    {group.durationDays === null ? "Tek seferlik ödeme, süre sınırı yok" : "Süre sonunda yenileyebilirsiniz"}
-                  </p>
-                  <ul className="mt-5 divide-y divide-border">
-                    {group.options.map((plan) => (
-                      <li key={plan.code} className="flex items-center justify-between gap-3 py-3">
-                        <div>
-                          <p className="font-medium text-fg">{deviceLabel(plan.device_limit)}</p>
-                          <p className="text-lg font-bold text-fg">{formatPrice(plan.price_minor, plan.currency)}</p>
-                        </div>
-                        <LinkButton
-                          href={`/satin-al?paket=${encodeURIComponent(plan.code)}`}
-                          variant="secondary"
-                          aria-label={`${plan.name} paketini seç`}
-                        >
-                          Seç
-                        </LinkButton>
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
-              ))}
+            <ul className="grid gap-6 md:grid-cols-2 xl:grid-cols-3" aria-label="Paket seçenekleri">
+              {groups.map((group) => {
+                const long = group.durationDays === null || group.durationDays >= 365;
+                return (
+                  <li
+                    key={group.key}
+                    className={`card-lift relative flex flex-col rounded-3xl p-7 ${long ? "gradient-border shadow-lift" : "border border-border bg-surface shadow-sm"}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <IconTile icon={group.durationDays === null ? InfinityIcon : CalendarClock} tone={long ? "violet" : "accent"} />
+                      {long ? (
+                        <Badge tone="accent">{group.durationDays === null ? "Tek seferlik" : "Uzun dönem"}</Badge>
+                      ) : null}
+                    </div>
+                    <h2 className="mt-5 text-2xl font-semibold tracking-tight text-fg">{durationLabel(group.durationDays)}</h2>
+                    <p className="mt-1 text-sm text-muted">
+                      {group.durationDays === null ? "Tek seferlik ödeme, süre sınırı yok" : "Süre sonunda yenileyebilirsiniz"}
+                    </p>
+                    <ul className="mt-6 space-y-2.5">
+                      {group.options.map((plan) => (
+                        <li key={plan.code} className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-bg/60 px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium text-muted">{deviceLabel(plan.device_limit)}</p>
+                            <p className="tabular text-xl font-semibold tracking-tight text-fg">{formatPrice(plan.price_minor, plan.currency)}</p>
+                          </div>
+                          <LinkButton
+                            href={`/satin-al?paket=${encodeURIComponent(plan.code)}`}
+                            variant={long ? "primary" : "secondary"}
+                            size="sm"
+                            aria-label={`${plan.name} paketini seç`}
+                          >
+                            Seç
+                          </LinkButton>
+                        </li>
+                      ))}
+                    </ul>
+                    <ul className="mt-6 space-y-2 border-t border-border pt-5 text-sm text-fg">
+                      {["Tüm özellikler", "iPhone uygulaması dâhil", "Cihazları panelden yönetme"].map((item) => (
+                        <li key={item} className="flex items-center gap-2">
+                          <Check aria-hidden="true" className="h-4 w-4 text-success-fg" /> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                );
+              })}
             </ul>
             <p className="mt-6 text-sm text-muted">Vergi, ödeme ve fatura ayrıntıları satın alma adımında gösterilir.</p>
           </>

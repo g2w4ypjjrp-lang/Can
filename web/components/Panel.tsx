@@ -77,19 +77,33 @@ export function Panel() {
   }
 
   const { me } = state;
+  const initial = (me.full_name || me.email).trim().charAt(0).toLocaleUpperCase("tr-TR");
   return (
     <Container className="py-12">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-fg">Müşteri paneli</h1>
-          <p className="mt-2 text-muted">
-            {me.full_name ? `${me.full_name} · ` : ""}
-            <span data-testid="panel-email">{me.email}</span>
-          </p>
+      <div className="relative overflow-hidden rounded-[2rem] border border-border bg-surface p-7 shadow-lift sm:p-9">
+        <div aria-hidden="true" className="glow absolute inset-0" />
+        <div className="relative flex flex-wrap items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <span aria-hidden="true" className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-xl font-semibold text-white shadow-glow">
+              {initial}
+            </span>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-fg">Müşteri paneli</h1>
+              <p className="mt-1 text-muted">
+                {me.full_name ? `${me.full_name} · ` : ""}
+                <span data-testid="panel-email">{me.email}</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <LinkButton href="/indir" variant="secondary" size="sm" className="px-4 py-2">
+              Uygulamayı indir
+            </LinkButton>
+            <Button variant="secondary" size="sm" className="px-4 py-2" onClick={() => void logout()} disabled={leaving}>
+              {leaving ? "Çıkış yapılıyor…" : "Çıkış yap"}
+            </Button>
+          </div>
         </div>
-        <Button variant="secondary" onClick={() => void logout()} disabled={leaving}>
-          {leaving ? "Çıkış yapılıyor…" : "Çıkış yap"}
-        </Button>
       </div>
 
       <section aria-labelledby="lisanslar" className="mt-10">
@@ -116,20 +130,6 @@ export function Panel() {
           bilgisayarı buradan kaldırabilir veya uygulamada &quot;Bu bilgisayarı lisanstan çıkar&quot; seçeneğini
           kullanabilirsiniz.
         </p>
-      </section>
-
-      <section aria-labelledby="uygulama" className="mt-10">
-        <h2 id="uygulama" className="text-xl font-semibold text-fg">
-          Uygulama
-        </h2>
-        <Card className="mt-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <p className="text-sm text-muted">
-            Windows kurulum paketi, dosya doğrulama (SHA-256) ve iPhone uygulaması indirme sayfasında.
-          </p>
-          <LinkButton href="/indir" variant="secondary">
-            Uygulamayı indir
-          </LinkButton>
-        </Card>
       </section>
 
       <OrdersSection />

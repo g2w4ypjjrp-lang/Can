@@ -1,6 +1,8 @@
 import {
   BrainCircuit,
   ChartCandlestick,
+  Check,
+  Cpu,
   FlaskConical,
   Gauge,
   Monitor,
@@ -11,10 +13,23 @@ import {
 } from "lucide-react";
 import type { Metadata } from "next";
 
-import { IconBox } from "@/components/IconBox";
+import type { ReactNode } from "react";
 
+import { DesktopViz, EquityViz, PhoneViz, RadarViz, RiskViz, ScannerViz, ScoreRing } from "@/components/home/Visuals";
 import { RiskNotice } from "@/components/RiskNotice";
-import { Card, Container, LinkButton, Notice, PageHeader } from "@/components/ui";
+import { Card, Container, IconTile, LinkButton, Notice, PageHeader } from "@/components/ui";
+
+const VISUALS: Record<string, ReactNode> = {
+  veri: <ScannerViz />,
+  balina: <RadarViz />,
+  analiz: <ScoreRing />,
+  strateji: <EquityViz />,
+  sanal: <EquityViz gradientId="sanal-alan" title="Örnek sanal işlem bakiyesi" />,
+  risk: <RiskViz />,
+  masaustu: <DesktopViz />,
+  iphone: <PhoneViz />,
+};
+const TONES = ["accent", "violet", "cyan", "accent", "success", "success", "accent", "violet"] as const;
 
 export const metadata: Metadata = {
   title: "Özellikler",
@@ -132,14 +147,14 @@ export default function FeaturesPage() {
         title="Özellikler"
         lead="Veriden karara, testten uygulamaya: piyasayı izlemek, stratejinizi ölçmek ve riskinizi kontrol altında tutmak için gereken araçlar."
       />
-      <Container className="py-12">
-        <nav aria-label="Bu sayfada" className="mb-10">
-          <ul className="flex flex-wrap gap-2">
+      <Container className="py-14">
+        <nav aria-label="Bu sayfada" className="sticky top-20 z-20 -mx-2 mb-14 overflow-x-auto rounded-full px-2 scrollbar-none">
+          <ul className="glass flex w-max gap-1 rounded-full p-1 shadow-sm">
             {SECTIONS.map((section) => (
               <li key={section.id}>
                 <a
                   href={`#${section.id}`}
-                  className="inline-block rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-fg transition-colors hover:bg-surface-2"
+                  className="inline-block whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-surface-3"
                 >
                   {section.title}
                 </a>
@@ -147,36 +162,49 @@ export default function FeaturesPage() {
             ))}
           </ul>
         </nav>
-        <div className="grid gap-6 lg:grid-cols-2">
-          {SECTIONS.map((section) => (
-            <Card as="section" key={section.id} className="card-lift">
-              <div className="flex items-center gap-3">
-                <IconBox icon={section.icon} />
-                <h2 id={section.id} className="scroll-mt-24 text-xl font-semibold text-fg">
+        <div className="space-y-6">
+          {SECTIONS.map((section, index) => (
+            <section
+              key={section.id}
+              aria-labelledby={section.id}
+              className="reveal grid items-center gap-10 overflow-hidden rounded-[2rem] border border-border bg-surface p-7 shadow-sm sm:p-10 lg:grid-cols-2"
+            >
+              <div className={index % 2 === 1 ? "lg:order-2" : ""}>
+                <IconTile icon={section.icon} tone={TONES[index % TONES.length]} />
+                <h2 id={section.id} className="mt-5 scroll-mt-36 text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
                   {section.title}
                 </h2>
+                <p className="mt-3 text-lg text-muted">{section.lead}</p>
+                <ul className="mt-6 space-y-3">
+                  {section.points.map((point) => (
+                    <li key={point} className="flex gap-3 text-fg">
+                      <span aria-hidden="true" className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-bg text-success-fg">
+                        <Check className="h-3 w-3" strokeWidth={3} />
+                      </span>
+                      <span className="leading-relaxed">{point}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <p className="mt-2 text-muted">{section.lead}</p>
-              <ul className="mt-4 space-y-2.5">
-                {section.points.map((point) => (
-                  <li key={point} className="flex gap-3 text-fg">
-                    <span aria-hidden="true" className="mt-2 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                    <span>{point}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
+              <div className={`relative ${index % 2 === 1 ? "lg:order-1" : ""}`}>
+                <div aria-hidden="true" className="preview-halo absolute -inset-10 opacity-70" />
+                <div className="relative rounded-3xl border border-border bg-bg/60 p-5">{VISUALS[section.id]}</div>
+              </div>
+            </section>
           ))}
         </div>
 
-        <section aria-labelledby="gereksinimler" className="mt-12">
-          <h2 id="gereksinimler" className="text-2xl font-bold tracking-tight text-fg">
+        <section aria-labelledby="gereksinimler" className="mt-20">
+          <h2 id="gereksinimler" className="text-3xl font-semibold tracking-tight text-fg">
             Sistem gereksinimleri
           </h2>
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             <Card>
-              <h3 className="font-semibold text-fg">Bilgisayar</h3>
-              <ul className="mt-3 space-y-1.5 text-muted">
+              <div className="flex items-center gap-3">
+                <IconTile icon={Cpu} />
+                <h3 className="font-semibold text-fg">Bilgisayar</h3>
+              </div>
+              <ul className="mt-4 space-y-2 text-muted">
                 <li>Windows 10 veya 11, 64 bit</li>
                 <li>En az 8 GB bellek önerilir (model eğitimi için)</li>
                 <li>Kesintisiz internet bağlantısı</li>
@@ -184,8 +212,11 @@ export default function FeaturesPage() {
               </ul>
             </Card>
             <Card>
-              <h3 className="font-semibold text-fg">Telefon (isteğe bağlı)</h3>
-              <ul className="mt-3 space-y-1.5 text-muted">
+              <div className="flex items-center gap-3">
+                <IconTile icon={Smartphone} tone="violet" />
+                <h3 className="font-semibold text-fg">Telefon (isteğe bağlı)</h3>
+              </div>
+              <ul className="mt-4 space-y-2 text-muted">
                 <li>iOS 17 veya üzeri bir iPhone</li>
                 <li>Face ID veya Touch ID önerilir</li>
                 <li>Masaüstü uygulamasıyla QR kod üzerinden eşleştirme</li>
