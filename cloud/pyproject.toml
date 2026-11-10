@@ -16,6 +16,8 @@ dependencies = [
     "argon2-cffi>=23.1",
     "psycopg-pool>=3.2",
     "email-validator>=2.2",
+    # Ödeme sağlayıcılarına sunucu tarafı istekler (payments/service.py).
+    "httpx>=0.27",
 ]
 
 [project.scripts]

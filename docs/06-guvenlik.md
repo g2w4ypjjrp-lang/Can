@@ -85,6 +85,8 @@ yapıldı.
 | 7 | Uzaktan kontrol mesajları şifresizdi | Aktarma işletmecisi özetleri okuyabilirdi | Uçtan uca şifreleme |
 | 8 | Lighthouse CI aracının bağımlılıklarında 16 bilinen açık (geliştirme aracı) | Yalnızca CI makinesi | Araç güncellendi; kalan paket sabitlendi |
 | 9 | Motor veritabanı açılışı başarısız olunca (bozuk dosya) SQLite bağlantısı açık kalıyordu | Windows'ta dosya kilitli kalır (bozuk yedek silinemez/değiştirilemez) | Hata yolunda bağlantı kapatılır; Windows CI dayanıklılık/yedek işinde bulundu, gerileme testi |
+| 10 | Bulut ödeme modülü `httpx` kullanıyordu ama paket yalnızca geliştirme bağımlılığıydı | Üretim kurulumunda API hiç açılmaz (tüm hizmet durur) | `httpx` çalışma bağımlılığı yapıldı; CI `containers` işi yalnızca üretim bağımlılıklarıyla kurulan imajı her gönderimde açıp dener |
+| 11 | (Önlem) İndirme bağlantısı yönetim panelinden değiştirilebilir | Ele geçirilen yönetici oturumu müşterileri zararlı dosyaya yönlendirebilir | Bağlantı yalnızca izinli alan adlarına; yayınlama TOTP ister; yayındaki sürümün adresi/özeti değiştirilemez (tetikleyici); sayfada SHA-256 doğrulama komutu; asıl çözüm kod imzalama (G6) |
 
 **Kalan riskler ve önlemleri (bilinçli olarak kabul edilen veya onaya bağlı):**
 

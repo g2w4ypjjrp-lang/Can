@@ -12,9 +12,47 @@ onayı** ile yapılacaktır; bu klasör o güne kadar hedef yapıyı ve gizli bi
 | `https://www.canarslan.net.tr` | Kalıcı yönlendirme (301) → `https://canarslan.net.tr` | yük dengeleyici |
 | `https://api.canarslan.net.tr` | Hesap, lisans ve (Aşama 17) ödeme API'si | `cloud/` (`ati-cloud-api`) |
 | `wss://relay.canarslan.net.tr` | iPhone ↔ masaüstü aktarma servisi | `cloud/` (`ati-cloud-relay`) |
-| `https://admin.canarslan.net.tr` | Admin paneli (Aşama 16): paketler, fiyatlar, ödeme ayarları, lisanslar | `web/` (`/yonetim`, `ATI_ADMIN_HOST`) |
+| `https://admin.canarslan.net.tr` | Admin paneli (Aşama 16): paketler, fiyatlar, ödeme ayarları, lisanslar, sürümler | `web/` (`/yonetim`, `ATI_ADMIN_HOST`) |
+| `https://indir.canarslan.net.tr` | Windows kurulum paketleri (yalnızca statik dosya) | nesne deposu + CDN |
 
 E-posta (sağlayıcı seçilince): gönderen `bildirim@canarslan.net.tr`, destek `destek@canarslan.net.tr`.
+
+## Kapsayıcı imajları
+
+VDS kullanılmaz; servisler yönetilen bir kapsayıcı platformunda çalışır. İki imaj vardır, ikisi de
+ortamdan bağımsızdır (ayarlar çalışma anında ortam değişkeniyle verilir), gizli bilgi içermez ve
+root olmayan kullanıcıyla çalışır. CI (`containers` işi) her gönderimde ikisini derler, yalnızca
+üretim bağımlılıklarıyla açılıp açılmadığını ve sayfaların yanıt verdiğini dener.
+
+| İmaj | Derleme | Süreçler |
+|---|---|---|
+| `ati-web` | `docker build -t ati-web web/` | site + müşteri paneli + yönetim paneli, port 3000 |
+| `ati-cloud` | `docker build -t ati-cloud cloud/` | `ati-cloud-api` (8000, varsayılan), `ati-cloud-relay` (8765), `ati-cloud-migrate` (dağıtım öncesi tek sefer), `ati-cloud-payments maintain` (10 dk'da bir) |
+
+Platformda dikkat edilecekler:
+
+* **Aktarma servisi tek örnek çalışmalı.** Motor ile telefon aynı süreçte buluşur (bellek içi
+  yönlendirme); en fazla 1 örnek ve WebSocket desteği gerekir. Bağlantı koparsa motor ve telefon
+  kendiliğinden yeniden bağlanır.
+* API ve site yatay ölçeklenebilir (durum veritabanında). Sağlık denetimi: API `/ready`, aktarma
+  `/health`, site `/robots.txt`.
+* Her dağıtımda önce `ati-cloud-migrate` çalıştırılır; API `/ready` bekleyen geçiş varsa 503 döner.
+
+## İndirme dosyaları (indir.canarslan.net.tr)
+
+1. CI'daki **Masaüstü → Windows kurulum paketi** işi imzasız `*-setup.exe` dosyasını, yanında
+   `.sha256` dosyasıyla üretir; iş özetinde sürüm, boyut (bayt) ve SHA-256 yazar.
+2. Dosya, sürüm numaralı ve **değişmeyen** bir adla indirme deposuna yüklenir (ör.
+   `AI-Trading-Intelligence_0.12.0_x64-setup.exe`). Aynı ada farklı dosya yüklenmez; yeni sürüm yeni
+   addır. Depo herkese açık okunur, yazma yetkisi yalnızca dağıtımı yapan kişidedir.
+3. Yönetim paneli → **Sürümler**: adres, SHA-256 ve boyut girilerek taslak eklenir, kontrol edilir ve
+   doğrulama kodu (TOTP) ile yayınlanır. Site İndir sayfasında en son yayındaki sürümü gösterir.
+   Yayınlanan sürümün adresi/özeti değiştirilemez; hatalıysa geri çekilir ve yeni sürüm eklenir.
+4. Kod imzalama (G6) gelene kadar sayfa “imzasız” uyarısını ve PowerShell ile özet doğrulama
+   komutunu gösterir.
+
+Bağlantı yalnızca `ATI_RELEASE_DOWNLOAD_HOSTS` alan adlarına verilebilir; yönetici oturumu ele
+geçirilse bile müşteriler başka bir siteye yönlendirilemez.
 
 ## Neden bu yapı
 
@@ -39,7 +77,7 @@ Diğer yöneticiler panelden (Yöneticiler) davet edilir. Gizli değer `ATI_ADMI
 
 ## DNS ve TLS kontrol listesi (G5 sırasında)
 
-* [ ] `canarslan.net.tr`, `www`, `api`, `relay`, `admin` kayıtları (sağlayıcının yük dengeleyicisine)
+* [ ] `canarslan.net.tr`, `www`, `api`, `relay`, `admin`, `indir` kayıtları (sağlayıcının yük dengeleyicisine / CDN'e)
 * [ ] `CAA` kaydı: yalnızca kullanılan sertifika otoritesi
 * [ ] TLS 1.2+ (tercihen 1.3), otomatik yenilenen sertifikalar
 * [ ] HSTS (`max-age=63072000; includeSubDomains; preload`) — site üretimde zaten gönderir

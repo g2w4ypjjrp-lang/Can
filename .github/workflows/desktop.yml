@@ -176,8 +176,29 @@ jobs:
           Start-Sleep -Seconds 3
           if (Test-Path (Join-Path $dir "engine/ati-engine.exe")) { throw "Kaldırma tamamlanmadı" }
           Write-Host "Kaldırma tamam"
+      - name: İndirme sayfası bilgileri (SHA-256, boyut)
+        # Yönetim paneli → Sürümler'e girilecek değerler; müşteri indirdiği dosyayı bu özetle doğrular.
+        run: |
+          $installer = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          $sha = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          "$sha  $($installer.Name)" | Out-File -Encoding ascii "$($installer.FullName).sha256"
+          $version = (Get-Content desktop/src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          @(
+            "### Windows kurulum paketi (imzasız)",
+            "",
+            "| Alan | Değer |",
+            "|---|---|",
+            "| Sürüm | $version |",
+            "| Dosya | $($installer.Name) |",
+            "| Boyut (bayt) | $($installer.Length) |",
+            "| SHA-256 | ``$sha`` |",
+            "",
+            "Dosyayı indirme sunucusuna (indir.canarslan.net.tr) yükleyin, sonra yönetim paneli → Sürümler'de bu değerlerle taslak ekleyip yayınlayın."
+          ) -join "`n" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         with:
           name: ati-windows-installer-unsigned
-          path: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          path: |
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sha256
           retention-days: 14

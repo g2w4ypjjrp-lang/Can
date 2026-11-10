@@ -917,6 +917,28 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
 | Felaket kurtarma tatbikatı | ✅ Bulut: 31 tablo, satır sayıları aynı; denetim zinciri sağlam ve son özet aynı; değiştirilemezlik tetikleyicileri çalışıyor; sayaçlar devam ediyor; motor aynı anahtarla kira yeniliyor; müşteri oturumu ve tam anahtar erişimi yerinde; yanlış KEK ile anahtarlar açılamıyor. Motor: 6 test (çalışırken yedek, çalışırken geri yükleme reddi, geri yükleme, eski yedeklerin temizlenmesi, bozuk yedek reddi, başarısız açılışta dosyanın bırakılması) |
 | Dış sızma testi | ⏸️ Canlı ortam kurulunca (G5) bağımsız bir ekiple önerilir |
 
+### Yayın hazırlığı — İndirme sayfası ve üretim imajları ✅ (yayın G5 bekliyor)
+
+- **İndirme sayfası** (`/indir`, menüde "İndir"): Windows kurulum paketi (sürüm, tarih, boyut,
+  SHA-256 ve PowerShell doğrulama komutu, imzasız paket uyarısı), iPhone uygulaması (App Store
+  bağlantısı yayınlanınca), kurulum adımları, güvenli başlangıç ve Binance anahtarında para çekme
+  izni verilmemesi uyarısı. Müşteri panelinde "Uygulamayı indir" kartı.
+- **Sürümler** yönetim panelinden yönetilir (`release.manage`, yalnızca süper yönetici): taslak →
+  TOTP ile yayınlama → geri çekme. Windows paketi yalnızca `ATI_RELEASE_DOWNLOAD_HOSTS` alan
+  adlarından (varsayılan `indir.canarslan.net.tr`, `canarslan.net.tr`), iPhone uygulaması yalnızca
+  App Store/TestFlight adresinden eklenebilir. Yayındaki sürümün adresi/özeti/boyutu veritabanı
+  tetikleyicisiyle değiştirilemez; her işlem denetim kaydında.
+- **Üretim imajları:** `web/Dockerfile` (site + paneller), `cloud/Dockerfile` (API, aktarma,
+  geçişler, ödeme bakımı). Root olmayan kullanıcı, gizli bilgi yok. CI `containers` işi her
+  gönderimde derler ve gerçek PostgreSQL ile duman testi yapar. İlk derleme gerçek bir hata buldu:
+  ödeme modülünün kullandığı `httpx` yalnızca geliştirme bağımlılığıydı; üretimde API hiç
+  açılmazdı (düzeltildi, `docs/06` §6 #10).
+- Masaüstü CI işi kurulum paketinin SHA-256 ve boyutunu `.sha256` dosyası ve iş özeti olarak
+  üretir (Sürümler sayfasına girilecek değerler).
+
+Testler: bulut 174 (sürümler 15), web birim 43, uçtan uca yönetici + sayfalar 25 (sürüm yayınla →
+İndir sayfasında görünür → geri çek; `/indir` erişilebilirlik 0 ihlal).
+
 ## Açık kararlar (sizden bilgi gerekecek)
 
 1. **Fiyatlandırma:** ✅ Karar: paketler (fiyat, para birimi, satışa açma/kapama) ve ödeme
