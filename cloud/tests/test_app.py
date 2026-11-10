@@ -208,3 +208,29 @@ def test_client_ip_with_forwarded_hops() -> None:
     assert client_ip(request(["2001:db8::1"], 1)) == "2001:db8::1"
     assert client_ip(request([], 1)) == "10.1.2.3"
     assert client_ip(request(["bozuk-deger"], 1)) == "10.1.2.3"
+
+
+def test_database_processes_use_selector_event_loop() -> None:
+    """Windows sunucusunda psycopg'nin asenkron sürücüsü ProactorEventLoop ile çalışmaz: API ve
+    komut satırı araçları SelectorEventLoop kullanmalı (Windows VDS'de bulundu)."""
+    import asyncio
+    import inspect
+
+    import uvicorn.config
+
+    from ati_cloud import loop, server
+    from ati_cloud.admin import cli as admin_cli
+    from ati_cloud.licensing import cli as license_cli
+    from ati_cloud.payments import cli as payments_cli
+
+    factory = uvicorn.config.import_from_string(loop.UVICORN_LOOP)
+    assert factory(use_subprocess=False) is asyncio.SelectorEventLoop
+    assert "loop=UVICORN_LOOP" in inspect.getsource(server.main)
+
+    async def answer() -> str:
+        return type(asyncio.get_running_loop()).__name__
+
+    assert loop.run(answer()) in ("_UnixSelectorEventLoop", "_WindowsSelectorEventLoop")
+    for module in (admin_cli, license_cli, payments_cli):
+        source = inspect.getsource(module)
+        assert "asyncio.run(" not in source and "return run(" in source, module.__name__

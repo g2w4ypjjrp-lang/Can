@@ -10,12 +10,12 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 
 from ati_cloud.accounts import Database
 from ati_cloud.admin.context import AdminContext
 from ati_cloud.config import CloudSettings
 from ati_cloud.licensing.service import Licensing
+from ati_cloud.loop import run
 from ati_cloud.payments.service import Payments
 
 
@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     maintain.add_argument("--reconcile-minutes", type=int, default=10)
     maintain.add_argument("--expire-hours", type=int, default=24)
     args = parser.parse_args(argv)
-    return asyncio.run(_maintain(args.reconcile_minutes, args.expire_hours))
+    return run(_maintain(args.reconcile_minutes, args.expire_hours))
 
 
 if __name__ == "__main__":

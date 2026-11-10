@@ -13,6 +13,7 @@ import uvicorn
 
 from ati_cloud.app import create_app
 from ati_cloud.config import CloudSettings
+from ati_cloud.loop import UVICORN_LOOP
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -29,6 +30,8 @@ def main(argv: list[str] | None = None) -> int:
         proxy_headers=settings.forwarded_hops == 0,
         forwarded_allow_ips=settings.trusted_proxies,
         server_header=False,
+        # Windows'ta psycopg asenkron sürücüsü için (ati_cloud/loop.py).
+        loop=UVICORN_LOOP,
         log_level="info",
     )
     return 0

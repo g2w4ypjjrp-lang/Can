@@ -12,7 +12,6 @@ testler içindir. Üretilen anahtarlar yalnızca bir kez ekrana yazılır.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import base64
 import secrets
 import sys
@@ -23,6 +22,7 @@ from ati_cloud.accounts import Database
 from ati_cloud.config import CloudSettings
 from ati_cloud.licensing.lease import key_id
 from ati_cloud.licensing.service import LicenseError, Licensing
+from ati_cloud.loop import run
 
 
 def _gen_secrets() -> int:
@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
         return _gen_secrets()
     if args.command == "public-key":
         return _public_key()
-    return asyncio.run(_issue(args.plan, args.email, args.count))
+    return run(_issue(args.plan, args.email, args.count))
 
 
 if __name__ == "__main__":

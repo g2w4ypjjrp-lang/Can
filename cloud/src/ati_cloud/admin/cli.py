@@ -10,13 +10,13 @@ doğrulama uygulamasını (TOTP) kurar. Diğer yöneticiler panelden davet edili
 from __future__ import annotations
 
 import argparse
-import asyncio
 import sys
 
 from ati_cloud.accounts import Database
 from ati_cloud.admin.admins import create_invited_admin
 from ati_cloud.admin.auth import issue_invite
 from ati_cloud.config import CloudSettings
+from ati_cloud.loop import run
 
 
 async def _invite(email: str, name: str, roles: list[str]) -> int:
@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     invite.add_argument("--name", required=True)
     invite.add_argument("--role", action="append", default=None, help="Varsayılan: super_admin")
     args = parser.parse_args(argv)
-    return asyncio.run(_invite(args.email, args.name, args.role or ["super_admin"]))
+    return run(_invite(args.email, args.name, args.role or ["super_admin"]))
 
 
 if __name__ == "__main__":
