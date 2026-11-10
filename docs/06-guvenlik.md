@@ -97,5 +97,8 @@ yapıldı.
   (dağıtım, G5).
 * **Simülatör ve test modu:** üretimde kapalıdır (testle doğrulanır). Sağlayıcının test
   ortamında gerçek deneme, test hesabı bilgileriyle yapılacak.
+* **Windows'ta açılış beklemesi (açık iş):** motor açılırken olay döngüsü bir kez ~1,4 sn
+  bekliyor (Linux'ta 5 ms). Bu sürede acil durdurma da gecikir. Nedeni Windows CI'daki
+  `--debug-slow` çıktısıyla belirlenip giderilecek; kararlı durumda sorun yok (p99 ~16 ms).
 * **Dış sızma testi:** bu aşamadaki testler kod içinden ve gerçek sunuculara karşı
   otomatiktir. Yayından önce bağımsız bir sızma testi önerilir (canlı ortam, G5).
