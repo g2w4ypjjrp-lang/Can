@@ -428,6 +428,9 @@ Calistir $NpmCmd @("prune", "--omit=dev", "--no-audit", "--no-fund") $webDizin
 New-Item -ItemType Directory -Force -Path (Join-Path $webDizin ".next\cache") | Out-Null
 
 Adim "Dosya izinleri (servis hesabı yalnızca okur; günlük, sertifika ve önbellek klasörlerine yazar)"
+# Node.js yolları çözerken üst klasörü de okur (lstat C:\ATI); yalnızca bu klasörün kendisi için,
+# alt klasörlere geçmeyen okuma izni. Ayarlar klasöründeki dosyaların kendi izinleri vardır.
+& icacls.exe $Kok /grant "*${SidYerelHizmet}:(RX)" /C /Q | Out-Null
 foreach ($k in $Uygulama, "$Kok\python", $Betikler, $Araclar, "$Kok\indir") {
     Izin $k "*${SidYerelHizmet}:(OI)(CI)RX"
 }
