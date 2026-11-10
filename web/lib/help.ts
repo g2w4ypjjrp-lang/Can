@@ -36,6 +36,21 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
+    id: "iki-adimli",
+    title: "Hesabınızda iki adımlı doğrulama",
+    lead: "Parolanız ele geçse bile hesabınızı ve lisans anahtarlarınızı korur. Telefonda bir doğrulama uygulaması gerekir.",
+    steps: [
+      "Müşteri paneli → Güvenlik bölümünde \"Aç\"a basın ve parolanızı girin.",
+      "Google Authenticator, Microsoft Authenticator veya 1Password gibi bir uygulamayla QR kodu okutun.",
+      "Uygulamadaki 6 haneli kodu yazıp Etkinleştir'e basın.",
+      "Gösterilen 10 kurtarma kodunu güvenli bir yere kaydedin; bir daha gösterilmez.",
+    ],
+    notes: [
+      "Telefonunuzu kaybederseniz girişte kod yerine kurtarma kodlarından birini yazın; her kod bir kez çalışır.",
+      "Kapatmak için parolanız ve güncel bir kod (veya kurtarma kodu) gerekir.",
+    ],
+  },
+  {
     id: "binance-demo",
     title: "Binance Demo Trading anahtarı oluşturma",
     lead: "Önce sahte bakiyeyle, gerçek fiyatlarla deneyin. Binance'in test ortamı Demo Trading'e taşındı.",

@@ -642,6 +642,9 @@ def create_admin_manage_router(ctx: AdminContext) -> APIRouter:
             )
             await conn.execute("DELETE FROM customer_tokens WHERE customer_id = %s", (cid,))
             await conn.execute(
+                "DELETE FROM customer_login_challenges WHERE customer_id = %s", (cid,)
+            )
+            await conn.execute(
                 "DELETE FROM email_outbox WHERE to_email = %s AND status <> 'sent'", (email,)
             )
             await conn.execute(
@@ -655,6 +658,8 @@ def create_admin_manage_router(ctx: AdminContext) -> APIRouter:
             await conn.execute(
                 "UPDATE customers SET status = 'deleted', deleted_at = now(), email = %s, "
                 "full_name = NULL, password_hash = NULL, mfa_totp_secret_enc = NULL, "
+                "mfa_enabled_at = NULL, mfa_pending_enc = NULL, mfa_last_counter = NULL, "
+                "mfa_recovery_hashes = '{}', "
                 "marketing_consent = false, country_code = NULL, blocked_at = NULL, "
                 "blocked_reason = NULL WHERE id = %s",
                 (anon, cid),

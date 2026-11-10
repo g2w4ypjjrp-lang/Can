@@ -5,6 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { login, PASSWORD, register, verify } from "./customer";
 import { grantLicense, latestLink, sql, uniqueEmail } from "./db";
+import { TotpDevice } from "./totp";
 
 test("kayıt, doğrulama, giriş, panel ve çıkış", async ({ page, context }) => {
   const email = uniqueEmail("akis");
@@ -97,6 +98,65 @@ test("parola sıfırlama eski parolayı ve oturumları geçersiz kılar", async 
   await login(page, email);
   await expect(page.getByRole("alert").filter({ hasText: "E-posta veya parola hatalı" })).toBeVisible();
   await login(page, email, "Yepyeni-Parola-2026");
+  await expect(page).toHaveURL(/\/panel$/);
+});
+
+test("iki adımlı doğrulama: aç, kodla ve kurtarma koduyla giriş, kapat", async ({ page, context }) => {
+  const email = uniqueEmail("ikiadim");
+  await register(page, email);
+  await verify(page, email);
+  await login(page, email);
+  await expect(page).toHaveURL(/\/panel$/);
+  await expect(page.getByTestId("mfa-state")).toHaveText("Kapalı");
+
+  await page.getByTestId("mfa-start").click();
+  await page.getByLabel("Parolanız").fill("yanlis-parola-2026");
+  await page.getByRole("button", { name: "Devam" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByLabel("Parolanız").fill(PASSWORD);
+  await page.getByRole("button", { name: "Devam" }).click();
+  await expect(page.getByAltText("Doğrulama uygulaması için QR kod")).toBeVisible();
+  const device = new TotpDevice((await page.getByTestId("mfa-secret").textContent())!.trim());
+  await page.getByLabel("Doğrulama kodu").fill(await device.next());
+  await page.getByRole("button", { name: "Etkinleştir" }).click();
+  await expect(page.getByTestId("mfa-recovery-codes").locator("li")).toHaveCount(10);
+  const codes = await page.getByTestId("mfa-recovery-codes").locator("li").allTextContents();
+  await expect(page.getByRole("button", { name: "Tamam" })).toBeDisabled();
+  await page.getByLabel("Kodları güvenli bir yere kaydettim").check();
+  await page.getByRole("button", { name: "Tamam" }).click();
+  await expect(page.getByTestId("mfa-state")).toHaveText("Açık");
+  const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+  expect(axe.violations).toEqual([]);
+
+  // Parola tek başına yetmez: kod adımı gelir, oturum açılmaz.
+  await context.clearCookies();
+  await login(page, email);
+  await expect(page.getByTestId("login-2fa")).toBeVisible();
+  await page.goto("/panel");
+  await expect(page).toHaveURL(/\/giris/);
+  await login(page, email);
+  await page.getByLabel("Doğrulama kodu").fill("000000");
+  await page.getByRole("button", { name: "Doğrula ve giriş yap" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Doğrulama kodu hatalı" })).toBeVisible();
+  await page.getByLabel("Doğrulama kodu").fill(await device.next());
+  await page.getByRole("button", { name: "Doğrula ve giriş yap" }).click();
+  await expect(page).toHaveURL(/\/panel$/);
+
+  // Kurtarma kodu bir kez çalışır.
+  await context.clearCookies();
+  await login(page, email);
+  await page.getByLabel("Doğrulama kodu").fill(codes[0]!);
+  await page.getByRole("button", { name: "Doğrula ve giriş yap" }).click();
+  await expect(page).toHaveURL(/\/panel$/);
+  await expect(page.getByText("Kalan kurtarma kodu: 9.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Kapat" }).click();
+  await page.getByLabel("Parolanız").fill(PASSWORD);
+  await page.getByLabel("Doğrulama kodu").fill(await device.next());
+  await page.getByRole("button", { name: "İki adımlı doğrulamayı kapat" }).click();
+  await expect(page.getByTestId("mfa-state")).toHaveText("Kapalı");
+  await context.clearCookies();
+  await login(page, email);
   await expect(page).toHaveURL(/\/panel$/);
 });
 

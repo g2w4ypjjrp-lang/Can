@@ -18,6 +18,7 @@ Güvenlik kuralları:
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import ipaddress
 import secrets
@@ -38,6 +39,14 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel, EmailStr, Field
 
+from ati_cloud.admin.security import (
+    SecretBox,
+    new_recovery_codes,
+    new_totp_secret,
+    otpauth_uri,
+    recovery_digest,
+    verify_totp,
+)
 from ati_cloud.config import CloudSettings
 
 SESSION_COOKIE = "ati_session"
@@ -232,6 +241,24 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=256)
 
 
+class MfaLoginRequest(BaseModel):
+    challenge: str = Field(min_length=20, max_length=100)
+    code: str = Field(min_length=6, max_length=20)
+
+
+class PasswordConfirm(BaseModel):
+    password: str = Field(min_length=1, max_length=256)
+
+
+class MfaCode(BaseModel):
+    code: str = Field(min_length=6, max_length=20)
+
+
+class MfaDisable(BaseModel):
+    password: str = Field(min_length=1, max_length=256)
+    code: str = Field(min_length=6, max_length=20)
+
+
 class TokenRequest(BaseModel):
     token: str = Field(min_length=20, max_length=200)
 
@@ -340,6 +367,42 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
                 (request.headers.get("user-agent") or "")[:300],
                 Jsonb(details or {}),
             ),
+        )
+
+    async def open_session(
+        conn: psycopg.AsyncConnection[Any], customer_id: Any, request: Request, response: Response
+    ) -> None:
+        token = secrets.token_urlsafe(32)
+        expires = datetime.now(UTC) + timedelta(days=settings.session_days)
+        await conn.execute(
+            "INSERT INTO customer_sessions (customer_id, refresh_token_hash, client_kind, ip, "
+            "user_agent, expires_at) VALUES (%s, %s, 'web', %s, %s, %s)",
+            (
+                customer_id,
+                token_digest(token),
+                client_ip(request),
+                (request.headers.get("user-agent") or "")[:300],
+                expires,
+            ),
+        )
+        await conn.execute(
+            "UPDATE customers SET last_login_at = now() WHERE id = %s", (customer_id,)
+        )
+        await audit(
+            conn,
+            actor_type="customer",
+            actor_id=str(customer_id),
+            action="customer.login",
+            request=request,
+        )
+        response.set_cookie(
+            SESSION_COOKIE,
+            token,
+            max_age=settings.session_days * 86400,
+            httponly=True,
+            secure=settings.session_cookie_secure,
+            samesite="strict",
+            path="/",
         )
 
     async def enqueue_email(
@@ -499,8 +562,8 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
         limited(login_email, email)
         async with db.connection() as conn:
             cur = await conn.execute(
-                "SELECT id, password_hash, status, email_verified_at FROM customers "
-                "WHERE email = %s AND status <> 'deleted'",
+                "SELECT id, password_hash, status, email_verified_at, mfa_enabled_at "
+                "FROM customers WHERE email = %s AND status <> 'deleted'",
                 (email,),
             )
             row = await cur.fetchone()
@@ -536,39 +599,219 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
                     "UPDATE customers SET password_hash = %s WHERE id = %s",
                     (hasher.hash(body.password), row["id"]),
                 )
-            token = secrets.token_urlsafe(32)
-            expires = datetime.now(UTC) + timedelta(days=settings.session_days)
-            await conn.execute(
-                "INSERT INTO customer_sessions (customer_id, refresh_token_hash, client_kind, ip, "
-                "user_agent, expires_at) VALUES (%s, %s, 'web', %s, %s, %s)",
-                (
-                    row["id"],
-                    token_digest(token),
-                    client_ip(request),
-                    (request.headers.get("user-agent") or "")[:300],
-                    expires,
-                ),
+            if row["mfa_enabled_at"] is not None:
+                # Parola doğru ama oturum henüz açılmaz: doğrulama kodu adımı (5 dk, 5 deneme).
+                challenge = secrets.token_urlsafe(32)
+                await conn.execute(
+                    "DELETE FROM customer_login_challenges WHERE customer_id = %s "
+                    "OR expires_at < now()",
+                    (row["id"],),
+                )
+                await conn.execute(
+                    "INSERT INTO customer_login_challenges (token_hash, customer_id, expires_at) "
+                    "VALUES (%s, %s, now() + interval '5 minutes')",
+                    (token_digest(challenge), row["id"]),
+                )
+                return {"status": "mfa_required", "challenge": challenge}
+            await open_session(conn, row["id"], request, response)
+        return {"status": "ok"}
+
+    # --- İki adımlı doğrulama (2FA) -------------------------------------------------------------
+
+    mfa_box = (
+        SecretBox(base64.b64decode(settings.admin_secret_kek.get_secret_value()))
+        if settings.admin_secret_kek
+        else None
+    )
+    mfa_ip = SlidingWindowLimiter(20, 300)
+
+    def box() -> SecretBox:
+        if mfa_box is None:
+            raise HTTPException(
+                status_code=503, detail="İki adımlı doğrulama bu sunucuda yapılandırılmadı"
             )
+        return mfa_box
+
+    def check_password(stored: str | None, password: str) -> None:
+        try:
+            hasher.verify(stored or _DUMMY_HASH, password)
+        except (VerifyMismatchError, VerificationError, InvalidHashError):
+            raise HTTPException(status_code=401, detail="Parola hatalı") from None
+
+    async def verify_second_factor(
+        conn: psycopg.AsyncConnection[Any], customer_id: Any, code: str
+    ) -> str | None:
+        """Kod doğruysa "totp" ya da "recovery" döner (kurtarma kodu harcanır); değilse None."""
+        cur = await conn.execute(
+            "SELECT mfa_totp_secret_enc, mfa_last_counter, mfa_recovery_hashes FROM customers "
+            "WHERE id = %s AND mfa_enabled_at IS NOT NULL FOR UPDATE",
+            (customer_id,),
+        )
+        row = await cur.fetchone()
+        if row is None:
+            return None
+        secret = box().open(bytes(row["mfa_totp_secret_enc"]), f"customer-totp|{customer_id}")
+        counter = verify_totp(secret, code, last_counter=row["mfa_last_counter"])
+        if counter is not None:
             await conn.execute(
-                "UPDATE customers SET last_login_at = now() WHERE id = %s", (row["id"],)
+                "UPDATE customers SET mfa_last_counter = %s WHERE id = %s", (counter, customer_id)
+            )
+            return "totp"
+        digest = recovery_digest(code)
+        remaining = [bytes(h) for h in row["mfa_recovery_hashes"]]
+        if digest in remaining:
+            remaining.remove(digest)
+            await conn.execute(
+                "UPDATE customers SET mfa_recovery_hashes = %s WHERE id = %s",
+                (remaining, customer_id),
+            )
+            return "recovery"
+        return None
+
+    @router.post("/auth/login/2fa")
+    async def login_second_factor(
+        body: MfaLoginRequest, request: Request, response: Response
+    ) -> dict[str, Any]:
+        require_origin(request)
+        limited(mfa_ip, client_ip(request))
+        async with db.connection() as conn:
+            cur = await conn.execute(
+                "SELECT customer_id, attempts FROM customer_login_challenges "
+                "WHERE token_hash = %s AND expires_at > now() FOR UPDATE",
+                (token_digest(body.challenge),),
+            )
+            challenge = await cur.fetchone()
+            if challenge is None:
+                raise HTTPException(
+                    status_code=401, detail="Doğrulama süresi doldu; yeniden giriş yapın"
+                )
+            customer_id = challenge["customer_id"]
+            used = await verify_second_factor(conn, customer_id, body.code)
+            if used is None:
+                if challenge["attempts"] + 1 >= 5:
+                    await conn.execute(
+                        "DELETE FROM customer_login_challenges WHERE token_hash = %s",
+                        (token_digest(body.challenge),),
+                    )
+                else:
+                    await conn.execute(
+                        "UPDATE customer_login_challenges SET attempts = attempts + 1 "
+                        "WHERE token_hash = %s",
+                        (token_digest(body.challenge),),
+                    )
+                await audit(
+                    conn, actor_type="customer", actor_id=str(customer_id),
+                    action="customer.login_mfa_failed", request=request,
+                )  # fmt: skip
+                await conn.commit()
+                raise HTTPException(status_code=401, detail="Doğrulama kodu hatalı")
+            await conn.execute(
+                "DELETE FROM customer_login_challenges WHERE customer_id = %s", (customer_id,)
+            )
+            if used == "recovery":
+                await audit(
+                    conn, actor_type="customer", actor_id=str(customer_id),
+                    action="customer.recovery_code_used", request=request,
+                )  # fmt: skip
+            await open_session(conn, customer_id, request, response)
+        return {"status": "ok"}
+
+    @router.get("/me/2fa")
+    async def mfa_status(customer: dict[str, Any] = customer_dep) -> dict[str, Any]:
+        async with db.connection() as conn:
+            cur = await conn.execute(
+                "SELECT mfa_enabled_at, cardinality(mfa_recovery_hashes) AS recovery_left "
+                "FROM customers WHERE id = %s",
+                (customer["id"],),
+            )
+            row = await cur.fetchone()
+        assert row is not None  # noqa: S101 - oturumdaki müşteri vardır
+        return {
+            "enabled": row["mfa_enabled_at"] is not None,
+            "enabled_at": row["mfa_enabled_at"],
+            "recovery_left": row["recovery_left"] if row["mfa_enabled_at"] else 0,
+            "available": mfa_box is not None,
+        }
+
+    @router.post("/me/2fa/setup")
+    async def mfa_setup(
+        body: PasswordConfirm, request: Request, customer: dict[str, Any] = customer_dep
+    ) -> dict[str, str]:
+        require_origin(request)
+        sealer = box()
+        check_password(customer["password_hash"], body.password)
+        secret = new_totp_secret()
+        async with db.connection() as conn:
+            cur = await conn.execute(
+                "UPDATE customers SET mfa_pending_enc = %s WHERE id = %s "
+                "AND mfa_enabled_at IS NULL RETURNING id",
+                (sealer.seal(secret, f"customer-totp|{customer['id']}"), customer["id"]),
+            )
+            if await cur.fetchone() is None:
+                raise HTTPException(status_code=409, detail="İki adımlı doğrulama zaten açık")
+        return {
+            "secret": base64.b32encode(secret).decode().rstrip("="),
+            "otpauth_uri": otpauth_uri(secret, str(customer["email"])),
+        }
+
+    @router.post("/me/2fa/enable")
+    async def mfa_enable(
+        body: MfaCode, request: Request, customer: dict[str, Any] = customer_dep
+    ) -> dict[str, Any]:
+        require_origin(request)
+        sealer = box()
+        async with db.connection() as conn:
+            cur = await conn.execute(
+                "SELECT mfa_pending_enc FROM customers WHERE id = %s AND mfa_enabled_at IS NULL "
+                "FOR UPDATE",
+                (customer["id"],),
+            )
+            row = await cur.fetchone()
+            if row is None or row["mfa_pending_enc"] is None:
+                raise HTTPException(status_code=409, detail="Önce kurulumu başlatın")
+            pending = bytes(row["mfa_pending_enc"])
+            secret = sealer.open(pending, f"customer-totp|{customer['id']}")
+            counter = verify_totp(secret, body.code, last_counter=None)
+            if counter is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Kod doğrulanamadı; telefonunuzun saatinin doğru olduğundan emin olun",
+                )
+            codes = new_recovery_codes()
+            await conn.execute(
+                "UPDATE customers SET mfa_totp_secret_enc = %s, mfa_pending_enc = NULL, "
+                "mfa_enabled_at = now(), mfa_last_counter = %s, mfa_recovery_hashes = %s "
+                "WHERE id = %s",
+                (pending, counter, [recovery_digest(c) for c in codes], customer["id"]),
             )
             await audit(
-                conn,
-                actor_type="customer",
-                actor_id=str(row["id"]),
-                action="customer.login",
-                request=request,
+                conn, actor_type="customer", actor_id=str(customer["id"]),
+                action="customer.mfa_enabled", request=request,
+            )  # fmt: skip
+        return {"status": "enabled", "recovery_codes": codes}
+
+    @router.post("/me/2fa/disable")
+    async def mfa_disable(
+        body: MfaDisable, request: Request, customer: dict[str, Any] = customer_dep
+    ) -> dict[str, str]:
+        require_origin(request)
+        box()
+        check_password(customer["password_hash"], body.password)
+        async with db.connection() as conn:
+            if await verify_second_factor(conn, customer["id"], body.code) is None:
+                await conn.commit()
+                raise HTTPException(status_code=400, detail="Doğrulama kodu hatalı")
+            await conn.execute(
+                "UPDATE customers SET mfa_enabled_at = NULL, mfa_totp_secret_enc = NULL, "
+                "mfa_pending_enc = NULL, mfa_last_counter = NULL, mfa_recovery_hashes = '{}' "
+                "WHERE id = %s",
+                (customer["id"],),
             )
-        response.set_cookie(
-            SESSION_COOKIE,
-            token,
-            max_age=settings.session_days * 86400,
-            httponly=True,
-            secure=settings.session_cookie_secure,
-            samesite="strict",
-            path="/",
-        )
-        return {"status": "ok"}
+            await audit(
+                conn, actor_type="customer", actor_id=str(customer["id"]),
+                action="customer.mfa_disabled", request=request,
+            )  # fmt: skip
+        return {"status": "disabled"}
 
     @router.post("/auth/logout")
     async def logout(
