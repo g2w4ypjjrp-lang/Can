@@ -99,6 +99,21 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
+    id: "bot-ayarlari",
+    title: "Bot (otomatik işlem) ayarları",
+    lead: "Bot, puanı eşik üstündeki fırsatlarda yalnızca Demo Trading'de işlem açar. Ayarları Spot / Futures işlemler ekranındaki \"Bot ayarları\" kartından değiştirebilirsiniz.",
+    steps: [
+      "En düşük fırsat puanı (50–100): yükseldikçe daha az ama daha seçici işlem açılır.",
+      "İşlem başına risk: zarar durdurda kaybedilecek pay. Risk sınırının üstüne çıkamaz.",
+      "Kaldıraç, saatte en fazla giriş, aynı sembolde bekleme süresi ve piyasaları seçin; Kaydet'e basın.",
+      "Beğenmezseniz \"Varsayılana dön\" ile ilk ayarlara dönebilirsiniz.",
+    ],
+    notes: [
+      "Her işlem yine risk kapısından geçer ve zarar durdur zorunludur.",
+      "Değişiklikler denetim kaydına yazılır. Sonuçlar garanti değildir.",
+    ],
+  },
+  {
     id: "backtest",
     title: "Backtest ve yapay zekâ modeli eğitimi",
     lead: "Stratejileri geçmiş veride, ücret ve kayma dahil deneyin.",

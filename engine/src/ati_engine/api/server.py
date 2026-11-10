@@ -34,6 +34,7 @@ from ati_engine.api.schemas import (
     AnalysisSnapshotResponse,
     AuditEntry,
     AutoTradeRequest,
+    AutoTradeSettingsUpdate,
     BacktestJobInfo,
     BacktestRequest,
     CandlesResponse,
@@ -117,7 +118,8 @@ from ati_engine.backtest.service import BacktestJob, BacktestService
 from ati_engine.core.bus import OverflowPolicy
 from ati_engine.core.events import Event, SystemEvent, encode_event
 from ati_engine.core.models import Market
-from ati_engine.execution.auto import AutoTrader
+from ati_engine.execution.auto import EDITABLE, AutoTrader, merged_settings
+from ati_engine.execution.auto import SETTINGS_KEY as AUTOTRADE_SETTINGS_KEY
 from ati_engine.execution.engine import TakeProfit, TradeIntent
 from ati_engine.execution.service import ExecutionService, ExecutionUnavailable
 from ati_engine.execution.venue import ExecutionBlocked
@@ -173,6 +175,16 @@ Auth = Annotated[None, Depends(require_token)]
 
 
 HistoryBars = Annotated[int, Query(ge=50, le=20_000)]
+
+
+def _first_error(exc: Exception) -> str:
+    """Doğrulama hatasından kullanıcıya gösterilecek ilk açıklama."""
+    if isinstance(exc, ValidationError):
+        errors = exc.errors()
+        if errors:
+            message = str(errors[0].get("msg", ""))
+            return message.removeprefix("Value error, ")
+    return str(exc)
 
 
 def create_app(runtime: EngineRuntime) -> FastAPI:
@@ -1239,6 +1251,36 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             action="autotrade.toggle",
             details={"enabled": body.enabled, "environment": "testnet"},
         )
+        return trader.status()
+
+    @app.post("/v1/autotrade/settings")
+    async def autotrade_settings(body: AutoTradeSettingsUpdate, _: Auth) -> dict[str, Any]:
+        """Bot ayarlarını değiştirir (kalıcı). Risk sınırları aşılamaz; gerçek hesap kilitli."""
+        trader = autotrader_or_404()
+        changes = body.model_dump(mode="json", exclude_none=True)
+        if not changes:
+            raise HTTPException(status_code=422, detail="Değişiklik yok")
+        try:
+            cfg = merged_settings(trader.cfg, trader.limits, changes)
+        except (ValueError, ValidationError) as exc:
+            raise HTTPException(status_code=422, detail=_first_error(exc)) from exc
+        before = {k: v for k, v in trader.cfg.model_dump(mode="json").items() if k in EDITABLE}
+        after = {k: v for k, v in cfg.model_dump(mode="json").items() if k in EDITABLE}
+        await SettingsStore(runtime.db).set(AUTOTRADE_SETTINGS_KEY, after)
+        trader.cfg = cfg
+        await runtime.audit.record(
+            actor=LOCAL_ACTOR,
+            action="autotrade.settings_changed",
+            details={"before": before, "after": after, "environment": "testnet"},
+        )
+        return trader.status()
+
+    @app.post("/v1/autotrade/settings/reset")
+    async def autotrade_settings_reset(_: Auth) -> dict[str, Any]:
+        trader = autotrader_or_404()
+        await SettingsStore(runtime.db).set(AUTOTRADE_SETTINGS_KEY, None)
+        trader.cfg = trader.defaults
+        await runtime.audit.record(actor=LOCAL_ACTOR, action="autotrade.settings_reset")
         return trader.status()
 
     # --- Hata raporları (isteğe bağlı) --------------------------------------------------------

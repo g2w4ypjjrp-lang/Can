@@ -35,7 +35,8 @@ from ati_engine.core.supervisor import RestartPolicy, TaskSupervisor
 from ati_engine.exchange.endpoints import endpoints_for
 from ati_engine.exchange.rate_limit import WeightBudget
 from ati_engine.exchange.rest import BinanceRestClient
-from ati_engine.execution.auto import AutoTrader
+from ati_engine.execution.auto import SETTINGS_KEY as AUTOTRADE_SETTINGS_KEY
+from ati_engine.execution.auto import AutoTrader, merged_settings
 from ati_engine.execution.fills import FillSimulator
 from ati_engine.execution.service import ExecutionService
 from ati_engine.history.archive import INTERVAL_MS
@@ -190,6 +191,7 @@ class Engine:
                 await self._start_paper(runtime)
             if settings.execution.testnet_enabled:
                 self._start_execution(runtime)
+                await self._load_autotrade_settings(runtime)
             await self._start_license(runtime)
             await self._start_remote(runtime)
             await self._start_telegram(runtime)
@@ -282,6 +284,20 @@ class Engine:
         runtime.supervisor.spawn(
             "telegram", notifier.run, RestartPolicy(max_restarts=20, window_s=3600)
         )
+
+    @staticmethod
+    async def _load_autotrade_settings(runtime: EngineRuntime) -> None:
+        """Uygulamada kaydedilen bot ayarları (risk sınırlarını aşan kayıt yok sayılır)."""
+        trader = runtime.autotrader
+        if trader is None:
+            return
+        stored = await SettingsStore(runtime.db).get(AUTOTRADE_SETTINGS_KEY)
+        if not isinstance(stored, dict):
+            return
+        try:
+            trader.cfg = merged_settings(trader.defaults, trader.limits, stored)
+        except ValueError as exc:
+            logger.warning("Kayıtlı bot ayarları uygulanmadı", extra={"error": str(exc)[:200]})
 
     async def _start_crash_reports(self, runtime: EngineRuntime) -> None:
         """İsteğe bağlı hata raporları (varsayılan kapalı; kullanıcı Ayarlar'dan açar)."""

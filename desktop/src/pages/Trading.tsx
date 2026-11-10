@@ -9,6 +9,7 @@ import type {
 } from "../api/types.gen";
 import { Badge, Card, Confirm, DataTable, ErrorBox, Field } from "../components/ui";
 import { MARKET_LABELS, num, price, toNumber, tone } from "../lib/format";
+import { BotSettingsCard } from "./BotSettings";
 
 interface ExecutionStatus {
   trading_mode: string;
@@ -128,6 +129,8 @@ export function Trading() {
         </div>
         <TradeForm enabled={testnetMode} markets={markets} onDone={refreshAll} />
       </div>
+
+      <BotSettingsCard />
 
       <Confirm
         open={closing !== null}

@@ -38,6 +38,35 @@ from ati_engine.scoring.live import OpportunityScored
 
 logger = logging.getLogger(__name__)
 
+# Kullanıcının uygulamadan değiştirebildiği bot ayarları (kalıcı; motor açılışında uygulanır).
+SETTINGS_KEY = "autotrade.settings"
+EDITABLE = (
+    "markets",
+    "min_score",
+    "risk_per_trade_pct",
+    "leverage",
+    "max_entries_per_hour",
+    "symbol_cooldown_s",
+)
+
+
+def merged_settings(
+    base: AutoTradeSettings, limits: RiskLimits, changes: dict[str, Any]
+) -> AutoTradeSettings:
+    """Değişiklikleri temel ayarlara uygular. Risk sınırları üst sınırdır; aşılamaz (ValueError)."""
+    data = base.model_dump(mode="json")
+    data.update({k: v for k, v in changes.items() if k in EDITABLE})
+    cfg = AutoTradeSettings.model_validate(data)
+    if not cfg.markets:
+        raise ValueError("En az bir piyasa seçin")
+    if cfg.risk_per_trade_pct > limits.max_risk_per_trade_pct:
+        raise ValueError(
+            f"İşlem başına risk, risk sınırını (%{limits.max_risk_per_trade_pct}) aşamaz"
+        )
+    if cfg.leverage > limits.max_leverage:
+        raise ValueError(f"Kaldıraç, risk sınırını ({limits.max_leverage}x) aşamaz")
+    return cfg
+
 
 class AutoTrader:
     def __init__(
@@ -50,6 +79,7 @@ class AutoTrader:
         clock: Callable[[], int] | None = None,
     ) -> None:
         self.cfg = settings
+        self.defaults = settings
         self.limits = limits
         self.service = service
         self.trading_mode = trading_mode
@@ -195,6 +225,13 @@ class AutoTrader:
             "enabled": self.enabled,
             "environment": "testnet",
             "settings": self.cfg.model_dump(mode="json"),
+            "defaults": {
+                k: v for k, v in self.defaults.model_dump(mode="json").items() if k in EDITABLE
+            },
+            "limits": {
+                "max_risk_per_trade_pct": str(self.limits.max_risk_per_trade_pct),
+                "max_leverage": self.limits.max_leverage,
+            },
             "stats": dict(self.stats),
             "skipped": dict(self.skipped),
             "entries_last_hour": len(self._entries),

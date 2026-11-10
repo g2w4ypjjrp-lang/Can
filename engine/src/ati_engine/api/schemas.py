@@ -899,6 +899,17 @@ class AutoTradeRequest(BaseModel):
     enabled: bool
 
 
+class AutoTradeSettingsUpdate(BaseModel):
+    """Bot (otomatik işlem) ayarları. Boş bırakılan alan değişmez. Risk sınırları üst sınırdır."""
+
+    markets: list[Market] | None = Field(default=None, max_length=2)
+    min_score: float | None = Field(default=None, ge=50, le=100)
+    risk_per_trade_pct: Decimal | None = Field(default=None, gt=0)
+    leverage: int | None = Field(default=None, ge=1)
+    max_entries_per_hour: int | None = Field(default=None, ge=1, le=20)
+    symbol_cooldown_s: float | None = Field(default=None, ge=60, le=86_400)
+
+
 # --- Lisans (Aşama 15) ---------------------------------------------------------------------------
 
 

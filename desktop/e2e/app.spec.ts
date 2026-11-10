@@ -277,3 +277,22 @@ test("hata raporları varsayılan kapalı; ne gönderildiği açıklanır, açı
   await card.getByTestId("crash-toggle").click();
   await expect(card.getByTestId("crash-state")).toHaveText("Kapalı");
 });
+
+test("bot ayarları: risk sınırı aşılamaz, kaydedilir ve varsayılana döner", async ({ page }) => {
+  await open(page, "trading");
+  const card = page.getByTestId("bot-settings");
+  await expect(card.getByTestId("bot-min-score")).toHaveValue("70");
+  await card.getByTestId("bot-risk").fill("0,9");
+  await card.getByTestId("bot-save").click();
+  await expect(card).toContainText("risk sınırını");
+  await card.getByTestId("bot-risk").fill("0,4");
+  await card.getByTestId("bot-min-score").fill("85");
+  await card.getByTestId("bot-market-spot").check();
+  await card.getByTestId("bot-save").click();
+  await expect(card.getByTestId("bot-message")).toContainText("Kaydedildi");
+  await page.reload();
+  await expect(page.getByTestId("bot-settings").getByTestId("bot-min-score")).toHaveValue("85");
+  await expect(page.getByTestId("bot-settings").getByTestId("bot-market-spot")).toBeChecked();
+  await page.getByTestId("bot-settings").getByTestId("bot-reset").click();
+  await expect(page.getByTestId("bot-settings").getByTestId("bot-min-score")).toHaveValue("70");
+});
