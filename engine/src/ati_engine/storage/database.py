@@ -91,10 +91,15 @@ class Database:
         if self._path != ":memory:":
             Path(self._path).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self._path, isolation_level=None, check_same_thread=True)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        conn.execute("PRAGMA busy_timeout=5000")
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("PRAGMA busy_timeout=5000")
+        except BaseException:
+            # Bozuk/uygunsuz dosyada bağlantı açık kalmasın (Windows'ta dosyayı kilitli tutar).
+            conn.close()
+            raise
         self._conn = conn
         self._thread_id = threading.get_ident()
 

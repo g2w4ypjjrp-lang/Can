@@ -238,7 +238,7 @@ async def run(args: argparse.Namespace) -> int:
     exchange.prices.update({"BTCUSDT": Decimal(100), "ETHUSDT": Decimal(50)})
     licensing = await FakeLicenseServer().start()
     seconds = args.hours * 3600 + args.minutes * 60
-    with tempfile.TemporaryDirectory(prefix="ati-soak-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="ati-soak-", ignore_cleanup_errors=True) as tmp:
         data_dir = Path(tmp) / "data"
         settings = EngineSettings(
             data_dir=data_dir,
@@ -328,6 +328,11 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    # Windows konsolu varsayılan olarak cp1252 kullanır; Türkçe çıktı çökmesin.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description="Motor dayanıklılık testi")
     parser.add_argument("--hours", type=float, default=0)
     parser.add_argument("--minutes", type=float, default=0)

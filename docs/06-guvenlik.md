@@ -72,7 +72,7 @@ kuralları tüm rotalarda otomatik denenir; yeni uç nokta sınıflandırılmada
 bağımlılık ve gizli bilgi taraması, yük testi, dayanıklılık testi ve felaket kurtarma tatbikatı
 yapıldı.
 
-**Bu aşamada bulunan ve düzeltilen gerçek hatalar:**
+**Bu aşamada bulunan ve düzeltilen gerçek hatalar (9):**
 
 | # | Bulgu | Etki | Düzeltme |
 |---|---|---|---|
@@ -84,6 +84,7 @@ yapıldı.
 | 6 | Bağlantı havuzunun ilk eşzamanlı istekte açılması yarışı | Yeniden başlatmadan hemen sonra gelen ilk istekler 500 | Kilitli açılış; havuz boyutu ayarlanabilir |
 | 7 | Uzaktan kontrol mesajları şifresizdi | Aktarma işletmecisi özetleri okuyabilirdi | Uçtan uca şifreleme |
 | 8 | Lighthouse CI aracının bağımlılıklarında 16 bilinen açık (geliştirme aracı) | Yalnızca CI makinesi | Araç güncellendi; kalan paket sabitlendi |
+| 9 | Motor veritabanı açılışı başarısız olunca (bozuk dosya) SQLite bağlantısı açık kalıyordu | Windows'ta dosya kilitli kalır (bozuk yedek silinemez/değiştirilemez) | Hata yolunda bağlantı kapatılır; Windows CI dayanıklılık/yedek işinde bulundu, gerileme testi |
 
 **Kalan riskler ve önlemleri (bilinçli olarak kabul edilen veya onaya bağlı):**
 

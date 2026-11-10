@@ -908,13 +908,13 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
 
 | Kriter | Sonuç |
 |---|---|
-| Tehdit modeli gözden geçirme | ✅ `docs/06`: varlık/tehdit tablosu güncellendi, Aşama 18 bulguları (8 gerçek hata) ve kalan riskler |
+| Tehdit modeli gözden geçirme | ✅ `docs/06`: varlık/tehdit tablosu güncellendi, Aşama 18 bulguları (9 gerçek hata) ve kalan riskler |
 | Bağımlılık taraması (SCA) | ✅ 0 bilinen açık (Python, npm, Rust). Rust'ta 5 bilgi uyarısı Tauri'nin Linux GTK/D-Bus yığınından; Windows ürününe derlenmez |
 | Gizli bilgi taraması | ✅ İzlenen dosyalar ve tüm git geçmişi: 0 bulgu (tarayıcı öz sınaması geçer) |
-| Sızma testi (otomatik) | ✅ Bulut 13 + motor 5 test; bulunan 4 açık düzeltildi. Bulut toplamı 160, motor 508 test (+2 platforma özel) |
+| Sızma testi (otomatik) | ✅ Bulut 13 + motor 5 test; bulunan 4 açık düzeltildi. Bulut toplamı 160, motor 509 test (+2 platforma özel) |
 | Yük testi | ✅ 4 çekirdek, tek API süreci: 200 motor eşzamanlı etkinleştirme p95 251 ms; 1.000 kira yenileme saniyede 299, p95 461 ms (50 eşzamanlı); herkese açık okumalar p95 372 ms; aktarma 50 motor + 50 telefon, 1.000 gidiş-dönüş, p95 7,7 ms; **0 hata**. Kira yenileme 6 saatte bir yapıldığından tek süreç kapasitesi ihtiyacın çok üzerinde. İlk çalıştırma soğuk başlangıç hatasını buldu (düzeltildi) |
-| Motor dayanıklılığı | ✅ 20 dakika (Linux): bellek ve görev sayısı sabit, olay döngüsü gecikmesi p99 < 10 ms, 0 API hatası, acil durdurma ~16 ms. CI'da her gönderimde Windows + Linux 3 dk. ⏸️ 24 saatlik test hedef Windows bilgisayarda (komut hazır) |
-| Felaket kurtarma tatbikatı | ✅ Bulut: 31 tablo, satır sayıları aynı; denetim zinciri sağlam ve son özet aynı; değiştirilemezlik tetikleyicileri çalışıyor; sayaçlar devam ediyor; motor aynı anahtarla kira yeniliyor; müşteri oturumu ve tam anahtar erişimi yerinde; yanlış KEK ile anahtarlar açılamıyor. Motor: 5 test (çalışırken yedek, çalışırken geri yükleme reddi, geri yükleme, eski yedeklerin temizlenmesi, bozuk yedek reddi) |
+| Motor dayanıklılığı | ✅ 20 dakika (Linux): 20.154 API isteği, 1.246 canlı olay; bellek +%0,5, Python yığını +%1,2, görev sayısı sabit (72), olay döngüsü gecikmesi p99 en çok 6,7 ms, 0 API hatası, acil durdurma 19,9 ms. CI'da her gönderimde Windows + Linux 3 dk; Windows çalıştırması bir dosya kilidi hatasını buldu (`docs/06` §6 #9). ⏸️ 24 saatlik test hedef Windows bilgisayarda (komut hazır) |
+| Felaket kurtarma tatbikatı | ✅ Bulut: 31 tablo, satır sayıları aynı; denetim zinciri sağlam ve son özet aynı; değiştirilemezlik tetikleyicileri çalışıyor; sayaçlar devam ediyor; motor aynı anahtarla kira yeniliyor; müşteri oturumu ve tam anahtar erişimi yerinde; yanlış KEK ile anahtarlar açılamıyor. Motor: 6 test (çalışırken yedek, çalışırken geri yükleme reddi, geri yükleme, eski yedeklerin temizlenmesi, bozuk yedek reddi, başarısız açılışta dosyanın bırakılması) |
 | Dış sızma testi | ⏸️ Canlı ortam kurulunca (G5) bağımsız bir ekiple önerilir |
 
 ## Açık kararlar (sizden bilgi gerekecek)

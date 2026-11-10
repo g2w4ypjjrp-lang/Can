@@ -123,3 +123,18 @@ async def test_database_backup_is_consistent_snapshot(tmp_path: Path) -> None:
     row = await copy.fetchone("SELECT count(*), sum(x) FROM t")
     await copy.close()
     assert row == (1000, sum(range(1000)))
+
+
+async def test_failed_open_releases_the_file(tmp_path: Path) -> None:
+    """Bozuk dosyada açılış başarısız olunca bağlantı kapanmalı (Windows dosyayı kilitli tutar;
+    Aşama 18'de Windows CI'da bulundu)."""
+    import sqlite3
+
+    bad = tmp_path / "bozuk.db"
+    bad.write_bytes(b"SQLite format 3\x00" + b"x" * 4096)
+    db = Database(bad)
+    with pytest.raises(sqlite3.DatabaseError):
+        await db.open()
+    await db.close()
+    bad.unlink()  # Windows'ta bağlantı açık kalsaydı PermissionError verirdi
+    assert not bad.exists()
