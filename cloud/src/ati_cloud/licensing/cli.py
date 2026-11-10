@@ -44,7 +44,7 @@ async def _issue(plan: str, email: str | None, count: int) -> int:
     if licensing is None:
         print("Lisans gizli değerleri tanımlı değil (gen-secrets)", file=sys.stderr)
         return 2
-    db = Database(settings.database_url.get_secret_value())
+    db = Database(settings.database_dsn)
     try:
         async with db.connection() as conn:
             customer_id = None

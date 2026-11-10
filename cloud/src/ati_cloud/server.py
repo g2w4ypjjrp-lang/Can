@@ -25,7 +25,8 @@ def main(argv: list[str] | None = None) -> int:
         create_app(settings),
         host=args.host,
         port=args.port,
-        proxy_headers=True,
+        # ATI_FORWARDED_HOPS kullanılıyorsa adres uygulamada çözülür (accounts.client_ip).
+        proxy_headers=settings.forwarded_hops == 0,
         forwarded_allow_ips=settings.trusted_proxies,
         server_header=False,
         log_level="info",

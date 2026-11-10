@@ -1,5 +1,8 @@
 # Üretim yapılandırması — canarslan.net.tr
 
+> **Adım adım yayına alma (Render + Cloudflare):** [`render.md`](render.md). Tek seferlik kurulum
+> dosyası: [`../render.yaml`](../render.yaml).
+
 Alan adı belirlendi: **`canarslan.net.tr`**. Bulut sağlayıcısı, bölge ve üretime dağıtım **G5
 onayı** ile yapılacaktır; bu klasör o güne kadar hedef yapıyı ve gizli bilgi içermeyen ayar
 örneklerini tutar.

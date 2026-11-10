@@ -21,7 +21,7 @@ from ati_cloud.config import CloudSettings
 
 async def _invite(email: str, name: str, roles: list[str]) -> int:
     settings = CloudSettings()
-    db = Database(settings.database_url.get_secret_value())
+    db = Database(settings.database_dsn)
     try:
         async with db.connection() as conn:
             await conn.execute("SELECT set_config('ati.actor_type', 'system', false)")

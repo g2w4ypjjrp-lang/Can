@@ -90,6 +90,16 @@ yapıldı.
 
 **Kalan riskler ve önlemleri (bilinçli olarak kabul edilen veya onaya bağlı):**
 
+* **Render iç ağında veritabanı TLS'i sertifika doğrulamasız (`sslmode=require`).** Render iç
+  bağlantıları kendinden imzalı sertifika kullanır; `verify-full` mümkün değildir. Trafik
+  şifrelidir, sunucu kimliği doğrulanmaz. Önlem: veritabanına dışarıdan bağlantı kapalı
+  (`ipAllowList: []`), `require` yalnızca `ATI_DATABASE_SSLMODE` ile açıkça seçilebilir (adresteki
+  zayıf kip üretimde reddedilir). Sertifika doğrulamalı bağlantı sunan bir sağlayıcıya geçişte
+  ayar kaldırılır.
+* **İstemci adresi yük dengeleyicinin `X-Forwarded-For` değerinden (`ATI_FORWARDED_HOPS`).**
+  Render vekil adreslerini yayınlamaz; sağdan n'inci değer alınır (istemcinin eklediği sahte
+  değerler yok sayılır, test edildi). Yayından sonra denetim kaydındaki adres, yöneticinin gerçek
+  adresiyle karşılaştırılarak doğrulanır (`deploy/render.md` §7).
 * **Kullanıcı bilgisayarının ele geçirilmesi:** DPAPI, aynı Windows kullanıcısıyla çalışan
   kötü amaçlı yazılımı durduramaz. Önlem: para çekme yetkili anahtar reddedilir, IP kısıtı
   önerilir, gerçek hesap ayrı onay ister (G1/G2).

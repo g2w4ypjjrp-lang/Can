@@ -1,0 +1,152 @@
+# Render Blueprint — canarslan.net.tr üretim ortamı (G5). VDS yok: yönetilen kapsayıcılar.
+#
+# Kurulum adımları (hesap, DNS, ilk yönetici): deploy/render.md
+#
+# * Bölge: Frankfurt (AB). Müşteri verisi yurt dışında tutulur; KVKK değerlendirmesi gerekir.
+# * Gizli değerler (lisans ve yönetici anahtarları) Render tarafından rastgele üretilir
+#   (256 bit, base64) ve depoya yazılmaz. Üretildikten sonra güvenli bir yere yedeklenmelidir:
+#   kaybedilirse veritabanı yedeğindeki lisans anahtarları açılamaz.
+# * Canlı ödeme kapalıdır (ATI_PAYMENTS_LIVE_ALLOWED=false); açmak G3 onayı ister.
+# * Otomatik dağıtım yalnızca GitHub denetimleri (CI) geçtiğinde yapılır.
+
+envVarGroups:
+  - name: ati-gizli
+    envVars:
+      - key: ATI_LICENSE_PEPPER
+        generateValue: true
+      - key: ATI_LICENSE_KEK
+        generateValue: true
+      - key: ATI_LEASE_SIGNING_KEY
+        generateValue: true
+      - key: ATI_ADMIN_SECRET_KEK
+        generateValue: true
+
+  - name: ati-bulut-ayarlari
+    envVars:
+      - key: ATI_ENVIRONMENT
+        value: production
+      # Render iç ağı kendinden imzalı sertifika kullanır: şifreli bağlantı, sertifika doğrulamasız
+      # (docs/06, kalan riskler). Veritabanına dışarıdan bağlantı kapalıdır (ipAllowList: []).
+      - key: ATI_DATABASE_SSLMODE
+        value: require
+      - key: ATI_PUBLIC_WEB_URL
+        value: https://canarslan.net.tr
+      - key: ATI_WEB_ORIGINS
+        value: '["https://canarslan.net.tr"]'
+      - key: ATI_SESSION_COOKIE_SECURE
+        value: "true"
+      - key: ATI_ADMIN_PUBLIC_URL
+        value: https://admin.canarslan.net.tr
+      - key: ATI_ADMIN_ORIGINS
+        value: '["https://admin.canarslan.net.tr"]'
+      - key: ATI_PUBLIC_API_URL
+        value: https://api.canarslan.net.tr
+      - key: ATI_PAYMENTS_LIVE_ALLOWED
+        value: "false"
+      # İstemci adresi: Render yük dengeleyicisinin eklediği X-Forwarded-For değeri (yayından sonra
+      # denetim kaydındaki adresle doğrulanır; deploy/render.md).
+      - key: ATI_FORWARDED_HOPS
+        value: "1"
+      - key: ATI_RELEASE_DOWNLOAD_HOSTS
+        value: '["indir.canarslan.net.tr","canarslan.net.tr"]'
+
+databases:
+  - name: ati-db
+    databaseName: ati
+    user: ati_app
+    region: frankfurt
+    plan: 0.1c-256mb
+    postgresMajorVersion: "16"
+    ipAllowList: []
+
+services:
+  # Hesap, lisans, ödeme ve yönetim API'si. Her dağıtımdan önce veritabanı geçişleri çalışır.
+  - type: web
+    name: ati-api
+    runtime: docker
+    region: frankfurt
+    plan: 0.5c-512mb
+    dockerfilePath: ./cloud/Dockerfile
+    dockerContext: ./cloud
+    dockerCommand: ati-cloud-api --host 0.0.0.0 --port 10000
+    preDeployCommand: ati-cloud-migrate
+    healthCheckPath: /ready
+    autoDeployTrigger: checksPass
+    domains:
+      - api.canarslan.net.tr
+    envVars:
+      - fromGroup: ati-gizli
+      - fromGroup: ati-bulut-ayarlari
+      - key: ATI_DATABASE_URL
+        fromDatabase:
+          name: ati-db
+          property: connectionString
+
+  # iPhone ↔ masaüstü aktarma servisi (WebSocket). Motor ve telefon aynı süreçte buluşur:
+  # tek örnek çalışmalıdır. Mesajlar uçtan uca şifrelidir; servis anahtar tutmaz.
+  - type: web
+    name: ati-relay
+    runtime: docker
+    region: frankfurt
+    plan: 0.5c-512mb
+    numInstances: 1
+    dockerfilePath: ./cloud/Dockerfile
+    dockerContext: ./cloud
+    dockerCommand: ati-cloud-relay --host 0.0.0.0 --port 10000
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 60
+    domains:
+      - relay.canarslan.net.tr
+
+  # Web sitesi, müşteri paneli ve yönetim paneli (admin.canarslan.net.tr). www → kök alan adına
+  # yönlendirilir.
+  - type: web
+    name: ati-web
+    runtime: docker
+    region: frankfurt
+    plan: 0.5c-512mb
+    dockerfilePath: ./web/Dockerfile
+    dockerContext: ./web
+    healthCheckPath: /robots.txt
+    autoDeployTrigger: checksPass
+    domains:
+      - canarslan.net.tr
+      - admin.canarslan.net.tr
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: ATI_ENVIRONMENT
+        value: production
+      - key: ATI_PUBLIC_WEB_URL
+        value: https://canarslan.net.tr
+      - key: ATI_PUBLIC_API_URL
+        value: https://api.canarslan.net.tr
+      - key: ATI_API_URL
+        value: https://api.canarslan.net.tr
+      - key: ATI_PLANS_REVALIDATE_S
+        value: "300"
+      - key: ATI_ADMIN_HOST
+        value: admin.canarslan.net.tr
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+
+  # Ödeme bakımı: dönmeyen iyzico ödemelerini sorgular, 24 saati geçen ödenmemiş siparişleri iptal
+  # eder (10 dakikada bir).
+  - type: cron
+    name: ati-odeme-bakimi
+    runtime: docker
+    region: frankfurt
+    plan: 0.5c-512mb
+    schedule: "*/10 * * * *"
+    dockerfilePath: ./cloud/Dockerfile
+    dockerContext: ./cloud
+    dockerCommand: ati-cloud-payments maintain
+    autoDeployTrigger: checksPass
+    envVars:
+      - fromGroup: ati-gizli
+      - fromGroup: ati-bulut-ayarlari
+      - key: ATI_DATABASE_URL
+        fromDatabase:
+          name: ati-db
+          property: connectionString

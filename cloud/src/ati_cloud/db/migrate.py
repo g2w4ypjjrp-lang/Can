@@ -18,6 +18,8 @@ from importlib import resources
 
 import psycopg
 
+from ati_cloud.config import effective_dsn
+
 _MIGRATION_RE = re.compile(r"^(\d{4})_([a-z0-9_]+)\.sql$")
 _LOCK_ID = 0x41544901  # "ATI" + 1
 
@@ -116,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     if not dsn:
         print("ATI_DATABASE_URL tanımlı değil", file=sys.stderr)
         return 2
+    dsn = effective_dsn(dsn, os.environ.get("ATI_DATABASE_SSLMODE") or None)
     if args.check:
         with psycopg.connect(dsn, autocommit=True) as conn:
             todo = pending(conn, load_migrations())

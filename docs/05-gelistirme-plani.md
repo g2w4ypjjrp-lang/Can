@@ -936,7 +936,14 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
 - Masaüstü CI işi kurulum paketinin SHA-256 ve boyutunu `.sha256` dosyası ve iş özeti olarak
   üretir (Sürümler sayfasına girilecek değerler).
 
-Testler: bulut 174 (sürümler 15), web birim 43, uçtan uca yönetici + sayfalar 25 (sürüm yayınla →
+- **Yayın hedefi: Render (Frankfurt) + Cloudflare** (alan adı Cloudflare'de). `render.yaml`
+  (Render şemasıyla doğrulandı): site, API (dağıtım öncesi geçişler), aktarma (tek örnek), ödeme
+  bakımı (10 dk), PostgreSQL 16 (dışarıya kapalı); gizli anahtarlar Render'da üretilir. İndirme
+  dosyaları Cloudflare R2 (`indir.canarslan.net.tr`). Adım adım rehber: `deploy/render.md`.
+  Platforma uyum: `ATI_DATABASE_SSLMODE` (iç ağda `require`, yalnızca açık seçimle) ve
+  `ATI_FORWARDED_HOPS` (istemci adresi); aynı ayarlar üretim kipinde yerelde denendi.
+
+Testler: bulut 176 (sürümler 15, platform ayarları 2), web birim 43, uçtan uca yönetici + sayfalar 25 (sürüm yayınla →
 İndir sayfasında görünür → geri çek; `/indir` erişilebilirlik 0 ihlal).
 
 ## Açık kararlar (sizden bilgi gerekecek)

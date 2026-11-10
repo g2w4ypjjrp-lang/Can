@@ -52,7 +52,7 @@ Settings = Annotated[CloudSettings, Depends(get_settings)]
 
 def create_app(settings: CloudSettings | None = None) -> FastAPI:
     cfg = settings or CloudSettings()
-    db = Database(cfg.database_url.get_secret_value(), max_size=cfg.database_pool_max)
+    db = Database(cfg.database_dsn, max_size=cfg.database_pool_max)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -105,9 +105,7 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
     async def ready(cfg: Settings) -> JSONResponse:
         """Hazırlık: veritabanı erişilebilir ve şema güncel mi?"""
         try:
-            outstanding = await asyncio.to_thread(
-                _check_database, cfg.database_url.get_secret_value()
-            )
+            outstanding = await asyncio.to_thread(_check_database, cfg.database_dsn)
         except Exception as exc:
             return JSONResponse(
                 status_code=503,

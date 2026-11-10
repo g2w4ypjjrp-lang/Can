@@ -8,10 +8,18 @@ Manager) ortam değişkeni olarak enjekte edilir; depoya asla yazılmaz.
 from __future__ import annotations
 
 from typing import Literal, Self
-from urllib.parse import parse_qs, urlparse
 
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+SslMode = Literal["verify-full", "verify-ca", "require"]
+
+
+def effective_dsn(dsn: str, sslmode: str | None) -> str:
+    """Bağlantı adresi + (verilirse) TLS kipi. Yönetilen platformlar bağlantı adresini hazır verir;
+    kip ayrı ayarla eklenir (adres değiştirilmeden)."""
+    return dsn if sslmode is None else make_conninfo(dsn, sslmode=sslmode)
 
 
 class CloudSettings(BaseSettings):
@@ -19,6 +27,11 @@ class CloudSettings(BaseSettings):
 
     environment: Literal["development", "test", "staging", "production"] = "development"
     database_url: SecretStr
+    # Veritabanı TLS kipi (bağlantı adresindekinin yerine geçer). Üretimde sertifika doğrulamalı
+    # TLS (verify-full) zorunludur. Yönetilen platformun özel ağında sunucu sertifikası kendinden
+    # imzalıysa (ör. Render iç bağlantısı) "require" yalnızca burada açıkça seçilerek
+    # kullanılabilir: trafik şifrelidir, sunucu kimliği doğrulanmaz (docs/06, kalan riskler).
+    database_sslmode: SslMode | None = None
     # Süreç başına veritabanı bağlantı havuzu (yük testine göre ayarlanır; docs/05 Aşama 18).
     database_pool_max: int = Field(default=10, ge=2, le=100)
     # Web sitesi (Aşama 14): oturum çerezini kullanan istekler yalnızca bu kökenlerden kabul edilir.
@@ -28,6 +41,10 @@ class CloudSettings(BaseSettings):
     session_days: int = 30
     # İstemci adresini X-Forwarded-For'dan almaya yetkili vekiller (yük dengeleyici).
     trusted_proxies: list[str] = ["127.0.0.1"]
+    # İç adresleri bilinmeyen yük dengeleyici arkasında (yönetilen platform): önündeki vekil
+    # sayısı. 0 değilse istemci adresi X-Forwarded-For'un sağdan bu kadarıncı değeridir; istemcinin
+    # eklediği soldaki (sahte olabilecek) değerler yok sayılır. 0 ise ATI_TRUSTED_PROXIES geçerli.
+    forwarded_hops: int = Field(default=0, ge=0, le=5)
 
     # Lisans sistemi (Aşama 15). Gizli değerler base64; gizli bilgi deposundan verilir.
     # Üretmek için: ``uv run ati-cloud-license gen-secrets``.
@@ -54,6 +71,10 @@ class CloudSettings(BaseSettings):
     # İndirme sayfası: Windows kurulum paketinin bulunabileceği alan adları. Yönetici paneli
     # (oturumu ele geçirilse bile) indirme bağlantısını başka bir siteye yönlendiremez.
     release_download_hosts: list[str] = ["canarslan.net.tr", "indir.canarslan.net.tr"]
+
+    @property
+    def database_dsn(self) -> str:
+        return effective_dsn(self.database_url.get_secret_value(), self.database_sslmode)
 
     @property
     def licensing_configured(self) -> bool:
@@ -89,11 +110,12 @@ class CloudSettings(BaseSettings):
                     "staging/production ortamında lisans gizli değerleri zorunludur "
                     "(ATI_LICENSE_PEPPER, ATI_LICENSE_KEK, ATI_LEASE_SIGNING_KEY)"
                 )
-            url = urlparse(self.database_url.get_secret_value())
-            sslmode = parse_qs(url.query).get("sslmode", [""])[0]
-            if sslmode not in ("verify-full", "verify-ca"):
+            sslmode = conninfo_to_dict(self.database_dsn).get("sslmode")
+            private_network = sslmode == "require" and self.database_sslmode == "require"
+            if sslmode not in ("verify-full", "verify-ca") and not private_network:
                 raise ValueError(
                     "staging/production ortamında veritabanı bağlantısı sertifika doğrulamalı "
-                    "TLS kullanmalı (sslmode=verify-full)"
+                    "TLS kullanmalı (sslmode=verify-full; yönetilen platformun özel ağında "
+                    "ATI_DATABASE_SSLMODE=require)"
                 )
         return self

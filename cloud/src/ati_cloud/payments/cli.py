@@ -21,7 +21,7 @@ from ati_cloud.payments.service import Payments
 
 async def _maintain(reconcile_minutes: int, expire_hours: int) -> int:
     settings = CloudSettings()
-    db = Database(settings.database_url.get_secret_value())
+    db = Database(settings.database_dsn)
     licensing = Licensing.from_settings(settings)
     payments = Payments.build(
         settings, db, licensing, AdminContext.build(settings, db, licensing).box

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ipaddress
 import secrets
 import time
 import uuid
@@ -132,9 +133,31 @@ class SlidingWindowLimiter:
 
 
 def client_ip(request: Request) -> str:
-    """İstemci adresi. Güvenilen vekil sunucu arkasında uvicorn ``X-Forwarded-For``'dan çözer
-    (``ATI_TRUSTED_PROXIES``); başlık başka yerden gelirse yok sayılır."""
-    return request.client.host if request.client else "0.0.0.0"  # noqa: S104
+    """İstemci adresi (hız sınırı, denetim kaydı).
+
+    * ``ATI_FORWARDED_HOPS`` = 0: güvenilen vekil arkasında uvicorn ``X-Forwarded-For``'u çözer
+      (``ATI_TRUSTED_PROXIES``); başlık başka yerden gelirse yok sayılır.
+    * ``ATI_FORWARDED_HOPS`` = n > 0 (iç adresleri bilinmeyen yük dengeleyici): başlığın sağdan
+      n'inci değeri alınır. Vekiller kendi gördükleri adresi sona ekler; istemcinin gönderdiği
+      sahte değerler solda kalır ve yok sayılır.
+    """
+    peer = request.client.host if request.client else "0.0.0.0"  # noqa: S104
+    settings = getattr(request.app.state, "settings", None)
+    hops = getattr(settings, "forwarded_hops", 0)
+    if not hops:
+        return peer
+    chain = [
+        part.strip()
+        for header in request.headers.getlist("x-forwarded-for")
+        for part in header.split(",")
+        if part.strip()
+    ]
+    if len(chain) < hops:
+        return peer
+    try:
+        return str(ipaddress.ip_address(chain[-hops]))
+    except ValueError:
+        return peer
 
 
 def check_origin(settings: CloudSettings, request: Request) -> None:

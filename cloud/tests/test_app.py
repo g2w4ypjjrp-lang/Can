@@ -79,6 +79,28 @@ def test_production_requires_verified_tls() -> None:
     )
 
 
+def test_private_network_tls_must_be_chosen_explicitly() -> None:
+    """Yönetilen platformun özel ağı (kendinden imzalı sertifika): ``require`` yalnızca açık ayarla."""
+    internal = SecretStr("postgresql://ati:gizli@dpg-abc-a/ati")
+    with pytest.raises(ValidationError, match="TLS"):
+        CloudSettings(environment="production", database_url=internal, **SITE)
+    settings = CloudSettings(
+        environment="production", database_url=internal, database_sslmode="require", **SITE
+    )
+    assert "sslmode=require" in settings.database_dsn
+    assert "host=dpg-abc-a" in settings.database_dsn and "password=gizli" in settings.database_dsn
+    # Geçersiz kip kabul edilmez; ayar adresteki zayıf kipi de geçersiz kılar.
+    with pytest.raises(ValidationError):
+        CloudSettings(
+            environment="production", database_url=internal, database_sslmode="disable", **SITE
+        )
+    weak = SecretStr("postgresql://u@db/x?sslmode=disable")
+    strict = CloudSettings(
+        environment="production", database_url=weak, database_sslmode="verify-full", **SITE
+    )
+    assert "sslmode=verify-full" in strict.database_dsn and "disable" not in strict.database_dsn
+
+
 def test_production_requires_admin_kek_and_https_admin() -> None:
     dsn = SecretStr("postgresql://u@db/x?sslmode=verify-full")
     without_kek = {k: v for k, v in SITE.items() if k != "admin_secret_kek"}
@@ -140,3 +162,27 @@ def test_production_example_settings_are_valid(monkeypatch: pytest.MonkeyPatch) 
     assert cfg.session_cookie_secure is True
     assert cfg.admin_origins == ["https://admin.canarslan.net.tr"]
     assert cfg.payments_live_allowed is False  # canlı ödeme G3 onayına kadar kapalı
+
+
+def test_client_ip_with_forwarded_hops() -> None:
+    """Yük dengeleyici arkasında istemci adresi: X-Forwarded-For'un sağdan n'inci değeri; istemcinin
+    eklediği sahte değerler (solda) hız sınırını atlatmak için kullanılamaz."""
+    from types import SimpleNamespace
+
+    from starlette.requests import Request
+
+    from ati_cloud.accounts import client_ip
+
+    def request(values: list[str], hops: int, peer: str = "10.1.2.3") -> Request:
+        app = SimpleNamespace(state=SimpleNamespace(settings=SimpleNamespace(forwarded_hops=hops)))
+        headers = [(b"x-forwarded-for", v.encode()) for v in values]
+        return Request({"type": "http", "headers": headers, "client": (peer, 1234), "app": app})
+
+    assert client_ip(request(["203.0.113.7"], 0)) == "10.1.2.3"  # 0: uvicorn çözer
+    assert client_ip(request(["203.0.113.7"], 1)) == "203.0.113.7"
+    assert client_ip(request(["1.1.1.1, 203.0.113.7"], 1)) == "203.0.113.7"  # sahte sol değer
+    assert client_ip(request(["1.1.1.1", "203.0.113.7"], 1)) == "203.0.113.7"  # iki başlık
+    assert client_ip(request(["203.0.113.7, 198.51.100.2"], 2)) == "203.0.113.7"
+    assert client_ip(request(["2001:db8::1"], 1)) == "2001:db8::1"
+    assert client_ip(request([], 1)) == "10.1.2.3"
+    assert client_ip(request(["bozuk-deger"], 1)) == "10.1.2.3"
