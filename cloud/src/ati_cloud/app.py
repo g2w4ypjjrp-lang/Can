@@ -33,6 +33,7 @@ from ati_cloud.licensing.service import Licensing
 from ati_cloud.payments.api import create_admin_payments_router, create_payments_router
 from ati_cloud.payments.service import Payments
 from ati_cloud.releases import create_admin_releases_router, create_releases_router
+from ati_cloud.site import create_site_router
 
 
 def _check_database(dsn: str) -> list[int]:
@@ -94,6 +95,7 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
     app.include_router(create_payments_router(payments))
     app.include_router(create_admin_payments_router(admin, payments))
     app.include_router(create_releases_router(db))
+    app.include_router(create_site_router(db))
     app.include_router(create_admin_releases_router(admin))
 
     @app.get("/health")

@@ -7,6 +7,7 @@ import { useAdmin } from "@/components/admin/AdminSession";
 import { AdminPage, Feedback, TotpInput, inputClass, useAdminAction, useAdminQuery } from "@/components/admin/kit";
 import { Button, Card, Notice } from "@/components/ui";
 import { can, dateTime } from "@/lib/admin";
+import { DESIGN_LABELS, DESIGNS, type Design } from "@/lib/design";
 
 interface PaymentView {
   provider: string;
@@ -202,6 +203,77 @@ function RecoveryCodes() {
   );
 }
 
+/** Site görünümü: herkese açık sayfaların (ve bu panelin) renk tasarımı. Değişiklik ~30 sn içinde
+ *  sitede görünür; ziyaretçinin açık/koyu tema seçimi korunur. */
+function SiteDesign() {
+  const api = useApi();
+  const view = useAdminQuery<{ design: Design }>("/admin/v1/settings/appearance");
+  const action = useAdminAction();
+  const [choice, setChoice] = useState<Design | null>(null);
+  const current = choice ?? view.data?.design ?? null;
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!current) return;
+    const ok = await action.run(
+      () => api.put("/admin/v1/settings/appearance", { design: current }),
+      `Kaydedildi: ${DESIGN_LABELS[current].name}. Site yaklaşık 30 saniye içinde güncellenir.`,
+    );
+    if (ok) view.reload();
+  }
+
+  return (
+    <Card as="section" className="space-y-4" aria-labelledby="site-gorunumu">
+      <div>
+        <h2 id="site-gorunumu" className="text-lg font-semibold text-fg">
+          Site görünümü
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          Sitenin renk tasarımını seçin. Her tasarım açık ve koyu temada okunabilirlik denetiminden geçer; ziyaretçinin
+          açık/koyu seçimi korunur.
+        </p>
+      </div>
+      <Feedback error={view.error} />
+      <form onSubmit={(e) => void save(e)} className="space-y-4">
+        <fieldset>
+          <legend className="visually-hidden">Tasarım modu</legend>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {DESIGNS.map((code) => (
+              <label
+                key={code}
+                className={`card-lift flex cursor-pointer flex-col gap-3 rounded-2xl border p-3 transition-colors ${
+                  current === code ? "border-accent-text bg-surface-2 ring-2 ring-ring" : "border-border bg-surface hover:border-border-strong"
+                }`}
+              >
+                <span aria-hidden="true" className={`swatch-${code} h-16 rounded-xl shadow-sm`} />
+                <span className="flex items-start gap-2">
+                  <input
+                    type="radio"
+                    name="design"
+                    value={code}
+                    checked={current === code}
+                    onChange={() => setChoice(code)}
+                    className="mt-1 h-4 w-4"
+                    data-testid={`design-${code}`}
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-fg">{DESIGN_LABELS[code].name}</span>
+                    <span className="block text-xs text-muted">{DESIGN_LABELS[code].hint}</span>
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <Button type="submit" disabled={action.pending || !current || current === view.data?.design} data-testid="design-save">
+          Tasarımı kaydet
+        </Button>
+        <Feedback error={action.error} message={action.message} />
+      </form>
+    </Card>
+  );
+}
+
 export function Settings() {
   const { me } = useAdmin();
   return (
@@ -210,6 +282,7 @@ export function Settings() {
         <>
           <PaymentSettings />
           <CompanySettings />
+          <SiteDesign />
         </>
       ) : null}
       <RecoveryCodes />

@@ -126,6 +126,54 @@ test("ödeme ayarları: canlı mod kapalı, şirket bilgileri kaydedilir", async
   await noAxeViolations(page);
 });
 
+test("müşteri e-posta yazılarak ve TOTP ile silinir; kişisel veri kalmaz", async () => {
+  await sql("INSERT INTO customers (email, password_hash, full_name) VALUES ($1, $2, $3)", [
+    "silinecek@example.com",
+    ARGON2,
+    "Silinecek Kişi",
+  ]);
+  await page.goto("/yonetim/musteriler");
+  await page.getByLabel("Müşteri ara").fill("silinecek");
+  await page.getByRole("button", { name: "Ara", exact: true }).click();
+  await page.getByRole("button", { name: "silinecek@example.com ayrıntı" }).click();
+  const remove = page.getByRole("button", { name: "Müşteriyi kalıcı olarak sil" });
+  await expect(remove).toBeDisabled();
+  await page.getByLabel(/Onaylamak için e-postayı yazın/).fill("silinecek@example.com");
+  await page.getByLabel("Silme nedeni").fill("KVKK silme talebi");
+  await page.getByLabel("Doğrulama kodu (TOTP)").fill(await root.next());
+  await noAxeViolations(page);
+  await remove.click();
+  await expect(page.getByTestId("customer-deleted")).toBeVisible();
+  await expect(page.getByRole("button", { name: "silinecek@example.com ayrıntı" })).toHaveCount(0);
+  const rows = await sql<{ status: string; email: string; full_name: string | null }>(
+    "SELECT status::text AS status, email::text AS email, full_name FROM customers WHERE email LIKE 'silindi-%'",
+  );
+  expect(rows).toHaveLength(1);
+  expect(rows[0]!.status).toBe("deleted");
+  expect(rows[0]!.full_name).toBeNull();
+});
+
+test("site tasarımı panelden seçilir; her tasarım açık ve koyu temada erişilebilir", async () => {
+  for (const code of ["zumrut", "gunbatimi", "altin", "grafit", "okyanus"]) {
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.goto("/yonetim/ayarlar");
+    await page.getByTestId(`design-${code}`).check();
+    await page.getByTestId("design-save").click();
+    await expect(page.getByRole("status").filter({ hasText: "Kaydedildi" })).toBeVisible();
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-design", code);
+    await page.waitForLoadState("networkidle");
+    await noAxeViolations(page);
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    await noAxeViolations(page);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/yonetim/ayarlar");
+  await noAxeViolations(page);
+});
+
 test("sürüm eklenir, TOTP ile yayınlanır ve İndir sayfasında görünür", async () => {
   const sha = "3f".repeat(32);
   await page.goto("/indir");

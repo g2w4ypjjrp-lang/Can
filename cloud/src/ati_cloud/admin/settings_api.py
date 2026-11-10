@@ -22,6 +22,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from ati_cloud.admin.context import Admin, AdminContext, Conn
 from ati_cloud.admin.security import SecretBox
+from ati_cloud.site import DESIGNS, load_appearance
 
 LIVE_PHRASE = "CANLI ÖDEMEYİ AÇ"
 
@@ -35,6 +36,10 @@ PROVIDERS: dict[str, dict[str, list[str]]] = {
     "simulator": {"public": [], "secrets": []},
 }
 Provider = Literal["none", "paytr", "iyzico", "simulator"]
+
+
+class AppearanceUpdate(BaseModel):
+    design: Literal["okyanus", "zumrut", "gunbatimi", "altin", "grafit"]
 
 
 class PaymentUpdate(BaseModel):
@@ -121,6 +126,10 @@ async def load_payment_secrets(conn: Conn, box: SecretBox) -> dict[str, Any]:
         "public": stored.get("public", {}),
         "secrets": secrets_plain,
     }
+
+
+def _design_list() -> list[dict[str, str]]:
+    return [{"code": code, "name": name} for code, name in DESIGNS.items()]
 
 
 def create_admin_settings_router(ctx: AdminContext) -> APIRouter:
@@ -213,6 +222,27 @@ def create_admin_settings_router(ctx: AdminContext) -> APIRouter:
                 },
             )  # fmt: skip
         return _public_view(value, ctx.settings.payments_live_allowed, ctx.settings.environment)
+
+    @router.get("/appearance")
+    async def get_appearance(admin: Admin = manage) -> dict[str, Any]:
+        async with ctx.db.connection() as conn:
+            current = await load_appearance(conn)
+        return {**current, "designs": _design_list()}
+
+    @router.put("/appearance")
+    async def put_appearance(
+        body: AppearanceUpdate, request: Request, admin: Admin = manage
+    ) -> dict[str, Any]:
+        async with ctx.db.connection() as conn, conn.transaction():
+            await _store(conn, "appearance", {"design": body.design}, admin.id)
+            await ctx.audit(
+                conn, request, actor_id=admin.id, action="admin.appearance_updated",
+                target_type="settings", target_id="appearance", details={"design": body.design},
+            )  # fmt: skip
+        return {
+            "design": body.design,
+            "designs": [{"code": k, "name": v} for k, v in DESIGNS.items()],
+        }
 
     @router.get("/company")
     async def get_company(admin: Admin = manage) -> dict[str, Any]:

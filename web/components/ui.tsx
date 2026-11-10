@@ -298,9 +298,9 @@ export function TextLink(props: ComponentProps<typeof Link>) {
 
 export function IconTile({ icon: Icon, tone = "accent", className = "" }: { icon: LucideIcon; tone?: "accent" | "violet" | "cyan" | "success" | "danger"; className?: string }) {
   const map = {
-    accent: "from-[#2f5bea]/18 to-[#2f5bea]/4 text-accent-text ring-[#2f5bea]/25",
-    violet: "from-[#7c3aed]/18 to-[#7c3aed]/4 text-accent-2 ring-[#7c3aed]/25",
-    cyan: "from-[#0891b2]/18 to-[#0891b2]/4 text-accent-3 ring-[#0891b2]/25",
+    accent: "from-brand-1/18 to-brand-1/4 text-accent-text ring-brand-1/25",
+    violet: "from-brand-3/18 to-brand-3/4 text-accent-2 ring-brand-3/25",
+    cyan: "from-accent-3/18 to-accent-3/4 text-accent-3 ring-accent-3/25",
     success: "from-[#0f9d58]/16 to-[#0f9d58]/4 text-success-fg ring-[#0f9d58]/25",
     danger: "from-[#d93636]/16 to-[#d93636]/4 text-danger-fg ring-[#d93636]/25",
   };

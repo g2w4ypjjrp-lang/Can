@@ -54,6 +54,14 @@ class StepUpCode(BaseModel):
     code: str = Field(min_length=6, max_length=10)
 
 
+class DeleteCustomer(BaseModel):
+    """Müşteri silme: yanlış kişiyi silmemek için e-posta adresi yazılarak onaylanır."""
+
+    code: str = Field(min_length=6, max_length=10)
+    confirm_email: str = Field(min_length=3, max_length=320)
+    reason: str = Field(min_length=3, max_length=300)
+
+
 class MessageStatus(BaseModel):
     status: Literal["new", "in_progress", "closed", "spam"]
 
@@ -63,6 +71,7 @@ PERMISSIONS = (
     "report.payments",
     "audit.read",
     "customer.block",
+    "customer.delete",
     "customer.read",
     "customer.update",
     "device.revoke",
@@ -581,6 +590,82 @@ def create_admin_manage_router(ctx: AdminContext) -> APIRouter:
                 target_type="customer", target_id=cid,
             )  # fmt: skip
         return {"status": "active"}
+
+    @router.post("/customers/{customer_id}/delete")
+    async def delete_customer(
+        customer_id: str,
+        body: DeleteCustomer,
+        request: Request,
+        admin: Admin = need["customer.delete"],
+    ) -> dict[str, Any]:
+        """Müşteriyi siler (KVKK: kişisel veriler anonimleştirilir, kayıt geri alınamaz).
+
+        * E-posta, ad, parola ve 2FA silinir; aynı e-postayla yeniden kayıt olunabilir.
+        * Lisansları iptal edilir (bilgisayardaki uygulama bir sonraki yenilemede kapanır),
+          cihazları ve oturumları kapatılır, bekleyen e-postaları silinir.
+        * Siparişler ve ödemeler yasal saklama süresi boyunca korunur (müşteri kimliğiyle,
+          kişisel veri olmadan); denetim kaydına e-posta yazılmaz.
+        """
+        cid = _uuid(customer_id, "Müşteri")
+        anon = f"silindi-{cid}@silindi.invalid"
+        async with ctx.db.connection() as conn, conn.transaction():
+            await ctx.step_up(conn, admin, body.code)
+            cur = await conn.execute(
+                "SELECT email::text AS email FROM customers WHERE id = %s AND status <> 'deleted' "
+                "FOR UPDATE",
+                (cid,),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Müşteri bulunamadı")
+            email = str(row["email"])
+            if body.confirm_email.strip().lower() != email.lower():
+                raise HTTPException(
+                    status_code=422, detail="Yazılan e-posta adresi müşteriyle eşleşmiyor"
+                )
+            cur = await conn.execute(
+                "UPDATE licenses SET status = 'cancelled', cancel_reason = %s "
+                "WHERE customer_id = %s AND status NOT IN ('cancelled', 'expired') RETURNING id",
+                ("Müşteri silindi", cid),
+            )
+            licenses = len(await cur.fetchall())
+            cur = await conn.execute(
+                "UPDATE devices SET revoked_at = now() WHERE customer_id = %s "
+                "AND revoked_at IS NULL RETURNING id",
+                (cid,),
+            )
+            devices = len(await cur.fetchall())
+            await conn.execute(
+                "UPDATE customer_sessions SET revoked_at = now() WHERE customer_id = %s "
+                "AND revoked_at IS NULL",
+                (cid,),
+            )
+            await conn.execute("DELETE FROM customer_tokens WHERE customer_id = %s", (cid,))
+            await conn.execute(
+                "DELETE FROM email_outbox WHERE to_email = %s AND status <> 'sent'", (email,)
+            )
+            await conn.execute(
+                "UPDATE email_outbox SET to_email = %s WHERE to_email = %s", (anon, email)
+            )
+            await conn.execute(
+                "UPDATE contact_messages SET name = 'Silinmiş müşteri', email = %s "
+                "WHERE customer_id = %s OR email = %s",
+                (anon, cid, email),
+            )
+            await conn.execute(
+                "UPDATE customers SET status = 'deleted', deleted_at = now(), email = %s, "
+                "full_name = NULL, password_hash = NULL, mfa_totp_secret_enc = NULL, "
+                "marketing_consent = false, country_code = NULL, blocked_at = NULL, "
+                "blocked_reason = NULL WHERE id = %s",
+                (anon, cid),
+            )
+            await ctx.audit(
+                conn, request, actor_id=admin.id, action="admin.customer_deleted",
+                target_type="customer", target_id=cid,
+                details={"reason": body.reason, "licenses_cancelled": licenses,
+                         "devices_revoked": devices},
+            )  # fmt: skip
+        return {"status": "deleted", "licenses_cancelled": licenses, "devices_revoked": devices}
 
     @router.get("/devices")
     async def list_devices(

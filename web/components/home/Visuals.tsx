@@ -150,7 +150,7 @@ export function HeroVisual() {
                           </span>
                         </div>
                         <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-3">
-                          <div className={`h-full rounded-full bg-gradient-to-r from-[#2f5bea] to-[#8b5cf6] ${W[i]}`} />
+                          <div className={`h-full rounded-full bg-gradient-to-r from-brand-1 to-brand-3 ${W[i]}`} />
                         </div>
                       </li>
                     ))}
@@ -245,7 +245,7 @@ export function ScannerViz() {
             </svg>
             <span className="flex items-center gap-2">
               <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
-                <span className={`block h-full rounded-full bg-gradient-to-r from-[#2f5bea] to-[#8b5cf6] ${SCORE_W[i]}`} />
+                <span className={`block h-full rounded-full bg-gradient-to-r from-brand-1 to-brand-3 ${SCORE_W[i]}`} />
               </span>
               <span className="tabular w-6 text-right text-xs font-semibold text-fg">{r.score}</span>
             </span>
@@ -285,9 +285,9 @@ export function ScoreRing({ score = 82 }: { score?: number }) {
       <svg viewBox="0 0 128 128" className="h-32 w-32 shrink-0 -rotate-90" focusable="false">
         <defs>
           <linearGradient id="puan-halka" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0" stopColor="#2f5bea" />
-            <stop offset="0.6" stopColor="#8b5cf6" />
-            <stop offset="1" stopColor="#22d3ee" />
+            <stop offset="0" className="stop-brand-1" />
+            <stop offset="0.6" className="stop-brand-2" />
+            <stop offset="1" className="stop-brand-3" />
           </linearGradient>
         </defs>
         <circle cx="64" cy="64" r={r} fill="none" stroke="var(--surface-3)" strokeWidth="12" />

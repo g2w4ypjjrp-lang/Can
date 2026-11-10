@@ -7,6 +7,7 @@ import "@fontsource-variable/jetbrains-mono";
 
 import { ApiProvider } from "@/components/ApiContext";
 import { runtimeConfig } from "@/lib/config";
+import { fetchDesign } from "@/lib/design";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 import "./globals.css";
@@ -35,9 +36,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // İstek başlığını okumak sayfayı dinamik yapar: CSP nonce'u her istekte yenidir (proxy.ts).
   const nonce = (await headers()).get("x-nonce") ?? undefined;
   const { publicApiUrl } = runtimeConfig();
+  // Tasarım modu yönetim panelinden seçilir (renk paleti); açık/koyu tema ise ziyaretçinin.
+  const design = await fetchDesign();
   return (
     // data-theme, boyamadan önce tema betiğiyle eklenir (sunucu çıktısında yok).
-    <html lang="tr" suppressHydrationWarning>
+    <html lang="tr" data-design={design} suppressHydrationWarning>
       <head>
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
