@@ -96,8 +96,14 @@ yapıldı.
   (`ipAllowList: []`), `require` yalnızca `ATI_DATABASE_SSLMODE` ile açıkça seçilebilir (adresteki
   zayıf kip üretimde reddedilir). Sertifika doğrulamalı bağlantı sunan bir sağlayıcıya geçişte
   ayar kaldırılır.
+* **Kendi sunucunuzda (Windows VDS) veritabanı bağlantısı TLS'siz.** Yalnızca bağlantının tüm
+  adresleri yerel (127.0.0.1, ::1, localhost, Unix soketi) olduğunda kabul edilir; trafik
+  makineden çıkmaz. PostgreSQL yalnızca `localhost`'u dinler, güvenlik duvarında yalnızca 80/443
+  açıktır, servisler yönetici yetkisi olmayan YEREL HİZMET hesabıyla çalışır, gizli dosyalar
+  yalnızca yöneticiler ve servis hesabı (salt okuma) tarafından okunabilir.
 * **İstemci adresi yük dengeleyicinin `X-Forwarded-For` değerinden (`ATI_FORWARDED_HOPS`).**
-  Render vekil adreslerini yayınlamaz; sağdan n'inci değer alınır (istemcinin eklediği sahte
+  Render vekil adreslerini yayınlamaz (kendi sunucuda Caddy, değeri istemci adresiyle değiştirir);
+  sağdan n'inci değer alınır (istemcinin eklediği sahte
   değerler yok sayılır, test edildi). Yayından sonra denetim kaydındaki adres, yöneticinin gerçek
   adresiyle karşılaştırılarak doğrulanır (`deploy/render.md` §7).
 * **Kullanıcı bilgisayarının ele geçirilmesi:** DPAPI, aynı Windows kullanıcısıyla çalışan

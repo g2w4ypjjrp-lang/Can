@@ -7,6 +7,7 @@ Manager) ortam değişkeni olarak enjekte edilir; depoya asla yazılmaz.
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Literal, Self
 
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
@@ -20,6 +21,23 @@ def effective_dsn(dsn: str, sslmode: str | None) -> str:
     """Bağlantı adresi + (verilirse) TLS kipi. Yönetilen platformlar bağlantı adresini hazır verir;
     kip ayrı ayarla eklenir (adres değiştirilmeden)."""
     return dsn if sslmode is None else make_conninfo(dsn, sslmode=sslmode)
+
+
+def _is_loopback(host: str | None, hostaddr: str | None) -> bool:
+    """Bağlantı yalnızca bu makineye mi (127.0.0.1, ::1, localhost)? Birden çok adres verilmişse
+    hepsi yerel olmalı. Unix soketi (``/`` ile başlayan yol) de yereldir."""
+    values = [v.strip() for v in (hostaddr or host or "").split(",") if v.strip()]
+    if not values:
+        return False
+    for value in values:
+        if value.startswith("/") or value.lower() == "localhost":
+            continue
+        try:
+            if not ipaddress.ip_address(value).is_loopback:
+                return False
+        except ValueError:
+            return False
+    return True
 
 
 class CloudSettings(BaseSettings):
@@ -110,12 +128,19 @@ class CloudSettings(BaseSettings):
                     "staging/production ortamında lisans gizli değerleri zorunludur "
                     "(ATI_LICENSE_PEPPER, ATI_LICENSE_KEK, ATI_LEASE_SIGNING_KEY)"
                 )
-            sslmode = conninfo_to_dict(self.database_dsn).get("sslmode")
+            params = conninfo_to_dict(self.database_dsn)
+            sslmode = params.get("sslmode")
             private_network = sslmode == "require" and self.database_sslmode == "require"
-            if sslmode not in ("verify-full", "verify-ca") and not private_network:
+            # Veritabanı aynı makinedeyse (kendi sunucunuz) trafik ağa çıkmaz; TLS gerekmez.
+            same_machine = _is_loopback(
+                str(params.get("host") or ""), str(params.get("hostaddr") or "")
+            )
+            if sslmode not in ("verify-full", "verify-ca") and not (
+                private_network or same_machine
+            ):
                 raise ValueError(
                     "staging/production ortamında veritabanı bağlantısı sertifika doğrulamalı "
                     "TLS kullanmalı (sslmode=verify-full; yönetilen platformun özel ağında "
-                    "ATI_DATABASE_SSLMODE=require)"
+                    "ATI_DATABASE_SSLMODE=require; aynı makinedeki veritabanı için 127.0.0.1)"
                 )
         return self

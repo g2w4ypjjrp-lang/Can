@@ -101,6 +101,28 @@ def test_private_network_tls_must_be_chosen_explicitly() -> None:
     assert "sslmode=verify-full" in strict.database_dsn and "disable" not in strict.database_dsn
 
 
+@pytest.mark.parametrize(
+    ("dsn", "allowed"),
+    [
+        ("postgresql://ati:x@127.0.0.1:5432/ati", True),
+        ("postgresql://ati:x@localhost/ati", True),
+        ("postgresql://ati:x@[::1]/ati", True),
+        ("host=/var/run/postgresql dbname=ati", True),
+        ("postgresql://ati:x@127.0.0.1,10.0.0.5/ati", False),  # biri uzak
+        ("postgresql://ati:x@10.0.0.5/ati", False),
+        ("postgresql://ati:x@db.example/ati", False),
+        ("host=localhost hostaddr=10.0.0.5 dbname=ati", False),  # gerçek adres uzak
+    ],
+)
+def test_same_machine_database_needs_no_tls(dsn: str, allowed: bool) -> None:
+    """Kendi sunucunuzda (Windows VDS) veritabanı aynı makinede: trafik ağa çıkmaz."""
+    if allowed:
+        CloudSettings(environment="production", database_url=SecretStr(dsn), **SITE)
+    else:
+        with pytest.raises(ValidationError, match="TLS"):
+            CloudSettings(environment="production", database_url=SecretStr(dsn), **SITE)
+
+
 def test_production_requires_admin_kek_and_https_admin() -> None:
     dsn = SecretStr("postgresql://u@db/x?sslmode=verify-full")
     without_kek = {k: v for k, v in SITE.items() if k != "admin_secret_kek"}

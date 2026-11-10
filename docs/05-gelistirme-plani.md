@@ -943,7 +943,13 @@ Protokol: [`shared/protocol/license-v1.md`](../shared/protocol/license-v1.md).
   Platforma uyum: `ATI_DATABASE_SSLMODE` (iç ağda `require`, yalnızca açık seçimle) ve
   `ATI_FORWARDED_HOPS` (istemci adresi); aynı ayarlar üretim kipinde yerelde denendi.
 
-Testler: bulut 176 (sürümler 15, platform ayarları 2), web birim 43, uçtan uca yönetici + sayfalar 25 (sürüm yayınla →
+- **Kendi Windows sunucusu (VDS), ek ücret yok:** `deploy/windows-sunucu/kur.ps1` PostgreSQL 16
+  (yalnızca yerel), Node.js 22, uv, Caddy'yi (otomatik HTTPS) özet/imza doğrulamasıyla kurar;
+  servisleri YEREL HİZMET hesabıyla zamanlanmış görev olarak çalıştırır (çökerse yeniden başlar),
+  gece yedeği ve ödeme bakımı ekler. İşlem motoru sunucuya kurulmaz. Betiklerin sözdizimi ve
+  ürettiği ayarlar doğrulandı; Windows üzerinde ilk çalıştırma sunucuda yapılacak.
+
+Testler: bulut 184 (sürümler 15, platform ve veritabanı TLS ayarları 10), web birim 43, uçtan uca yönetici + sayfalar 25 (sürüm yayınla →
 İndir sayfasında görünür → geri çek; `/indir` erişilebilirlik 0 ihlal).
 
 ## Açık kararlar (sizden bilgi gerekecek)
