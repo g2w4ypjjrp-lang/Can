@@ -17,7 +17,7 @@
 | Ödemeler | Sahte veya tekrar gönderilen webhook | İmza doğrulanmadan işlenemez (şema kısıtı); olay kimliği tekil; sipariş satırı kilitlenir; sipariş başına tek başarılı ödeme; birim başına tek lisans; tutar uyuşmazlığında teslim yok; iyzico sonucu imzalı sunucu isteğiyle sorgulanır; üretimde test modu ve simülatör kapalı | ✅ Aşama 17 |
 | iOS uzaktan komutları | Bulutun veya ağın ele geçirilmesi, tekrar oynatma | Secure Enclave anahtarıyla imza; motorda doğrulama; zaman damgası + sayaç; komut izin listesi; hassas komutlarda Face ID | 🔜 Aşama 13 |
 | Bulut veritabanı bağlantısı | Ortadaki adam saldırısı | Staging/production'da `sslmode=verify-full` zorunlu (ayar doğrulaması) | ✅ |
-| Tedarik zinciri | Kötü niyetli bağımlılık | Kilit dosyaları (`uv.lock`), CI'da `--locked`, bağımlılık taraması (Aşama 18), kod imzalama | ✅ kısmen |
+| Tedarik zinciri | Kötü niyetli veya açıklı bağımlılık, depoya sızan gizli bilgi | Kilit dosyaları (`uv.lock`, `package-lock.json`, `Cargo.lock`), CI'da `--locked`/`npm ci`; her gönderimde ve haftalık `pip-audit`, `npm audit`, `cargo audit`; depo ve tüm git geçmişinde gizli bilgi taraması (`scripts/secret_scan.py`, öz sınamalı); kod imzalama (G6) | ✅ Aşama 18 (imzalama G6) |
 
 ## 2. Gizli bilgi yönetimi
 
