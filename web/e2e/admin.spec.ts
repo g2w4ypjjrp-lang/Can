@@ -70,6 +70,32 @@ test("yönetici davetle etkinleşir, paket fiyatı sitede görünür", async () 
   await expect(page.getByText("₺1.499,90")).toBeVisible();
 });
 
+test("indirim kuponu oluşturulur, listelenir ve kapatılır", async () => {
+  await page.goto("/yonetim");
+  await page.getByRole("link", { name: "İndirim kuponları" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "İndirim kuponları" })).toBeVisible();
+  await page.getByLabel("Kod", { exact: true }).fill("panel10");
+  await page.getByLabel("İndirim (%)").fill("10");
+  await page.getByLabel("Kullanım sınırı").fill("50");
+  await page.getByLabel("Not").fill("Panel testi");
+  await page.getByLabel("30 Gün - 1 Cihaz").check();
+  await page.getByRole("button", { name: "Kuponu oluştur" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Kupon oluşturuldu" })).toBeVisible();
+  const row = page.getByTestId("coupon-PANEL10");
+  await expect(row).toContainText("%10");
+  await expect(row).toContainText("d30_1dev");
+  await expect(row).toContainText("0 / 50");
+  await expect(page.getByTestId("coupon-state-PANEL10")).toHaveText("Geçerli");
+  await noAxeViolations(page);
+  await row.getByRole("button", { name: "PANEL10 kapat" }).click();
+  await expect(page.getByTestId("coupon-state-PANEL10")).toHaveText("Kapalı");
+  // Aynı kod ikinci kez oluşturulamaz.
+  await page.getByLabel("Kod", { exact: true }).fill("PANEL10");
+  await page.getByLabel("İndirim (%)").fill("5");
+  await page.getByRole("button", { name: "Kuponu oluştur" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Bu kod zaten var" })).toBeVisible();
+});
+
 test("lisans üretilir, dondurulur, tam anahtar TOTP ile gösterilir", async () => {
   await sql("INSERT INTO customers (email, password_hash, email_verified_at) VALUES ('alici@example.com', $1, now())", [ARGON2]);
   await page.goto("/yonetim/lisanslar");

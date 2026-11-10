@@ -61,6 +61,10 @@ CLOSED_MESSAGE = "Çevrim içi ödeme şu anda kapalı. Lütfen daha sonra tekra
 WEBHOOK_PROVIDERS = ("paytr", "simulator")
 PROVIDER_LABELS = {"paytr": "PayTR", "iyzico": "iyzico", "simulator": "Test simülatörü"}
 PENDING_TRIAL_WINDOW_H = 2
+# Kupon kullanımı sayılırken ödemesi bekleyen siparişlerin hak tükettiği süre.
+PENDING_COUPON_WINDOW_H = 2
+COUPON_CODE = re.compile(r"^[A-Z0-9][A-Z0-9-]{2,31}$")
+COUPON_INVALID = "Kupon kodu geçersiz veya süresi dolmuş."
 
 
 class PaymentError(Exception):
@@ -89,6 +93,29 @@ class BillingDetails:
     tax_id: str | None = None
     company: str | None = None
     tax_office: str | None = None
+
+
+@dataclass(frozen=True)
+class AppliedCoupon:
+    code: str
+    discount_minor: int
+    total_minor: int
+
+
+def normalize_coupon(raw: str) -> str:
+    """Kullanıcının yazdığı kod: boşluklar atılır, büyük harfe çevrilir (İ/ı gibi harfler dahil)."""
+    return "".join(raw.split()).upper().replace("İ", "I")
+
+
+def coupon_discount(coupon: dict[str, Any], price_minor: int, currency: str) -> int:
+    """Kuponun bu fiyata indirimi (kuruş). Yüzde aşağı yuvarlanır; indirim fiyatı aşamaz."""
+    if coupon["percent_off"] is not None:
+        return price_minor * int(coupon["percent_off"]) // 100
+    if coupon["currency"] != currency:
+        raise PaymentError(
+            409, "coupon_currency", "Bu kupon bu paketin para biriminde geçerli değil."
+        )
+    return min(int(coupon["amount_off_minor"]), price_minor)
 
 
 def invoice_number(order_no: int, when: datetime) -> str:
@@ -247,8 +274,86 @@ class Payments:
 
     # --- Ödeme başlatma ----------------------------------------------------------------------
 
+    async def apply_coupon(
+        self, conn: Conn, raw_code: str, plan: dict[str, Any], customer_id: Any, *, lock: bool
+    ) -> AppliedCoupon:
+        """Kuponu pakete uygular; uygun değilse açıklayıcı ``PaymentError``.
+
+        ``lock`` ile (ödeme başlatırken) aynı koda eşzamanlı başvurular sıralanır; böylece kullanım
+        sınırı aşılamaz.
+        """
+        code = normalize_coupon(raw_code)
+        if not COUPON_CODE.fullmatch(code):
+            raise PaymentError(404, "coupon_invalid", COUPON_INVALID)
+        if lock:
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtext('ati.coupon:' || %s))", (code,)
+            )
+        cur = await conn.execute(
+            "SELECT code, percent_off, amount_off_minor, currency, plan_codes, max_redemptions "
+            "FROM coupons WHERE code = %s AND is_active "
+            "AND (valid_from IS NULL OR valid_from <= now()) "
+            "AND (valid_until IS NULL OR valid_until > now())",
+            (code,),
+        )
+        coupon = await cur.fetchone()
+        if coupon is None:
+            raise PaymentError(404, "coupon_invalid", COUPON_INVALID)
+        price = int(plan["price_minor"])
+        if plan["is_trial"] or price == 0:
+            raise PaymentError(
+                409, "coupon_not_applicable", "Kupon ücretsiz paketlerde kullanılamaz."
+            )
+        if coupon["plan_codes"] and plan["code"] not in coupon["plan_codes"]:
+            raise PaymentError(
+                409, "coupon_not_applicable", "Bu kupon seçtiğiniz pakette geçerli değil."
+            )
+        cur = await conn.execute(
+            "SELECT count(*) FILTER (WHERE customer_id = %s)::int AS mine, count(*)::int AS total "
+            "FROM orders WHERE coupon_code = %s AND (status IN ('paid', 'fulfilled') "
+            "OR (status = 'pending' AND created_at > now() - make_interval(hours => %s)))",
+            (customer_id, code, PENDING_COUPON_WINDOW_H),
+        )
+        used = _one(await cur.fetchone())
+        if used["mine"]:
+            raise PaymentError(409, "coupon_used", "Bu kuponu daha önce kullandınız.")
+        if coupon["max_redemptions"] is not None and used["total"] >= coupon["max_redemptions"]:
+            raise PaymentError(409, "coupon_exhausted", "Bu kuponun kullanım sınırı doldu.")
+        discount = coupon_discount(coupon, price, str(plan["currency"]))
+        return AppliedCoupon(code=code, discount_minor=discount, total_minor=price - discount)
+
+    async def quote(self, customer: dict[str, Any], plan_code: str, coupon: str) -> dict[str, Any]:
+        """Ödeme sayfasında kupon önizlemesi (sipariş açmaz)."""
+        async with self.db.connection() as conn:
+            plan = await self._plan(conn, plan_code)
+            applied = await self.apply_coupon(conn, coupon, plan, customer["id"], lock=False)
+        return {
+            "code": applied.code,
+            "subtotal_minor": int(plan["price_minor"]),
+            "discount_minor": applied.discount_minor,
+            "total_minor": applied.total_minor,
+            "currency": plan["currency"],
+        }
+
+    @staticmethod
+    async def _plan(conn: Conn, plan_code: str) -> dict[str, Any]:
+        cur = await conn.execute(
+            "SELECT code, name, price_minor, currency, is_trial, duration_days, device_limit "
+            "FROM license_plans WHERE code = %s AND is_active FOR SHARE",
+            (plan_code,),
+        )
+        plan = await cur.fetchone()
+        if plan is None:
+            raise PaymentError(404, "plan_unavailable", "Bu paket şu anda satışta değil.")
+        return plan
+
     async def checkout(
-        self, customer: dict[str, Any], plan_code: str, billing: BillingDetails, ip: str
+        self,
+        customer: dict[str, Any],
+        plan_code: str,
+        billing: BillingDetails,
+        ip: str,
+        coupon: str | None = None,
     ) -> dict[str, Any]:
         if customer.get("email_verified_at") is None:
             raise PaymentError(
@@ -257,15 +362,16 @@ class Payments:
         customer_id = customer["id"]
         async with self.db.connection() as conn:
             cfg = await self.load_config(conn)
-            cur = await conn.execute(
-                "SELECT code, name, price_minor, currency, is_trial, duration_days, device_limit "
-                "FROM license_plans WHERE code = %s AND is_active FOR SHARE",
-                (plan_code,),
+            plan = await self._plan(conn, plan_code)
+            price = int(plan["price_minor"])
+            applied = (
+                await self.apply_coupon(conn, coupon, plan, customer_id, lock=True)
+                if coupon
+                else None
             )
-            plan = await cur.fetchone()
-            if plan is None:
-                raise PaymentError(404, "plan_unavailable", "Bu paket şu anda satışta değil.")
-            free = int(plan["price_minor"]) == 0
+            total = applied.total_minor if applied else price
+            # %100 kupon ya da ücretsiz paket: sağlayıcıya gidilmez, hemen teslim edilir.
+            free = total == 0
             if self.licensing is None or (not free and not self.sales_open(cfg)):
                 raise PaymentError(503, "payments_closed", CLOSED_MESSAGE)
             provider = None if free else self.provider(cfg)
@@ -290,17 +396,25 @@ class Payments:
                 },
                 "mode": "free" if free else cfg.mode,
             }
+            if applied:
+                snapshot["coupon"] = {
+                    "code": applied.code,
+                    "discount_minor": applied.discount_minor,
+                }
             cur = await conn.execute(
-                "INSERT INTO orders (customer_id, currency, subtotal_minor, total_minor, "
-                "payment_provider, billing_snapshot) VALUES (%s, %s, %s, %s, %s, %s) "
+                "INSERT INTO orders (customer_id, currency, subtotal_minor, discount_minor, "
+                "total_minor, payment_provider, billing_snapshot, coupon_code) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
                 "RETURNING id, order_no, customer_id, total_minor, currency",
                 (
                     customer_id,
                     plan["currency"],
-                    plan["price_minor"],
-                    plan["price_minor"],
+                    price,
+                    applied.discount_minor if applied else 0,
+                    total,
                     "free" if free else cfg.provider,
                     Jsonb(snapshot),
+                    applied.code if applied else None,
                 ),
             )
             order = _one(await cur.fetchone())
@@ -313,7 +427,8 @@ class Payments:
                 conn, actor_type="customer", actor_id=customer_id, action="order.created",
                 target_id=order["id"], ip=ip,
                 details={"order_no": order["order_no"], "plan": plan["code"],
-                         "total_minor": plan["price_minor"], "currency": plan["currency"],
+                         "total_minor": total, "currency": plan["currency"],
+                         "coupon": applied.code if applied else None,
                          "provider": "free" if free else cfg.provider, "mode": snapshot["mode"]},
             )  # fmt: skip
             if free:

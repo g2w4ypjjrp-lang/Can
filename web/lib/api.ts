@@ -125,6 +125,8 @@ export interface Order {
   order_no: number;
   status: string;
   total_minor: number;
+  discount_minor?: number;
+  coupon_code?: string | null;
   currency: string;
   created_at: string;
   paid_at: string | null;

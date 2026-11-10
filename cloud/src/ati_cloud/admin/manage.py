@@ -4,6 +4,7 @@ denetim kaydı. Her uç nokta tek bir yetkiye bağlıdır (``ctx.depends("<yetki
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -27,6 +28,27 @@ class PlanUpdate(BaseModel):
     sort_order: int | None = Field(default=None, ge=0, le=10_000)
     companion_device_limit: int | None = Field(default=None, ge=0, le=10)
     features: dict[str, Any] | None = None
+
+
+class CouponCreate(BaseModel):
+    code: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{2,31}$")
+    percent_off: int | None = Field(default=None, ge=1, le=100)
+    amount_off_minor: int | None = Field(default=None, gt=0, le=100_000_000_00)
+    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    plan_codes: list[Annotated[str, Field(pattern=r"^[a-z0-9_]{1,40}$")]] = Field(
+        default_factory=list, max_length=20
+    )
+    max_redemptions: int | None = Field(default=None, ge=1, le=1_000_000)
+    valid_from: datetime | None = None
+    valid_until: datetime | None = None
+    note: str = Field(default="", max_length=200)
+
+
+class CouponUpdate(BaseModel):
+    is_active: bool | None = None
+    max_redemptions: int | None = Field(default=None, ge=1, le=1_000_000)
+    valid_until: datetime | None = None
+    note: str | None = Field(default=None, max_length=200)
 
 
 class GenerateRequest(BaseModel):
@@ -70,6 +92,7 @@ PERMISSIONS = (
     "device.read",
     "report.payments",
     "audit.read",
+    "coupon.manage",
     "customer.block",
     "customer.delete",
     "customer.read",
@@ -215,6 +238,104 @@ def create_admin_manage_router(ctx: AdminContext) -> APIRouter:
                 },
             )  # fmt: skip
         return dict(after or {})
+
+    # --- İndirim kuponları -------------------------------------------------------------------
+
+    coupon_columns = (
+        "c.code, c.percent_off, c.amount_off_minor, c.currency, c.plan_codes, c.max_redemptions, "
+        "c.valid_from, c.valid_until, c.is_active, c.note, c.created_at, "
+        "(SELECT count(*) FROM orders o WHERE o.coupon_code = c.code "
+        " AND o.status IN ('paid', 'fulfilled'))::int AS redemptions, "
+        "(SELECT COALESCE(sum(o.discount_minor), 0) FROM orders o WHERE o.coupon_code = c.code "
+        " AND o.status IN ('paid', 'fulfilled'))::bigint AS discount_total_minor"
+    )
+
+    @router.get("/coupons")
+    async def coupons(admin: Admin = need["coupon.manage"]) -> list[dict[str, Any]]:
+        async with ctx.db.connection() as conn:
+            cur = await conn.execute(
+                f"SELECT {coupon_columns} FROM coupons c ORDER BY c.created_at DESC LIMIT 500"  # noqa: S608
+            )
+            return await cur.fetchall()
+
+    @router.post("/coupons")
+    async def create_coupon(
+        body: CouponCreate, request: Request, admin: Admin = need["coupon.manage"]
+    ) -> dict[str, Any]:
+        if (body.percent_off is None) == (body.amount_off_minor is None):
+            raise HTTPException(
+                status_code=422, detail="Yüzde ya da tutar indiriminden birini girin"
+            )
+        if body.amount_off_minor is not None and body.currency is None:
+            raise HTTPException(status_code=422, detail="Tutar indirimi için para birimi gerekli")
+        if body.valid_from and body.valid_until and body.valid_until <= body.valid_from:
+            raise HTTPException(status_code=422, detail="Bitiş tarihi başlangıçtan sonra olmalı")
+        code = body.code.upper()
+        async with ctx.db.connection() as conn, conn.transaction():
+            if body.plan_codes:
+                cur = await conn.execute(
+                    "SELECT array_agg(code) AS found FROM license_plans WHERE code = ANY(%s)",
+                    (body.plan_codes,),
+                )
+                found = set((await cur.fetchone() or {}).get("found") or [])
+                missing = sorted(set(body.plan_codes) - found)
+                if missing:
+                    raise HTTPException(
+                        status_code=422, detail=f"Paket bulunamadı: {', '.join(missing)}"
+                    )
+            try:
+                await conn.execute(
+                    "INSERT INTO coupons (code, percent_off, amount_off_minor, currency, "
+                    "plan_codes, max_redemptions, valid_from, valid_until, note, created_by) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (
+                        code, body.percent_off, body.amount_off_minor,
+                        body.currency if body.amount_off_minor is not None else None,
+                        sorted(set(body.plan_codes)), body.max_redemptions, body.valid_from,
+                        body.valid_until, body.note.strip(), admin.id,
+                    ),
+                )  # fmt: skip
+            except pg_errors.UniqueViolation as exc:
+                raise HTTPException(status_code=409, detail="Bu kod zaten var") from exc
+            await ctx.audit(
+                conn, request, actor_id=admin.id, action="admin.coupon_created",
+                target_type="coupon", target_id=code,
+                details=body.model_dump(mode="json", exclude={"code"}),
+            )  # fmt: skip
+            cur = await conn.execute(
+                f"SELECT {coupon_columns} FROM coupons c WHERE c.code = %s",  # noqa: S608
+                (code,),
+            )
+            return dict(await cur.fetchone() or {})
+
+    @router.patch("/coupons/{code}")
+    async def update_coupon(
+        code: str, body: CouponUpdate, request: Request, admin: Admin = need["coupon.manage"]
+    ) -> dict[str, Any]:
+        changes = body.model_dump(exclude_unset=True)
+        if not changes:
+            raise HTTPException(status_code=422, detail="Değişiklik yok")
+        assignments = ", ".join(f"{name} = %s" for name in changes)
+        async with ctx.db.connection() as conn, conn.transaction():
+            try:
+                cur = await conn.execute(
+                    f"UPDATE coupons SET {assignments} WHERE code = %s RETURNING code",  # noqa: S608 - sütun adları modelden
+                    (*changes.values(), code.upper()),
+                )
+            except pg_errors.CheckViolation as exc:
+                raise HTTPException(status_code=409, detail=str(exc.diag.message_primary)) from exc
+            if await cur.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Kupon bulunamadı")
+            await ctx.audit(
+                conn, request, actor_id=admin.id, action="admin.coupon_updated",
+                target_type="coupon", target_id=code.upper(),
+                details=body.model_dump(mode="json", exclude_unset=True),
+            )  # fmt: skip
+            cur = await conn.execute(
+                f"SELECT {coupon_columns} FROM coupons c WHERE c.code = %s",  # noqa: S608
+                (code.upper(),),
+            )
+            return dict(await cur.fetchone() or {})
 
     # --- Lisanslar -------------------------------------------------------------------------
 

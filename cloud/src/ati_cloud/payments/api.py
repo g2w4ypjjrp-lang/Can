@@ -3,7 +3,8 @@
 Müşteri (çerezli, köken denetimli):
     GET  /v1/payments/status            satış açık mı, test modu mu (herkese açık)
     GET  /v1/legal/seller               satıcı bilgileri (yasal metinler için, herkese açık)
-    POST /v1/checkout                   sipariş + sağlayıcı ödeme sayfası
+    POST /v1/checkout                   sipariş + sağlayıcı ödeme sayfası (isteğe bağlı kupon)
+    POST /v1/coupons/check              kupon önizlemesi (sipariş açmaz)
     GET  /v1/me/orders                  siparişlerim
     GET  /v1/me/orders/{order_no}       sipariş durumu (sonuç sayfası)
 
@@ -64,6 +65,12 @@ class CheckoutBody(BaseModel):
     accept_preinfo: bool  # ön bilgilendirme formu
     accept_contract: bool  # mesafeli satış sözleşmesi
     accept_immediate_delivery: bool  # dijital içerik anında teslim → cayma hakkı istisnası
+    coupon: str | None = Field(default=None, max_length=40)
+
+
+class CouponCheck(BaseModel):
+    plan_code: str = Field(pattern=r"^[a-z0-9_]{1,40}$")
+    code: str = Field(min_length=1, max_length=40)
 
 
 class SimulateBody(BaseModel):
@@ -86,7 +93,8 @@ def _order_uuid(value: str) -> uuid.UUID:
 
 
 ORDER_COLUMNS = (
-    "o.order_no, o.status::text AS status, o.total_minor, o.currency, o.created_at, o.paid_at, "
+    "o.order_no, o.status::text AS status, o.total_minor, o.discount_minor, o.coupon_code, "
+    "o.currency, o.created_at, o.paid_at, "
     "o.fulfilled_at, o.review_reason IS NOT NULL AS under_review, "
     "CASE WHEN o.status = 'pending' THEN o.checkout_url END AS checkout_url, "
     "(SELECT p.name FROM order_items i JOIN license_plans p ON p.code = i.plan_code "
@@ -103,6 +111,9 @@ def create_payments_router(payments: Payments) -> APIRouter:
     current_customer = customer_dependency(db)
     customer_dep = Depends(current_customer)
     checkout_limit = SlidingWindowLimiter(10, 3600)
+    # Kupon kodu tahminini zorlaştırmak için müşteri ve IP başına sınır.
+    coupon_customer = SlidingWindowLimiter(20, 3600)
+    coupon_ip = SlidingWindowLimiter(60, 3600)
     simulate_limit = SlidingWindowLimiter(30, 3600)
     invalid_webhook_ip = SlidingWindowLimiter(60, 60)
 
@@ -138,7 +149,21 @@ def create_payments_router(payments: Payments) -> APIRouter:
             )
         billing = BillingDetails(**body.billing.model_dump())
         try:
-            return await payments.checkout(customer, body.plan_code, billing, client_ip(request))
+            return await payments.checkout(
+                customer, body.plan_code, billing, client_ip(request), coupon=body.coupon or None
+            )
+        except PaymentError as exc:
+            raise _http(exc) from exc
+
+    @router.post("/coupons/check")
+    async def check_coupon(
+        body: CouponCheck, request: Request, customer: dict[str, Any] = customer_dep
+    ) -> dict[str, Any]:
+        check_origin(settings, request)
+        limited(coupon_customer, str(customer["id"]))
+        limited(coupon_ip, client_ip(request))
+        try:
+            return await payments.quote(customer, body.plan_code, body.code)
         except PaymentError as exc:
             raise _http(exc) from exc
 

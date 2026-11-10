@@ -154,3 +154,35 @@ test("yönetici siparişi görür, TOTP ile iade eder ve lisans iptal olur", asy
   await expect(page.getByTestId(`order-${orderNo}-status`)).toHaveText("İade edildi");
   await expect(page.getByRole("article").filter({ hasText: "30 Gün - 1 Cihaz" })).toContainText("İptal edildi");
 });
+
+test("indirim kuponu ödeme sayfasında uygulanır ve tutar sunucuda hesaplanır", async () => {
+  await sql("INSERT INTO coupons (code, percent_off, note) VALUES ('E2E-YUZDE20', 20, 'uçtan uca') ON CONFLICT (code) DO NOTHING");
+  await page.goto("/satin-al?paket=d30_1dev");
+  await page.getByLabel("Kupon kodu").fill("yok-boyle");
+  await page.getByRole("button", { name: "Uygula" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Kupon kodu geçersiz" })).toBeVisible();
+  await page.getByLabel("Kupon kodu").fill("e2e-yuzde20");
+  await page.getByLabel("Kupon kodu").press("Enter"); // Enter formu göndermez, kuponu uygular
+  await expect(page.getByTestId("coupon-applied")).toContainText("E2E-YUZDE20");
+  await expect(page.getByTestId("coupon-applied")).toContainText("₺1.199,20");
+  await expect(page).toHaveURL(/\/satin-al\?paket=d30_1dev$/);
+  await page.getByLabel("Telefon").fill("+90 532 000 00 00");
+  await page.getByLabel("Adres").fill("Örnek Mah. Deneme Sok. No: 1 Kadıköy");
+  await page.getByLabel("Şehir").fill("İstanbul");
+  for (const label of [/Ön bilgilendirme formunu/, /Mesafeli satış sözleşmesini/, /elektronik ortamda teslim edileceğini/]) {
+    await page.getByLabel(label).check();
+  }
+  await noAxeViolations(page);
+  await page.getByRole("button", { name: "Ödemeye geç · ₺1.199,20" }).click();
+  await expect(page).toHaveURL(/\/odeme\/test\?oturum=/);
+  await expect(page.getByText("₺1.199,20")).toBeVisible();
+  await page.getByRole("button", { name: "Ödemeyi onayla (başarılı)" }).click();
+  await expect(page.getByTestId("order-status")).toHaveText("Tamamlandı");
+  const rows = await sql<{ discount_minor: string; total_minor: string }>(
+    "SELECT discount_minor, total_minor FROM orders o JOIN customers c ON c.id = o.customer_id WHERE c.email = $1 AND o.coupon_code = 'E2E-YUZDE20'",
+    [email],
+  );
+  expect(rows).toEqual([{ discount_minor: "29980", total_minor: "119920" }]);
+  await page.goto("/panel");
+  await expect(page.getByText("E2E-YUZDE20 kuponu: −₺299,80")).toBeVisible();
+});

@@ -58,6 +58,11 @@ export function OrdersSection() {
               </div>
               <div className="text-right">
                 <p className="font-semibold text-fg">{formatPrice(order.total_minor, order.currency)}</p>
+                {order.coupon_code ? (
+                  <p className="text-xs text-muted">
+                    {order.coupon_code} kuponu: −{formatPrice(order.discount_minor ?? 0, order.currency)}
+                  </p>
+                ) : null}
                 <p className="text-muted" data-testid={`order-${order.order_no}-status`}>
                   {orderStatusLabel(order.status, order.under_review)}
                 </p>

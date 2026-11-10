@@ -101,7 +101,7 @@ test("parola sıfırlama eski parolayı ve oturumları geçersiz kılar", async 
   await expect(page).toHaveURL(/\/panel$/);
 });
 
-test("iki adımlı doğrulama: aç, kodla ve kurtarma koduyla giriş, kapat", async ({ page, context }) => {
+test("iki adımlı doğrulama: aç, kodla ve kurtarma koduyla giriş, kapat; güvenli yönlendirme", async ({ page, context }) => {
   const email = uniqueEmail("ikiadim");
   await register(page, email);
   await verify(page, email);
@@ -155,15 +155,9 @@ test("iki adımlı doğrulama: aç, kodla ve kurtarma koduyla giriş, kapat", as
   await page.getByLabel("Doğrulama kodu").fill(await device.next());
   await page.getByRole("button", { name: "İki adımlı doğrulamayı kapat" }).click();
   await expect(page.getByTestId("mfa-state")).toHaveText("Kapalı");
-  await context.clearCookies();
-  await login(page, email);
-  await expect(page).toHaveURL(/\/panel$/);
-});
 
-test("giriş sonrası yalnızca site içi adrese yönlendirir", async ({ page }) => {
-  const email = uniqueEmail("yonlendir");
-  await register(page, email);
-  await verify(page, email);
+  // Giriş sonrası yalnızca site içi adrese yönlendirilir (kayıt hız sınırı nedeniyle aynı hesapla).
+  await context.clearCookies();
   await login(page, email, PASSWORD, "/giris?sonra=//kotu-site.example/tuzak");
   await expect(page).toHaveURL(/127\.0\.0\.1:3100\/panel$/);
 });

@@ -17,6 +17,14 @@ interface PlanSummary {
   is_trial: boolean;
 }
 
+interface Quote {
+  code: string;
+  subtotal_minor: number;
+  discount_minor: number;
+  total_minor: number;
+  currency: string;
+}
+
 type Viewer = { kind: "loading" } | { kind: "anonymous" } | { kind: "customer"; me: Me } | { kind: "error"; message: string };
 
 const CONSENTS = [
@@ -62,7 +70,19 @@ export function CheckoutForm({ plan }: { plan: PlanSummary }) {
   const [status, setStatus] = useState<PaymentStatus | null>(null);
   const { pending, error, run } = useSubmit();
   const [leaving, setLeaving] = useState(false);
+  const [couponInput, setCouponInput] = useState("");
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const coupon = useSubmit();
   const free = plan.price_minor === 0;
+  const total = quote ? quote.total_minor : plan.price_minor;
+
+  function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    void coupon.run(async () => {
+      setQuote(await api.post<Quote>("/v1/coupons/check", { plan_code: plan.code, code }));
+    });
+  }
   const next = `/satin-al?paket=${encodeURIComponent(plan.code)}`;
 
   useEffect(() => {
@@ -103,6 +123,7 @@ export function CheckoutForm({ plan }: { plan: PlanSummary }) {
         accept_preinfo: data.get("accept_preinfo") === "on",
         accept_contract: data.get("accept_contract") === "on",
         accept_immediate_delivery: data.get("accept_immediate_delivery") === "on",
+        coupon: quote?.code ?? null,
       });
       setLeaving(true);
       window.location.assign(result.redirect_url);
@@ -181,6 +202,46 @@ export function CheckoutForm({ plan }: { plan: PlanSummary }) {
           hint="Fatura için; şirket adına alımda vergi numarası."
         />
       </fieldset>
+      {free ? null : (
+        <fieldset className="space-y-3">
+          <legend className="text-base font-semibold text-fg">İndirim kuponu</legend>
+          {quote ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-success-border bg-success-bg px-4 py-3 text-sm text-success-fg" role="status" data-testid="coupon-applied">
+              <span>
+                <strong>{quote.code}</strong> uygulandı: −{formatPrice(quote.discount_minor, quote.currency)} · Ödenecek{" "}
+                <strong>{formatPrice(quote.total_minor, quote.currency)}</strong>
+              </span>
+              <Button type="button" variant="secondary" size="sm" className="px-3 py-1.5" onClick={() => setQuote(null)}>
+                Kaldır
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Field
+                  id="coupon"
+                  name="coupon"
+                  label="Kupon kodu"
+                  autoComplete="off"
+                  maxLength={32}
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      applyCoupon();
+                    }
+                  }}
+                />
+              </div>
+              <Button type="button" variant="secondary" onClick={applyCoupon} disabled={coupon.pending || !couponInput.trim()}>
+                Uygula
+              </Button>
+            </div>
+          )}
+          <ErrorBox error={coupon.error} />
+        </fieldset>
+      )}
       <fieldset className="space-y-3">
         <legend className="text-base font-semibold text-fg">Onaylar</legend>
         {CONSENTS.map((consent) => (
@@ -194,7 +255,13 @@ export function CheckoutForm({ plan }: { plan: PlanSummary }) {
       </fieldset>
       <ErrorBox error={error} />
       <Button type="submit" className="w-full" disabled={pending || leaving}>
-        {pending || leaving ? "Yönlendiriliyor…" : free ? "Denemeyi başlat" : `Ödemeye geç · ${formatPrice(plan.price_minor, plan.currency)}`}
+        {pending || leaving
+          ? "Yönlendiriliyor…"
+          : free
+            ? "Denemeyi başlat"
+            : total === 0
+              ? "Lisansı al"
+              : `Ödemeye geç · ${formatPrice(total, plan.currency)}`}
       </Button>
       <p id="odeme-aciklama" className="text-center text-sm text-muted">
         {free
