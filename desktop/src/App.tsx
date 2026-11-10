@@ -2,6 +2,7 @@ import {
   Activity,
   BarChart3,
   CandlestickChart,
+  FlaskConical,
   Gauge,
   LayoutDashboard,
   type LucideIcon,
@@ -22,6 +23,7 @@ import { Analysis } from "./pages/Analysis";
 import { Dashboard, stateTone } from "./pages/Dashboard";
 import { Markets } from "./pages/Markets";
 import { Opportunities } from "./pages/Opportunities";
+import { Lab } from "./pages/Lab";
 import { LicenseGate } from "./pages/LicenseGate";
 import { Performance } from "./pages/Performance";
 import { Phone, phoneSummary, type RemoteStatus } from "./pages/Phone";
@@ -49,6 +51,7 @@ export const PAGES: PageDef[] = [
   { key: "trading", label: "Spot / Futures işlemler", hint: "Emirler, pozisyonlar ve otomatik işlem", group: "İşlem", icon: BarChart3, render: () => <Trading /> },
   { key: "performance", label: "Kâr/zarar ve geçmiş", hint: "Sonuçlar ve işlem geçmişi", group: "İşlem", icon: Trophy, render: () => <Performance /> },
   { key: "risk", label: "Risk", hint: "Sınırlar, risk kapısı kararları ve olaylar", group: "İşlem", icon: ShieldAlert, render: () => <Risk /> },
+  { key: "lab", label: "Backtest ve eğitim", hint: "Geçmiş veri indirme, geriye dönük test ve yapay zekâ modeli eğitimi", group: "İşlem", icon: FlaskConical, render: () => <Lab /> },
   { key: "strategies", label: "Strateji performansı", hint: "Stratejilerin sanal yarışma sonuçları", group: "İşlem", icon: Gauge, render: () => <Strategies /> },
   { key: "phone", label: "Telefon", hint: "QR kodla iPhone eşleştirme ve telefondan kontrol", group: "Sistem", icon: Smartphone, render: () => <Phone /> },
   { key: "settings", label: "Ayarlar", hint: "İşlem modu, borsa anahtarları, lisans ve denetim kaydı", group: "Sistem", icon: SettingsIcon, render: () => <Settings /> },

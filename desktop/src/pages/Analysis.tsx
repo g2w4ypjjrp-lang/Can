@@ -83,7 +83,7 @@ export function Analysis() {
       </Card>
       <div className="grid-2">
         <Card title="Yapay zekâ tahmini">
-          {!model && <p className="muted">Bu sembol ve aralık için eğitilmiş model yok (Analiz → model eğitimi motor komut satırından).</p>}
+          {!model && <p className="muted">Bu sembol ve aralık için eğitilmiş model yok. Backtest ve eğitim ekranından model eğitebilirsiniz.</p>}
           <ErrorBox error={prediction.error} />
           {prediction.data && (
             <div className="stack">

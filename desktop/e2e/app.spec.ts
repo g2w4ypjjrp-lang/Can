@@ -53,6 +53,7 @@ test("bütün ekranlar açılır", async ({ page }) => {
     "performance",
     "risk",
     "strategies",
+    "lab",
     "phone",
     "settings",
     "dashboard",
@@ -238,4 +239,15 @@ test("lisans zorunluyken lisans girilmeden uygulama açılmaz; etkinleştirince 
   await page.getByTestId("license-release").click();
   await page.getByRole("dialog").getByRole("button", { name: "Lisanstan çıkar" }).click();
   await expect(gate).toBeVisible();
+});
+
+test("backtest ve eğitim ekranı: üç bölüm açılır, geçmiş veri kapalıysa açıklama gösterir", async ({ page }) => {
+  await open(page, "lab");
+  await expect(page.getByTestId("page-lab")).toBeVisible();
+  for (const id of ["lab-history", "lab-backtest", "lab-train"]) await expect(page.getByTestId(id)).toBeVisible();
+  // Uçtan uca motorda geçmiş veri servisi kapalı: çökmeden açıklama gösterilir.
+  await expect(page.getByTestId("lab-history")).toContainText("Geçmiş veri");
+  await expect(page.getByTestId("lab-backtest")).toContainText("etkin değil");
+  await page.getByTestId("lab-bt-symbols").fill("");
+  await expect(page.getByTestId("lab-bt-start")).toBeDisabled();
 });
