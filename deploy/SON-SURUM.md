@@ -1,4 +1,8 @@
-# En son sürümü yükleme (0.13.2)
+# En son sürümü yükleme (0.13.3)
+
+0.13.3'te yeni: **telefonun kamerasıyla QR okutunca tarayıcıda izleme sayfası** (uygulama gerekmez),
+**karar aralığı** seçimi (1 dk / 5 dk / 15 dk / 1 saat), motor yeniden açıldığında piyasa akışının
+başlamaması hatası düzeltildi (güvenli modda kalıp işlem açmıyordu), modern arayüz.
 
 0.13.2'de yeni: Genel bakışta **Bot paneli** (bot neden işlem açmıyor + Düzelt düğmeleri, sonraki
 karar saati, en yüksek puanlı adaylar), coin listesi açılışta birkaç saniyede dolar, fırsat taraması
@@ -41,7 +45,7 @@ harcama sınırı tanımlanabilir).
 1. GitHub → depo → **Actions** → **Masaüstü** → **Run workflow** → dal:
    `claude/laughing-hawking-wmt8mo` → **Run workflow**. Yaklaşık 25 dakika sürer.
 2. Yeşil olunca çalıştırmanın altındaki **Artifacts** → `ati-windows-installer-unsigned` ZIP'ini
-   indirip açın: `AI Trading Intelligence_0.13.2_x64-setup.exe`.
+   indirip açın: `AI Trading Intelligence_0.13.3_x64-setup.exe`.
 3. Dosyayı VDS'ye kopyalayıp hazırlayın (indirme klasörüne koyar, SHA-256'yı ve varsa güncelleme
    imzasını yazar):
 
@@ -49,7 +53,7 @@ harcama sınırı tanımlanabilir).
    powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 surum-hazirla -Dosya "<setup.exe yolu>"
    ```
 
-4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.13.2), adres, SHA-256, boyut ve
+4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.13.3), adres, SHA-256, boyut ve
    imzayı girin → doğrulama kodunuzla **Yayınla**. Artık canarslan.net.tr/indir sayfasında görünür.
 
 ## C. Bilgisayarınızda kurulum / güncelleme

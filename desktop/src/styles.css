@@ -1470,3 +1470,191 @@ dl.kv dd {
   color: #dbe4ff;
   opacity: 1;
 }
+
+/* ============================================================================================
+   Modern katman (0.13.3): cam kartlar, yumuşak derinlik, degrade vurgular, akıcı geçişler.
+   Önceki kuralların üzerine yazar; renk anlamları (yükseliş/düşüş/uyarı) değişmez.
+   ============================================================================================ */
+:root {
+  --radius: 18px;
+  --glass: rgba(16, 24, 44, 0.86);
+  --glass-strong: rgba(22, 32, 56, 0.82);
+  --glass-line: rgba(140, 165, 230, 0.12);
+  --glass-line-strong: rgba(140, 165, 230, 0.22);
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.9);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  font-feature-settings: "tnum" 1, "cv11" 1;
+}
+.app {
+  background:
+    radial-gradient(900px 520px at 92% -8%, rgba(61, 109, 245, 0.2), transparent 62%),
+    radial-gradient(760px 460px at 30% 112%, rgba(139, 92, 246, 0.14), transparent 60%),
+    radial-gradient(520px 320px at 5% 8%, rgba(31, 209, 142, 0.06), transparent 60%), var(--bg);
+  background-attachment: fixed;
+}
+.sidebar {
+  background: rgba(8, 13, 26, 0.72);
+  backdrop-filter: blur(18px) saturate(140%);
+  border-right: 1px solid var(--glass-line);
+}
+.sidebar nav button {
+  border-radius: 12px;
+  transition:
+    background 0.2s var(--ease),
+    color 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+.sidebar nav button:hover:not(:disabled) {
+  transform: translateX(2px);
+}
+.sidebar nav button.active {
+  background: linear-gradient(90deg, rgba(61, 109, 245, 0.28), rgba(124, 77, 255, 0.12));
+  border-color: rgba(109, 149, 255, 0.35);
+  box-shadow: 0 8px 22px -14px rgba(77, 110, 255, 0.9);
+}
+.topbar {
+  background: rgba(6, 10, 19, 0.6);
+  backdrop-filter: blur(18px) saturate(140%);
+  border-bottom: 1px solid var(--glass-line);
+}
+.topbar h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #ffffff, #c9d6ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.card,
+.bot-panel,
+.getting-started,
+.stat {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 45%), var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius);
+  /* backdrop-filter kullanılmaz: kartın içindeki onay pencerelerini (position: fixed) karta
+     hapseder ve tıklanamaz yapar. Cam etkisi yarı saydam renk ve degradeyle verilir. */
+  box-shadow: var(--shadow);
+  transition:
+    border-color 0.25s var(--ease),
+    box-shadow 0.25s var(--ease),
+    transform 0.25s var(--ease);
+}
+.card:hover,
+.stat:hover {
+  border-color: var(--glass-line-strong);
+}
+.stat:hover {
+  box-shadow:
+    var(--shadow),
+    0 16px 34px -22px rgba(77, 110, 255, 0.7);
+}
+.card-head {
+  border-bottom: 1px solid var(--glass-line);
+  padding: 14px 20px;
+}
+.card-head h2 {
+  font-size: 14.5px;
+  font-weight: 650;
+}
+.card-body {
+  padding: 18px 20px;
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+button {
+  border-radius: 12px;
+  border-color: var(--glass-line-strong);
+  background: rgba(255, 255, 255, 0.04);
+  transition:
+    background 0.2s var(--ease),
+    border-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease),
+    transform 0.12s var(--ease),
+    filter 0.2s var(--ease);
+}
+button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(140, 165, 230, 0.35);
+}
+button.primary,
+button.danger {
+  border-radius: 12px;
+}
+button.primary:hover:not(:disabled),
+button.danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+input,
+select {
+  background: rgba(6, 11, 24, 0.7);
+  border-color: var(--glass-line-strong);
+  border-radius: 12px;
+}
+.badge {
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+table tbody tr {
+  transition: background 0.15s var(--ease);
+}
+table tbody tr:hover {
+  background: rgba(109, 149, 255, 0.06);
+}
+table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--glass-strong);
+  backdrop-filter: blur(10px);
+  z-index: 1;
+}
+.page > * {
+  animation: rise 0.35s var(--ease) both;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page > * {
+    animation: none;
+  }
+  .stat:hover,
+  button:hover:not(:disabled) {
+    transform: none;
+  }
+}
+.bot-panel.on {
+  border-color: rgba(31, 209, 142, 0.38);
+  background:
+    radial-gradient(600px 180px at 0% 0%, rgba(31, 209, 142, 0.12), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 45%), var(--glass);
+}
+.bot-meter {
+  height: 9px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.bot-meter span {
+  background: linear-gradient(90deg, #3d6df5, #8b5cf6);
+}
+.bot-meter span.pass {
+  background: linear-gradient(90deg, #12b97b, #1fd18e);
+}
+.chip.active {
+  background: linear-gradient(90deg, rgba(61, 109, 245, 0.35), rgba(124, 77, 255, 0.25));
+}
+.conditions li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--glass-line);
+}
+.conditions li:last-child {
+  border-bottom: 0;
+}

@@ -25,8 +25,8 @@ test("genel bakış motor durumunu ve hazırlık koşullarını gösterir", asyn
   await open(page);
   await expect(page.getByTestId("engine-state")).toHaveText("Çalışıyor");
   await expect(page.getByTestId("trading-mode")).toHaveText("Sanal işlem");
-  await expect(page.getByTestId("conditions")).toContainText("market_data.usdm_futures");
-  await expect(page.getByTestId("conditions")).toContainText("risk.daily_loss");
+  await expect(page.getByTestId("conditions")).toContainText("Futures piyasa verisi");
+  await expect(page.getByTestId("conditions")).toContainText("Günlük zarar sınırı");
 });
 
 test("başlarken kartı yapılacakları gösterir ve ilgili ekrana götürür", async ({ page }) => {

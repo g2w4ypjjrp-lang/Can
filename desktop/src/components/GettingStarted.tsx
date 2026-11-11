@@ -52,7 +52,7 @@ export function GettingStarted() {
     {
       key: "phone",
       title: "Telefonu eşleştir",
-      hint: phones > 0 ? `${phones} telefon eşli` : "İsteğe bağlı: QR kodla iPhone'dan kontrol",
+      hint: phones > 0 ? `${phones} telefon eşli` : "İsteğe bağlı: QR'ı telefonun kamerasıyla okutun",
       done: phones > 0,
       page: "phone",
       icon: Smartphone,

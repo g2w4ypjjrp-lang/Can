@@ -129,7 +129,10 @@ Kurulum dosyasını (EXE) GitHub derler.
    uygulamada Ayarlar → **Binance gerçek hesap anahtarları** → kaydedin (para çekme açıksa
    reddedilir) → İşlem modu → **Gerçek para** → onay ifadesini yazın. Uygulama yeniden başlayınca
    sanal moda döner; her seferinde yeniden onaylanır.
-6. **Telefon:** Telefon ekranı → "Telefondan kontrol"ü açın → iPhone uygulamasıyla QR'ı okutun.
+6. **Telefon:** Telefon ekranı → "Telefondan kontrol"ü açın → **QR kodu göster** → QR'ı telefonun
+   **kamerasıyla** okutun. Tarayıcıda `canarslan.net.tr/telefon` açılır ve birkaç saniyede eşleşir
+   (uygulama gerekmez): motor, bot, pozisyonlar, fırsatlar ve bildirimler görünür; acil durdurma ve
+   botu durdurma yapılabilir. Bağlantı uçtan uca şifrelidir.
 7. **Telegram (isteğe bağlı):** Ayarlar → Telegram bildirimleri → @BotFather'dan bot anahtarı →
    botunuza /start yazın → Sohbeti bul → Kaydet.
 8. Bilgisayar ve uygulama açık kalmalı; kapalıyken yeni işlem açılmaz (borsadaki stoplar kalır).

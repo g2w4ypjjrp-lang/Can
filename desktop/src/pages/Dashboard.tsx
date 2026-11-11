@@ -8,6 +8,15 @@ import { duration, MARKET_LABELS, MODE_LABELS, num, pct, price, STATE_LABELS, ti
 
 const RELEASE_PHRASE = "SERBEST BIRAK";
 
+/** Motorun hazırlık koşullarının anlaşılır adları (kod adı ipucunda kalır). */
+const CONDITION_LABELS: Record<string, string> = {
+  "market_data.spot": "Spot piyasa verisi",
+  "market_data.usdm_futures": "Futures piyasa verisi",
+  "risk.daily_loss": "Günlük zarar sınırı (Demo)",
+  "live.risk.daily_loss": "Günlük zarar sınırı (gerçek hesap)",
+  "license.valid": "Lisans",
+};
+
 export function stateTone(state?: string): "ok" | "warn" | "bad" | "neutral" {
   if (state === "running") return "ok";
   if (state === "safe_mode" || state === "starting") return "warn";
@@ -76,8 +85,8 @@ export function Dashboard() {
           <ul className="conditions" data-testid="conditions">
             {(s?.readiness ?? []).map((c) => (
               <li key={c.name}>
-                <Badge tone={c.ready ? "ok" : "warn"}>{c.ready ? "Hazır" : "Bekliyor"}</Badge> <code>{c.name}</code>{" "}
-                <span className="muted">{c.detail}</span>
+                <Badge tone={c.ready ? "ok" : "warn"}>{c.ready ? "Hazır" : "Bekliyor"}</Badge>{" "}
+                <b title={c.name}>{CONDITION_LABELS[c.name] ?? c.name}</b> <span className="muted">{c.detail}</span>
               </li>
             ))}
             {s && s.readiness.length === 0 && <li className="muted">Kayıtlı koşul yok</li>}
