@@ -254,8 +254,11 @@ export function Phone() {
                 </li>
                 <li>
                   <div>
-                    <b>iPhone'da "Bilgisayarı eşleştir"e dokunun</b>
-                    <span>Kamerayla kodu okutun. Eşleşme birkaç saniyede burada görünür.</span>
+                    <b>AI Trading Intelligence iPhone uygulamasında "Bilgisayarı eşleştir"e dokunun</b>
+                    <span>
+                      Kodu uygulamanın içinden okutun; telefonun kendi Kamera uygulaması bu kodu açmaz (bağlantı
+                      değil, şifreli eşleşme bilgisidir). Eşleşme birkaç saniyede burada görünür.
+                    </span>
                   </div>
                 </li>
               </ol>

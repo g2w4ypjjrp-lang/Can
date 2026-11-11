@@ -92,7 +92,10 @@ export const HELP_TOPICS: HelpTopic[] = [
       "QR kodu göster'e basın (kod 5 dakika geçerli, tek kullanımlık).",
       "iPhone uygulamasında Bilgisayarı eşleştir'e dokunup kodu okutun.",
     ],
-    notes: ["Botu başlatma, pozisyon kapatma ve acil durdurmayı kaldırma Face ID onayı ister."],
+    notes: [
+      "Kod yalnızca AI Trading Intelligence iPhone uygulamasının içinden okunur; telefonun kendi Kamera uygulaması bu kodu açmaz (bağlantı değil, şifreli eşleşme bilgisidir).",
+      "Botu başlatma, pozisyon kapatma ve acil durdurmayı kaldırma Face ID onayı ister.",
+    ],
   },
   {
     id: "telegram",
