@@ -20,10 +20,20 @@
 param([switch]$Temiz)
 $ErrorActionPreference = "Stop"
 $Kok = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$Cikti = Join-Path $Kok "cikti"
+# Ekranda görünen her şey bu dosyaya da yazılır (pencere kapansa da hata okunabilsin).
+$Gunluk = Join-Path $Kok "derleme-gunlugu.txt"
+try { Start-Transcript -Path $Gunluk -Force | Out-Null } catch { }
 
 function Adim([string]$Metin) { Write-Host ""; Write-Host "==> $Metin" -ForegroundColor Cyan }
 function Bilgi([string]$Metin) { Write-Host "    $Metin" }
-function Hata([string]$Metin) { Write-Host ""; Write-Host "HATA: $Metin" -ForegroundColor Red; exit 1 }
+function Hata([string]$Metin) {
+    Write-Host ""
+    Write-Host "HATA: $Metin" -ForegroundColor Red
+    Write-Host "Kurulum dosyası OLUŞMADI. Tüm çıktı şu dosyada: $Gunluk" -ForegroundColor Yellow
+    try { Stop-Transcript | Out-Null } catch { }
+    exit 1
+}
 
 function Yolu-Yenile {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
@@ -46,7 +56,8 @@ function Winget-Kur([string]$Kimlik, [string[]]$Ek = @()) {
 function Calistir([string]$Aciklama, [scriptblock]$Is) {
     $eski = $ErrorActionPreference
     $ErrorActionPreference = "Continue"   # 5.1: araçların stderr çıktısı hata sayılmasın
-    & $Is
+    # Satırlar metne çevrilip ekrana yazılır; böylece günlük dosyasına da girer.
+    & $Is 2>&1 | ForEach-Object { "$_" } | Out-Host
     $kod = $LASTEXITCODE
     $ErrorActionPreference = $eski
     if ($kod -ne 0) { Hata "$Aciklama başarısız (çıkış kodu $kod). Ekranın görüntüsünü gönderin." }
@@ -57,6 +68,8 @@ if (-not (Test-Path (Join-Path $Kok "desktop\src-tauri\tauri.conf.json"))) {
 }
 $surum = (Get-Content (Join-Path $Kok "desktop\src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json).version
 Write-Host "AI Trading Intelligence $surum — Windows kurulum dosyası derleniyor" -ForegroundColor Green
+Write-Host "Bitince kurulum dosyası: $Cikti\AI Trading Intelligence_$($surum)_x64-setup.exe (ve masaüstüne kopyası)"
+Write-Host "Pencereyi 'Derleme tamamlandı' ya da 'HATA' yazana kadar kapatmayın."
 
 # ---------------------------------------------------------------------------------------------
 Adim "Ön denetimler"
@@ -206,7 +219,7 @@ try {
     for ($i = 1; $i -le 3 -and -not $tamam; $i++) {
         $eski = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
-        & npx.cmd tauri build --bundles nsis
+        & npx.cmd tauri build --bundles nsis 2>&1 | ForEach-Object { "$_" } | Out-Host
         $kod = $LASTEXITCODE
         $ErrorActionPreference = $eski
         if ($kod -eq 0) { $tamam = $true } elseif ($i -lt 3) {
@@ -218,22 +231,28 @@ try {
 } finally { Pop-Location }
 
 # ---------------------------------------------------------------------------------------------
-$kurulum = Get-ChildItem (Join-Path $Kok "desktop\src-tauri\target\release\bundle\nsis\*-setup.exe") |
+$kurulum = Get-ChildItem (Join-Path $Kok "desktop\src-tauri\target\release\bundle\nsis\*-setup.exe") -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $kurulum) { Hata "Kurulum dosyası bulunamadı." }
-$cikti = Join-Path $Kok "cikti"
-New-Item -ItemType Directory -Force $cikti | Out-Null
-$hedef = Join-Path $cikti $kurulum.Name
+if ($kurulum.Name -notlike "*_$($surum)_*") {
+    Hata "Derlenen dosya ($($kurulum.Name)) beklenen sürüm ($surum) değil."
+}
+New-Item -ItemType Directory -Force $Cikti | Out-Null
+$hedef = Join-Path $Cikti $kurulum.Name
 Copy-Item $kurulum.FullName $hedef -Force
 $ozet = (Get-FileHash $hedef -Algorithm SHA256).Hash.ToLower()
+$masaustu = [Environment]::GetFolderPath("Desktop")
+if ($masaustu -and (Test-Path $masaustu)) { Copy-Item $hedef (Join-Path $masaustu $kurulum.Name) -Force }
 
 Write-Host ""
 Write-Host "Derleme tamamlandı." -ForegroundColor Green
 Write-Host "  Dosya   : $hedef"
+Write-Host "  Kopya   : masaüstünüzde aynı adla"
 Write-Host "  Sürüm   : $surum"
 Write-Host "  Boyut   : $($kurulum.Length) bayt"
 Write-Host "  SHA-256 : $ozet"
 Write-Host ""
 Write-Host "Bu bilgisayara kurmak için dosyaya çift tıklayın (eski sürümün üzerine kurulur; lisans ve ayarlar korunur)."
 Write-Host "Müşterilere yayınlamak için dosyayı sunucuya kopyalayıp: yonet.ps1 surum-hazirla -Dosya `"<dosya yolu>`""
-Start-Process explorer.exe $cikti
+try { Stop-Transcript | Out-Null } catch { }
+Start-Process explorer.exe $Cikti
