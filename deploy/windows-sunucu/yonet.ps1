@@ -6,6 +6,7 @@
   C:\ATI\betikler\yonet.ps1 durum
   C:\ATI\betikler\yonet.ps1 yeniden
   C:\ATI\betikler\yonet.ps1 davet -Eposta siz@ornek.com -Ad "Ad Soyad"
+  C:\ATI\betikler\yonet.ps1 yonetici-sifirla -Eposta siz@ornek.com
   C:\ATI\betikler\yonet.ps1 loglar -Servis api
   C:\ATI\betikler\yonet.ps1 yedek
   C:\ATI\betikler\yonet.ps1 eposta-ayarla
@@ -15,7 +16,7 @@
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("durum", "baslat", "durdur", "yeniden", "davet", "loglar", "yedek", "eposta-ayarla", "eposta-dene", "guncelleme-anahtari", "surum-hazirla", "yedek-bulut-ayarla", "yedek-bulut-dene")]
+    [ValidateSet("durum", "baslat", "durdur", "yeniden", "davet", "yonetici-sifirla", "loglar", "yedek", "eposta-ayarla", "eposta-dene", "guncelleme-anahtari", "surum-hazirla", "yedek-bulut-ayarla", "yedek-bulut-dene")]
     [string]$Komut,
     [string]$Eposta,
     [string]$Dosya,
@@ -154,6 +155,16 @@ switch ($Komut) {
         & "$Kok\uygulama\cloud\.venv\Scripts\ati-cloud-admin.exe" invite --email $Eposta --name $Ad --role $Rol
         Write-Host ""
         Write-Host "Bağlantıyı 72 saat içinde açın; parola, doğrulama uygulaması ve kurtarma kodları istenir."
+    }
+    "yonetici-sifirla" {
+        # Parolasını ya da doğrulama telefonunu kaybeden yönetici (son süper yönetici dahil):
+        # yeni davet bağlantısıyla yeni parola ve doğrulama uygulaması kurulur.
+        if (-not $Eposta) { throw "Kullanım: yonet.ps1 yonetici-sifirla -Eposta <yönetici e-postası>" }
+        Yukle-Env "bulut.env"
+        & "$Kok\uygulama\cloud\.venv\Scripts\ati-cloud-admin.exe" reset --email $Eposta
+        if ($LASTEXITCODE -ne 0) { throw "Sıfırlanamadı (e-postayı kontrol edin)." }
+        Write-Host ""
+        Write-Host "Bağlantıyı 72 saat içinde açın: yeni parola ve doğrulama uygulaması (QR) kurulur, yeni kurtarma kodları verilir."
     }
     "loglar" {
         foreach ($dosya in "$Servis-gozetim.log", "$Servis.log", "$Servis-hata.log") {

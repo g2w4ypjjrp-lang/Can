@@ -81,6 +81,15 @@ powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 davet -Eposta
 parola belirleyin, doğrulama uygulamasını (Google Authenticator vb.) kurun, 10 kurtarma kodunu
 saklayın.
 
+**Parolanızı veya doğrulama telefonunuzu kaybettiyseniz** (tek yönetici siz olsanız da) sunucuda:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 yonetici-sifirla -Eposta <yönetici e-postası>
+```
+
+Çıkan yeni davet bağlantısıyla yeni parola ve doğrulama uygulaması kurulur; eski parola, eski
+oturumlar ve eski kurtarma kodları geçersiz olur. İşlem denetim kaydına yazılır.
+
 ### 7. Kontrol edip bana haber verin
 
 - [ ] `https://canarslan.net.tr` açılıyor; `www.` köke yönleniyor

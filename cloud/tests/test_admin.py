@@ -611,3 +611,48 @@ async def test_audit_reports_and_messages(app: Any, root: AdminClient, dsn: str)
     assert {"admin.activated", "admin.message_status"} <= {e["action"] for e in log}
     verified = (await http.get("/admin/v1/audit/verify")).json()
     assert verified["intact"] is True and verified["entries"] >= 2
+
+
+async def test_server_reset_recovers_forgotten_password_of_last_super_admin(
+    app: Any,
+    clock: Clock,
+    dsn: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Tek süper yönetici parolasını unuttu: sunucudaki ``ati-cloud-admin reset`` yeni davet
+    bağlantısı verir; eski parola ve oturum geçersizleşir, yeni parola + doğrulama kurulur."""
+    from admin_support import activate_admin
+    from ati_cloud.admin import cli as admin_cli
+
+    root = await activate_admin(app, clock, "kok@example.com", ["super_admin"])
+    assert (await root.http.get("/admin/v1/auth/me")).status_code == 200
+    monkeypatch.setenv("ATI_DATABASE_URL", dsn)
+    monkeypatch.setenv("ATI_ADMIN_PUBLIC_URL", "https://admin.example.test")
+    assert await admin_cli._reset("yok@example.com") == 1
+    assert await admin_cli._reset("KOK@example.com") == 0
+    link = capsys.readouterr().out.strip().splitlines()[-1]
+    assert link.startswith("https://admin.example.test/yonetim/davet?token=")
+    token = link.split("token=", 1)[1]
+
+    assert (await root.http.get("/admin/v1/auth/me")).status_code == 401  # oturum kapandı
+    fresh = client_for(app)
+    old = await fresh.post(
+        "/admin/v1/auth/login", json={"email": "kok@example.com", "password": ADMIN_PASSWORD}
+    )
+    assert old.status_code in (401, 403)  # davet tamamlanmadan giriş yok
+    start = (await fresh.post("/admin/v1/auth/invite/start", json={"token": token})).json()
+    secret = base64.b32decode(start["secret"] + "=" * (-len(start["secret"]) % 8))
+    new_password = "Yepyeni-Yonetici-Parolasi-2026!"
+    done = await fresh.post(
+        "/admin/v1/auth/invite/complete",
+        json={"token": token, "password": new_password, "code": clock.code(secret)},
+    )
+    assert done.status_code == 200, done.text
+    me = (await fresh.get("/admin/v1/auth/me")).json()
+    assert me["email"] == "kok@example.com" and "super_admin" in me["roles"]
+    with psycopg.connect(dsn) as conn:
+        actions = [r[0] for r in conn.execute("SELECT action FROM audit_log").fetchall()]
+    assert "admin.admin_reset_from_server" in actions
+    for client in (root.http, fresh):
+        await client.aclose()
