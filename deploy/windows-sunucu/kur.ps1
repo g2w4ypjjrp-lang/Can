@@ -145,10 +145,31 @@ if (-not (Test-Path (Join-Path $Kaynak "cloud\pyproject.toml")) -or -not (Test-P
 }
 $surucu = Get-PSDrive -Name C
 if ($surucu.Free -lt 6GB) { Hata "C: sürücüsünde en az 6 GB boş alan gerekli (şu an $([math]::Round($surucu.Free / 1GB, 1)) GB)." }
+# Port denetimi netstat ile: Get-NetTCPConnection (WMI) bazı Windows kurulumlarında
+# "System.OutOfMemoryException" veriyor. Dinleyen bağlantının uzak adresi 0.0.0.0:0 / [::]:0'dır;
+# durum sütunu Türkçe Windows'ta yerelleştirildiği için ona bakılmaz.
+function Port-Dinleyenler([int]$Port) {
+    $bulunan = @()
+    try {
+        foreach ($satir in (& netstat.exe -ano 2>$null)) {
+            $p = @(($satir.Trim() -split '\s+') | Where-Object { $_ -ne '' })
+            if ($p.Count -lt 5 -or $p[0] -ne 'TCP') { continue }
+            $dinliyor = ($p[2] -eq '0.0.0.0:0') -or ($p[2] -eq '[::]:0')
+            if ($dinliyor -and ($p[1] -match ":$Port$") -and ($p[4] -match '^\d+$')) {
+                $bulunan += [int]$p[4]
+            }
+        }
+    } catch {
+        Write-Host "    UYARI: port $Port denetlenemedi ($($_.Exception.Message)); devam ediliyor." -ForegroundColor Yellow
+    }
+    return @($bulunan | Select-Object -Unique)
+}
 foreach ($port in 80, 443) {
-    $dinleyen = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-    foreach ($d in $dinleyen) {
-        $surec = Get-Process -Id $d.OwningProcess -ErrorAction SilentlyContinue
+    foreach ($surecNo in (Port-Dinleyenler $port)) {
+        if ($surecNo -eq 4) {
+            Hata "Port $port Windows (HTTP.sys / IIS / Web Dağıtım hizmeti) tarafından kullanılıyor. IIS kuruluysa durdurun: Yönetici PowerShell'de 'iisreset /stop' ve 'Stop-Service W3SVC'."
+        }
+        $surec = Get-Process -Id $surecNo -ErrorAction SilentlyContinue
         if ($surec -and $surec.Name -ne "caddy") {
             Hata "Port $port başka bir program tarafından kullanılıyor: $($surec.Name) (PID $($surec.Id)). IIS kuruluysa durdurun veya kaldırın."
         }
@@ -469,8 +490,13 @@ Gorev "Odeme-Bakimi" "odeme" (New-ScheduledTaskTrigger -Once -At (Get-Date).AddM
 Gorev "Yedek" "yedek" (New-ScheduledTaskTrigger -Daily -At "03:30") $kisa
 
 Adim "Güvenlik duvarı (80 ve 443 açık; veritabanı ve iç servisler kapalı)"
-if (-not (Get-NetFirewallRule -DisplayName "ATI HTTP-HTTPS" -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName "ATI HTTP-HTTPS" -Direction Inbound -Protocol TCP -LocalPort 80, 443 -Action Allow | Out-Null
+# netsh ile (Get-NetFirewallRule WMI'ye dayanır; bazı kurulumlarda bellek hatası verir).
+& netsh.exe advfirewall firewall show rule name="ATI HTTP-HTTPS" 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & netsh.exe advfirewall firewall add rule name="ATI HTTP-HTTPS" dir=in action=allow protocol=TCP localport=80,443 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "    UYARI: Güvenlik duvarı kuralı eklenemedi. Windows Defender Güvenlik Duvarı'nda 80 ve 443 için gelen kuralı elle açın." -ForegroundColor Yellow
+    }
 }
 Bilgi "Sağlayıcınızın panelinde ayrıca bir güvenlik duvarı varsa 80 ve 443 portlarını orada da açın."
 
