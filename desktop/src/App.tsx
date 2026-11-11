@@ -164,7 +164,7 @@ export function App() {
                 <Badge tone={stateTone(s.engine_state)} testId="top-state">
                   {STATE_LABELS[s.engine_state]}
                 </Badge>
-                <Badge tone={s.trading_mode === "paper" ? "neutral" : "info"} testId="top-mode">
+                <Badge tone={s.trading_mode === "live" ? "bad" : s.trading_mode === "paper" ? "neutral" : "info"} testId="top-mode">
                   {MODE_LABELS[s.trading_mode]}
                 </Badge>
                 {s.kill_switch.engaged && <Badge tone="bad">ACİL DURDURMA</Badge>}

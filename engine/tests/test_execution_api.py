@@ -70,7 +70,7 @@ async def test_testnet_trading_through_local_api(
     client: httpx.AsyncClient, exchange: FakeExchange, tmp_path: Path
 ) -> None:
     status = (await client.get("/v1/execution/status")).json()
-    assert status["live_locked"] is True and status["environment"] == "testnet"
+    assert status["live_locked"] is False and status["environment"] == "testnet"
     assert status["markets"]["usdm_futures"] == {
         "key_stored": False,
         "key_hint": None,
@@ -96,7 +96,7 @@ async def test_testnet_trading_through_local_api(
     assert futures["connected"] and futures["last_reconcile"]["ok"]
 
     blocked = await client.post("/v1/execution/trades", json=TRADE)
-    assert blocked.status_code == 409 and "TESTNET" in blocked.json()["detail"]
+    assert blocked.status_code == 409 and "Demo Trading değil" in blocked.json()["detail"]
     mode = await client.post("/v1/trading-mode", json={"mode": "testnet"})
     assert mode.status_code == 200
 
@@ -167,8 +167,8 @@ async def test_live_key_and_live_mode_refused(client: httpx.AsyncClient) -> None
     )
     assert live.status_code == 409
     checks = {c["name"]: c for c in live.json()["checks"]}
-    assert not checks["live_execution_available"]["passed"]
-    assert "G1" in checks["live_execution_available"]["message"]
+    assert not checks["live_key_connected"]["passed"]
+    assert "para çekme yetkisi KAPALI" in checks["live_key_connected"]["message"]
     unknown = await client.post("/v1/execution/trades", json=TRADE)
     assert unknown.status_code == 409  # mod PAPER
     missing = await client.post("/v1/execution/connect?market=spot")

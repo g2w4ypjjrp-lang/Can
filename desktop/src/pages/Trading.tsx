@@ -45,14 +45,23 @@ export function Trading() {
     await Promise.all([positions.refresh(), orders.refresh(), status.refresh()]);
   };
   const markets = status.data?.markets ?? {};
-  const testnetMode = engine.data?.trading_mode === "testnet";
+  const mode = engine.data?.trading_mode;
+  const liveMode = mode === "live";
+  const canTrade = mode === "testnet" || liveMode;
 
   return (
     <div className="page" data-testid="page-trading">
-      <div className="notice">
-        <b>Binance Demo Trading (sahte bakiye, gerçek fiyatlar).</b> Gerçek hesapla işlem bu sürümde kilitlidir; açılması için açık onayınız (G1: işlem yetkili ve para
-        çekme yetkisi kapalı canlı anahtar, G2: ilk gerçek işlem) gerekir.
-      </div>
+      {liveMode ? (
+        <div className="notice danger-notice" data-testid="trading-live-notice">
+          <b>GERÇEK PARA:</b> Bu ekrandaki pozisyonlar ve işlemler gerçek Binance hesabınızdadır. Her işlem risk kapısından
+          geçer; kâr garantisi yoktur. Demo'ya dönmek için Ayarlar → İşlem modu.
+        </div>
+      ) : (
+        <div className="notice">
+          <b>Binance Demo Trading (sahte bakiye, gerçek fiyatlar).</b> Gerçek parayla işlem için Ayarlar → İşlem modu →
+          Gerçek para (para çekme yetkisi kapalı gerçek hesap anahtarı ve onay gerekir).
+        </div>
+      )}
       <ErrorBox error={status.error} what="Emir yürütme" />
       <div className="stats">
         {Object.entries(markets).map(([m, info]) => (
@@ -127,7 +136,7 @@ export function Trading() {
             />
           </Card>
         </div>
-        <TradeForm enabled={testnetMode} markets={markets} onDone={refreshAll} />
+        <TradeForm enabled={canTrade} live={liveMode} markets={markets} onDone={refreshAll} />
       </div>
 
       <BotSettingsCard />
@@ -149,7 +158,7 @@ export function Trading() {
       </Confirm>
       <Confirm
         open={closeAll}
-        title="Tüm Demo Trading pozisyonlarını kapat"
+        title={liveMode ? "Tüm GERÇEK hesap pozisyonlarını kapat" : "Tüm Demo Trading pozisyonlarını kapat"}
         danger
         confirmLabel="Tümünü kapat"
         onCancel={() => setCloseAll(false)}
@@ -167,10 +176,12 @@ export function Trading() {
 
 function TradeForm({
   enabled,
+  live,
   markets,
   onDone,
 }: {
   enabled: boolean;
+  live: boolean;
   markets: ExecutionStatus["markets"];
   onDone: () => Promise<void>;
 }) {
@@ -202,7 +213,7 @@ function TradeForm({
       stop_loss: stop || null,
       take_profits,
       leverage: market === "usdm_futures" ? Number(leverage) : null,
-      reason: "elle test ağı işlemi (arayüz)",
+      reason: live ? "elle gerçek hesap işlemi (arayüz)" : "elle Demo Trading işlemi (arayüz)",
     });
     if (response) {
       setResult(response);
@@ -211,9 +222,15 @@ function TradeForm({
   };
 
   return (
-    <Card title="Yeni Demo Trading işlemi" testId="trade-form">
-      {!enabled && <div className="notice">İşlem açmak için Ayarlar'dan işlem modunu <b>Demo Trading</b> yapın.</div>}
-      {enabled && !connected && <div className="notice">Bu piyasa için Demo Trading anahtarı bağlı değil.</div>}
+    <Card title={live ? "Yeni işlem — GERÇEK PARA" : "Yeni Demo Trading işlemi"} testId="trade-form">
+      {!enabled && (
+        <div className="notice">
+          İşlem açmak için Ayarlar'dan işlem modunu <b>Demo para</b> ya da <b>Gerçek para</b> yapın.
+        </div>
+      )}
+      {enabled && !connected && (
+        <div className="notice">Bu piyasa için {live ? "gerçek hesap" : "Demo Trading"} anahtarı bağlı değil.</div>
+      )}
       <form className="form" onSubmit={onSubmit}>
         <Field label="Piyasa">
           <select value={market} onChange={(e) => setMarket(e.target.value as Market)} data-testid="trade-market">

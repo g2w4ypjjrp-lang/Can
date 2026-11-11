@@ -1,5 +1,5 @@
-"""Aşama 10: API anahtarı saklama (yalnızca test ağı), anahtar doğrulama, canlı anahtar
-yetki politikası ve gerçek hesap kilidi."""
+"""API anahtarı saklama (Demo ve gerçek hesap ayrı), anahtar doğrulama, canlı anahtar yetki
+politikası (para çekme açıksa ret) ve adres kilitleri (Demo ↔ gerçek Binance karışmaz)."""
 
 from __future__ import annotations
 
@@ -13,10 +13,8 @@ from ati_engine.exchange.rate_limit import WeightBudget
 from ati_engine.exchange.rest import BinanceRestClient
 from ati_engine.exchange.signing import HmacSigner
 from ati_engine.execution.binance_venue import BinanceFuturesVenue, BinanceSpotVenue
-from ati_engine.safety.trading_mode import LiveExecutionUnavailableCheck, LiveTradingLocked
 from ati_engine.security.exchange_keys import (
     ExchangeKeyStore,
-    LiveKeysLocked,
     check_live_key_policy,
     verify_key,
 )
@@ -59,11 +57,13 @@ async def test_testnet_keys_are_stored_encrypted_and_hinted(store: ExchangeKeySt
     assert await store.load("testnet", Market.USDM_FUTURES) is None
 
 
-async def test_live_keys_are_locked(store: ExchangeKeyStore) -> None:
-    with pytest.raises(LiveKeysLocked, match="G1"):
-        await store.store("live", Market.SPOT, KEY, SECRET)
-    with pytest.raises(LiveKeysLocked):
-        await store.load("live", Market.SPOT)
+async def test_live_and_demo_keys_are_kept_apart(store: ExchangeKeyStore) -> None:
+    await store.store("live", Market.SPOT, KEY, SECRET)
+    assert await store.load("testnet", Market.SPOT) is None  # Demo anahtarı ayrı
+    live = await store.info("live", Market.SPOT)
+    assert live is not None and live.environment == "live" and live.api_key_hint == "…wxyz"
+    assert await store.delete("live", Market.SPOT)
+    assert await store.load("live", Market.SPOT) is None
     with pytest.raises(ValueError, match="16-128"):
         await store.store("testnet", Market.SPOT, "kısa", SECRET)
     with pytest.raises(ValueError, match="testnet"):
@@ -101,25 +101,40 @@ async def test_live_key_policy_rejects_withdrawal_permission(exchange: FakeExcha
     await rest.close()
 
 
-async def test_live_mode_is_technically_impossible() -> None:
-    result = await LiveExecutionUnavailableCheck().evaluate()
-    assert not result.passed and "G1" in result.message and "G2" in result.message
+@pytest.mark.parametrize(
+    ("rest_url", "ws_url"),
+    [
+        ("https://demo-fapi.binance.com", "wss://fstream.binance.com/private"),
+        ("https://fapi.binance.com", "wss://demo-fstream.binance.com/private"),
+        ("https://testnet.binancefuture.com", "wss://fstream.binancefuture.com/private"),
+        ("https://kotu.example", "wss://fstream.binance.com/private"),
+    ],
+)
+async def test_live_mode_connects_only_to_real_binance(rest_url: str, ws_url: str) -> None:
     rest = BinanceRestClient(
-        "https://testnet.binancefuture.com",
-        budget=WeightBudget(100),
-        api_key="k",
-        signer=HmacSigner("s"),
+        rest_url, budget=WeightBudget(100), api_key="k", signer=HmacSigner("s")
     )
-    for venue_cls in (BinanceSpotVenue, BinanceFuturesVenue):
-        with pytest.raises(LiveTradingLocked):
-            venue_cls(
-                rest,
-                mode=TradingMode.LIVE,
-                api_key="k",
-                signer=HmacSigner("s"),
-                ws_url="wss://fstream.binancefuture.com/private",
-            )
+    with pytest.raises(ValueError, match="Binance dışı"):
+        BinanceFuturesVenue(
+            rest, mode=TradingMode.LIVE, api_key="k", signer=HmacSigner("s"), ws_url=ws_url
+        )
     await rest.close()
+
+
+async def test_live_mode_accepts_production_endpoints() -> None:
+    from ati_engine.config import BinanceEndpoints
+
+    b = BinanceEndpoints()
+    for venue_cls, rest_url, ws_url in (
+        (BinanceFuturesVenue, b.futures_live_rest, b.futures_live_ws_private),
+        (BinanceSpotVenue, b.spot_live_rest, b.spot_live_ws_api),
+    ):
+        rest = BinanceRestClient(rest_url, budget=WeightBudget(100), api_key="k",
+                                 signer=HmacSigner("s"))  # fmt: skip
+        venue = venue_cls(rest, mode=TradingMode.LIVE, api_key="k", signer=HmacSigner("s"),
+                          ws_url=ws_url)  # fmt: skip
+        assert venue.mode is TradingMode.LIVE
+        await rest.close()
 
 
 @pytest.mark.parametrize(

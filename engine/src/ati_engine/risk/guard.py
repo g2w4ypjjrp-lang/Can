@@ -92,7 +92,10 @@ class RiskGuard:
         bus: EventBus | None = None,
         close_all: Callable[[str], Awaitable[int]] | None = None,
         clock: Callable[[], int] | None = None,
+        prefix: str = "",
     ) -> None:
+        # Gerçek hesap bekçisinin koşulları "live." önekiyle ayrılır (Demo ile çakışmaz).
+        self.prefix = prefix
         self.limits = limits
         self.monitor = monitor
         self.safety = safety
@@ -110,7 +113,7 @@ class RiskGuard:
     # --- Koşul kaydı ------------------------------------------------------------------------
 
     def start(self) -> None:
-        self._register(DAILY_LOSS_CONDITION, "günlük zarar sınırı içinde")
+        self._register(self.prefix + DAILY_LOSS_CONDITION, "günlük zarar sınırı içinde")
 
     def _register(self, name: str, detail: str) -> None:
         if name not in self._registered:
@@ -119,11 +122,14 @@ class RiskGuard:
 
     def attach(self, market: Market) -> None:
         """Bir piyasa bağlandı: akış ve mutabakat koşulları izlenmeye başlar."""
-        self._register(stream_condition(market), "kullanıcı akışı bekleniyor")
-        self._register(reconciled_condition(market), "mutabakat tamam")
+        self._register(self.prefix + stream_condition(market), "kullanıcı akışı bekleniyor")
+        self._register(self.prefix + reconciled_condition(market), "mutabakat tamam")
 
     async def detach(self, market: Market) -> None:
-        for name in (stream_condition(market), reconciled_condition(market)):
+        for name in (
+            self.prefix + stream_condition(market),
+            self.prefix + reconciled_condition(market),
+        ):
             if name in self._registered:
                 self._registered.discard(name)
                 await self.safety.unregister_condition(name)
@@ -168,7 +174,7 @@ class RiskGuard:
                 halted = True
             report.halted = halted
             await self.safety.set_ready(
-                DAILY_LOSS_CONDITION,
+                self.prefix + DAILY_LOSS_CONDITION,
                 not halted,
                 snapshot.halt_reason or "günlük zarar sınırı aşıldı"
                 if halted
@@ -192,14 +198,16 @@ class RiskGuard:
             down_s = (now - since) / 1000
             ready = down_s < self.limits.stream_grace_s
             detail = f"kullanıcı akışı {down_s:.0f} sn kopuk"
-        if stream_condition(target.market) in self._registered:
-            await self.safety.set_ready(stream_condition(target.market), ready, detail)
+        if self.prefix + stream_condition(target.market) in self._registered:
+            await self.safety.set_ready(
+                self.prefix + stream_condition(target.market), ready, detail
+            )
         last = target.reconciler.last
         ok = last is None or last.ok
         critical = [i.rule for i in last.issues if i.severity == "critical"] if last else []
-        if reconciled_condition(target.market) in self._registered:
+        if self.prefix + reconciled_condition(target.market) in self._registered:
             await self.safety.set_ready(
-                reconciled_condition(target.market),
+                self.prefix + reconciled_condition(target.market),
                 ok,
                 "mutabakat tamam" if ok else "kritik fark: " + ", ".join(critical or ["hata"]),
             )

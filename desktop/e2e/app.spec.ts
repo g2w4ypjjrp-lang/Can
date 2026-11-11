@@ -87,9 +87,17 @@ test("acil durdurma devreye girer; kaldırmak için onay ifadesi gerekir", async
   await expect(page.getByTestId("top-state")).toHaveText("Çalışıyor");
 });
 
-test("gerçek hesap kilitli; test ağı anahtarı doğrulanmadan saklanmaz", async ({ page }) => {
+test("gerçek para onay ifadesi ve gerçek hesap anahtarı olmadan açılmaz; demo anahtarı doğrulanmadan saklanmaz", async ({ page }) => {
   await open(page, "settings");
-  await expect(page.getByTestId("mode-live")).toBeDisabled();
+  await page.getByTestId("mode-live").click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("gerçek parayla");
+  const confirmLive = dialog.getByRole("button", { name: "Gerçek parayı aç" });
+  await expect(confirmLive).toBeDisabled(); // ifade yazılmadan onaylanamaz
+  await dialog.getByLabel(/Onaylamak için yazın/).fill("GERCEK PARA ILE ISLEM YAPILMASINI ONAYLIYORUM");
+  await confirmLive.click();
+  await expect(page.getByTestId("mode-checks")).toContainText("para çekme yetkisi KAPALI");
+  await expect(page.getByTestId("mode-live")).toHaveAttribute("aria-checked", "false");
   const form = page.getByTestId("key-usdm_futures");
   await form.getByTestId("key-usdm_futures-api").fill(API_KEY);
   await form.getByTestId("key-usdm_futures-secret").fill("YanlisGizli0123456789abcdef");
@@ -106,7 +114,8 @@ test("gerçek hesap kilitli; test ağı anahtarı doğrulanmadan saklanmaz", asy
   await expect(form.getByTestId("key-usdm_futures-secret")).toHaveValue(""); // gizli anahtar ekranda kalmaz
 
   await page.getByTestId("mode-testnet").click();
-  await expect(page.getByTestId("settings-mode")).toHaveText("Demo Trading");
+  await expect(page.getByTestId("mode-testnet")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("top-mode")).toHaveText("Demo Trading");
 });
 
 test("test ağında işlem: risk kapısı stopsuz işlemi reddeder, korumalı işlemi açar ve kapatır", async ({ page }) => {
@@ -303,4 +312,33 @@ test("bot ayarları: risk sınırı aşılamaz, kaydedilir ve varsayılana döne
   await expect(saved.getByTestId("bot-pause")).toHaveValue("120");
   await page.getByTestId("bot-settings").getByTestId("bot-reset").click();
   await expect(page.getByTestId("bot-settings").getByTestId("bot-min-score")).toHaveValue("70");
+});
+
+
+test("gerçek para: anahtar (para çekme kapalı) bağlanınca onayla açılır, bot ve işlem ekranı uyarır, Demo'ya dönülür", async ({ page }) => {
+  await open(page, "settings");
+  const form = page.getByTestId("live-key-usdm_futures");
+  await expect(form).toContainText("Para çekme yetkisini KESİNLİKLE açmayın");
+  await form.getByTestId("live-key-usdm_futures-api").fill(API_KEY);
+  await form.getByTestId("live-key-usdm_futures-secret").fill(SECRET);
+  await form.getByTestId("live-key-usdm_futures-save").click();
+  await expect(form.getByTestId("live-key-usdm_futures-state")).toContainText("Bağlı …cdef");
+
+  await page.getByTestId("mode-live").click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel(/Onaylamak için yazın/).fill("GERCEK PARA ILE ISLEM YAPILMASINI ONAYLIYORUM");
+  await dialog.getByRole("button", { name: "Gerçek parayı aç" }).click();
+  await expect(page.getByTestId("top-mode")).toHaveText("GERÇEK PARA");
+  await expect(page.getByTestId("live-banner")).toBeVisible();
+
+  await open(page, "trading");
+  await expect(page.getByTestId("trading-live-notice")).toBeVisible();
+  await expect(page.getByTestId("trade-form")).toContainText("GERÇEK PARA");
+  const bot = page.getByTestId("bot-settings");
+  await expect(bot.getByTestId("bot-mode-live")).toHaveAttribute("aria-checked", "true");
+  await bot.getByTestId("bot-mode-testnet").click(); // bot kartından Demo'ya dönüş (onay gerekmez)
+  await expect(page.getByTestId("top-mode")).toHaveText("Demo Trading");
+  await open(page, "settings");
+  await page.getByTestId("live-key-usdm_futures").getByRole("button", { name: "Anahtarı sil" }).click();
+  await expect(page.getByTestId("live-key-usdm_futures-state")).toHaveText("Anahtar yok");
 });

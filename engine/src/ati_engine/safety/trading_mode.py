@@ -1,16 +1,14 @@
-"""İşlem modu denetleyicisi ve gerçek işlem (LIVE) kilidi.
+"""İşlem modu denetleyicisi ve gerçek işlem (LIVE) kapısı.
 
-Motor her açılışta PAPER (sanal işlem) modunda başlar. LIVE moduna geçiş için şunların
-TAMAMI gerekir:
+Motor her açılışta PAPER (sanal işlem) modunda başlar; gerçek hesap modu açılışta **asla**
+kendiliğinden geri gelmez. Kullanıcının onayıyla (G1/G2, 2026-11-11) gerçek hesap açıldı; LIVE
+moduna geçiş için şunların TAMAMI gerekir:
 
-1. Ayar dosyasında ``live_trading_enabled = true`` (kullanıcının bilinçli tercihi).
+1. Ayar dosyasında ``live_trading_enabled`` kapatılmamış olması (yöneticinin acil kapısı).
 2. Çalışma anında onay ifadesinin birebir girilmesi (``LIVE_TRADING_ACK_PHRASE``).
 3. Acil durdurmanın kapalı olması.
-4. Kayıtlı ek kontrollerin geçmesi. Aşama 1'de "gerçek emir yürütücüsü henüz yok"
-   kontrolü kayıtlıdır ve her zaman başarısız olur; yani bu aşamada gerçek işlem
-   teknik olarak İMKÂNSIZDIR. Aşama 10'da yürütme kodu eklendi ancak kontrol kullanıcı
-   onayları (G1: canlı anahtar, G2: ilk gerçek işlem) verilene kadar kayıtlı kalır; ayrıca
-   Binance yürütücüsü LIVE modda kurulamaz ve canlı anahtar kasaya yazılamaz.
+4. Kayıtlı ek kontrollerin geçmesi: para çekme yetkisi KAPALI gerçek hesap anahtarının kayıtlı
+   ve bağlı olması, lisansın geçerli olması (uygulama kayıt eder).
 
 Her deneme (başarılı/başarısız) denetim kaydına yazılır.
 """
@@ -18,7 +16,7 @@ Her deneme (başarılı/başarısız) denetim kaydına yazılır.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -45,25 +43,16 @@ class LiveTradingCheck(Protocol):
     async def evaluate(self) -> CheckResult: ...
 
 
-LIVE_LOCKED_MESSAGE = (
-    "Gerçek hesapla işlem bu sürümde kilitlidir. Yürütme kodu hazırdır ve Binance test ağında "
-    "denenebilir; gerçek hesap için kullanıcının açık onayları gerekir: G1 (işlem yetkili, para "
-    "çekme yetkisi KAPALI canlı API anahtarı) ve G2 (ilk gerçek para işlemi). Bu sürümde "
-    "yalnızca sanal işlem (PAPER) ve test ağı (TESTNET) kullanılabilir."
-)
+class CallableCheck:
+    """Bir işlevle değerlendirilen ön koşul (ör. gerçek hesap anahtarı bağlı mı)."""
 
-
-class LiveTradingLocked(PermissionError):
-    """Gerçek hesapla işlem kullanıcı onayları (G1/G2) olmadan teknik olarak imkânsızdır."""
-
-
-class LiveExecutionUnavailableCheck:
-    """Kullanıcı onayları (G1/G2) verilene kadar LIVE modunu kesin olarak engeller."""
-
-    name = "live_execution_available"
+    def __init__(self, name: str, evaluate: Callable[[], Awaitable[tuple[bool, str]]]) -> None:
+        self.name = name
+        self._evaluate = evaluate
 
     async def evaluate(self) -> CheckResult:
-        return CheckResult(self.name, False, LIVE_LOCKED_MESSAGE)
+        passed, message = await self._evaluate()
+        return CheckResult(self.name, passed, message)
 
 
 @dataclass(frozen=True)
@@ -87,9 +76,7 @@ class TradingModeController:
         self._bus = bus
         self._audit = audit
         self._kill_switch = kill_switch
-        self._checks: list[LiveTradingCheck] = (
-            list(checks) if checks is not None else [LiveExecutionUnavailableCheck()]
-        )
+        self._checks: list[LiveTradingCheck] = list(checks) if checks is not None else []
         self._mode = TradingMode.PAPER
         self._lock = asyncio.Lock()
 
@@ -105,9 +92,9 @@ class TradingModeController:
             CheckResult(
                 "config_live_enabled",
                 self._settings.live_trading_enabled,
-                "Ayar dosyasında live_trading_enabled = true olmalı"
+                "Gerçek hesap ayar dosyasında kapatılmış (live_trading_enabled = false)"
                 if not self._settings.live_trading_enabled
-                else "Ayar dosyasında gerçek işlem etkin",
+                else "Gerçek hesap ayarlarda açık",
             ),
             CheckResult(
                 "user_acknowledgement",

@@ -1,14 +1,17 @@
-"""Yürütme servisi: test ağı işlem motorlarını (piyasa başına) kurar, mutabakatı çalıştırır ve
-yerel API'ye işlem açma/kapama sunar.
+"""Yürütme servisi: işlem motorlarını (piyasa başına) kurar, mutabakatı çalıştırır ve yerel
+API'ye işlem açma/kapama sunar. Her ortam (Demo Trading = ``testnet``, gerçek hesap = ``live``)
+için ayrı bir servis örneği vardır: ayrı anahtarlar, ayrı hesap izleyicisi ve risk bekçisi.
 
 Güvenlik kuralları (kod düzeyinde):
 
-* Yalnızca **Binance test ağı** (TESTNET). Gerçek hesap anahtarı kasaya yazılamaz, Binance
-  yürütücüsü LIVE modda kurulamaz, test ağı modunda gerçek Binance adresine bağlanılamaz.
-* İşlem açmak için işlem modu TESTNET olmalı, motor RUNNING durumunda olmalı ve niyette zarar
-  durdur (veya iz süren stop) bulunmalı; kaldıraç ayardaki üst sınırı aşamaz.
-* Anahtar, saklanmadan önce salt-okunur imzalı bir istekle doğrulanır; doğrulanamazsa
-  saklanmaz. Anahtarın kendisi denetim kaydına ve yanıtlara yazılmaz.
+* Demo servisi gerçek Binance adresine, gerçek hesap servisi Binance dışı / Demo adresine
+  bağlanamaz (yürütücüde denetlenir).
+* İşlem açmak için işlem modu servisin ortamıyla aynı olmalı (Demo → TESTNET, gerçek → LIVE),
+  motor RUNNING durumunda olmalı ve niyette zarar durdur bulunmalı; risk kapısı her açılışı
+  denetler.
+* Anahtar, saklanmadan önce salt-okunur imzalı bir istekle doğrulanır. Gerçek hesap anahtarında
+  ayrıca yetkiler okunur: **para çekme veya transfer yetkisi açıksa REDDEDİLİR**. Doğrulanamayan
+  anahtar saklanmaz; anahtarın kendisi denetim kaydına ve yanıtlara yazılmaz.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus
@@ -38,7 +41,14 @@ from ati_engine.risk.account import AccountMonitor
 from ati_engine.risk.gate import RiskGate
 from ati_engine.risk.guard import RiskGuard
 from ati_engine.safety.coordinator import SafetyCoordinator
-from ati_engine.security.exchange_keys import ExchangeKeyStore, KeyCheck, StoredKey, verify_key
+from ati_engine.security.exchange_keys import (
+    LIVE_KEY_HELP,
+    ExchangeKeyStore,
+    KeyCheck,
+    StoredKey,
+    check_live_key_policy,
+    verify_key,
+)
 from ati_engine.storage.audit import AuditLog
 from ati_engine.storage.database import Database
 
@@ -46,7 +56,11 @@ logger = logging.getLogger(__name__)
 
 
 class ExecutionUnavailable(RuntimeError):
-    """İstenen piyasa için test ağı yürütücüsü bağlı değil."""
+    """İstenen piyasa için yürütücü bağlı değil."""
+
+
+Environment = Literal["testnet", "live"]
+ENV_LABELS = {"testnet": "Demo Trading", "live": "gerçek hesap"}
 
 
 @dataclass(frozen=True)
@@ -81,7 +95,11 @@ class ExecutionService:
         endpoints: dict[Market, TestnetEndpoints] | None = None,
         safety: SafetyCoordinator | None = None,
         bus: EventBus | None = None,
+        environment: Environment = "testnet",
     ) -> None:
+        self.environment: Environment = environment
+        self.mode = TradingMode.LIVE if environment == "live" else TradingMode.TESTNET
+        self.label = ENV_LABELS[environment]
         self.settings = settings
         self.cfg = settings.execution
         self.db = db
@@ -91,13 +109,17 @@ class ExecutionService:
         self.trading_mode = trading_mode
         self.engine_state = engine_state
         b = settings.binance
+        live = environment == "live"
         self.endpoints = endpoints or {
             Market.SPOT: TestnetEndpoints(
-                b.spot_testnet_rest, b.spot_testnet_ws_api, "/api/v3/time", "/api/v3/exchangeInfo"
+                b.spot_live_rest if live else b.spot_testnet_rest,
+                b.spot_live_ws_api if live else b.spot_testnet_ws_api,
+                "/api/v3/time",
+                "/api/v3/exchangeInfo",
             ),
             Market.USDM_FUTURES: TestnetEndpoints(
-                b.futures_testnet_rest,
-                b.futures_testnet_ws_private,
+                b.futures_live_rest if live else b.futures_testnet_rest,
+                b.futures_live_ws_private if live else b.futures_testnet_ws_private,
                 "/fapi/v1/time",
                 "/fapi/v1/exchangeInfo",
             ),
@@ -111,7 +133,7 @@ class ExecutionService:
             return [m.engine for m in self.markets.values()]
 
         self.monitor = AccountMonitor(
-            db, mode=TradingMode.TESTNET, engines=engines, quote_asset=settings.quote_asset
+            db, mode=self.mode, engines=engines, quote_asset=settings.quote_asset
         )
         self.gate = RiskGate(
             limits=settings.risk,
@@ -135,6 +157,7 @@ class ExecutionService:
                 targets=lambda: list(self.markets.values()),
                 bus=bus,
                 close_all=lambda reason: self.close_all(reason=reason, actor="risk_guard"),
+                prefix="live." if live else "",
             )
         self._guard_stop = asyncio.Event()
         self._guard_task: asyncio.Task[None] | None = None
@@ -159,36 +182,67 @@ class ExecutionService:
     async def store_key(
         self, market: Market, api_key: str, secret: str, *, actor: str
     ) -> tuple[KeyCheck, StoredKey | None]:
-        """Test ağı anahtarını doğrular; doğrulanırsa şifreli kasaya yazar."""
+        """Anahtarı doğrular; doğrulanırsa şifreli kasaya yazar. Gerçek hesap anahtarında önce
+        yetkiler okunur: para çekme/transfer açıksa ya da işlem yetkisi yoksa saklanmaz."""
         from ati_engine.exchange.signing import HmacSigner
 
-        rest = self._rest(market, api_key.strip(), HmacSigner(secret.strip()))
-        try:
-            with contextlib.suppress(Exception):
-                await rest.sync_time(self.endpoints[market].time_path)
-            check = await verify_key(rest, market)
-        finally:
-            await rest.close()
+        api_key, secret = api_key.strip(), secret.strip()
+        warnings: list[str] = []
+        blocked: list[str] = []
+        if self.environment == "live":
+            # Yetkiler spot adresinden okunur (futures anahtarı için de aynı uç nokta).
+            spot = self._rest(Market.SPOT, api_key, HmacSigner(secret))
+            try:
+                with contextlib.suppress(Exception):
+                    await spot.sync_time(self.endpoints[Market.SPOT].time_path)
+                verdict = await check_live_key_policy(spot, markets=[market])
+                blocked = [f.message for f in verdict.blocking]
+                warnings = [f.message for f in verdict.warnings]
+            except Exception as exc:
+                code = getattr(exc, "code", None)
+                blocked = [
+                    f"Anahtarın yetkileri okunamadı ({code or type(exc).__name__}). {LIVE_KEY_HELP}"
+                ]
+            finally:
+                await spot.close()
+        if blocked:
+            check = KeyCheck(False, " ".join(blocked))
+        else:
+            rest = self._rest(market, api_key, HmacSigner(secret))
+            try:
+                with contextlib.suppress(Exception):
+                    await rest.sync_time(self.endpoints[market].time_path)
+                check = await verify_key(
+                    rest, market, help_text=LIVE_KEY_HELP if self.environment == "live" else None
+                )
+            finally:
+                await rest.close()
+            if check.ok and warnings:
+                check = KeyCheck(True, f"{check.message}. Uyarı: {' '.join(warnings)}",
+                                 check.can_trade)  # fmt: skip
         stored = None
         if check.ok:
-            stored = await self.keys.store("testnet", market, api_key, secret)
+            stored = await self.keys.store(self.environment, market, api_key, secret)
         await self.audit.record(
             actor=actor,
-            action="execution.testnet_key",
+            action=f"execution.{self.environment}_key",
             details={
                 "market": market.value,
                 "verified": check.ok,
                 "stored": stored is not None,
                 "hint": stored.api_key_hint if stored else None,
+                "rejected_for": blocked[:3] if blocked else None,
             },
         )
         return check, stored
 
     async def delete_key(self, market: Market, *, actor: str) -> bool:
         await self.disconnect(market)
-        removed = await self.keys.delete("testnet", market)
+        removed = await self.keys.delete(self.environment, market)
         await self.audit.record(
-            actor=actor, action="execution.testnet_key_deleted", details={"market": market.value}
+            actor=actor,
+            action=f"execution.{self.environment}_key_deleted",
+            details={"market": market.value},
         )
         return removed
 
@@ -198,9 +252,11 @@ class ExecutionService:
         async with self._lock:
             if market in self.markets:
                 return self.markets[market]
-            loaded = await self.keys.load("testnet", market)
+            loaded = await self.keys.load(self.environment, market)
             if loaded is None:
-                raise ExecutionUnavailable(f"{market.value} için test ağı anahtarı kayıtlı değil")
+                raise ExecutionUnavailable(
+                    f"{market.value} için {self.label} anahtarı kayıtlı değil"
+                )
             api_key, signer = loaded
             endpoints = self.endpoints[market]
             rest = self._rest(market, api_key, signer)
@@ -217,7 +273,7 @@ class ExecutionService:
                 venue_cls = BinanceSpotVenue if market is Market.SPOT else BinanceFuturesVenue
                 venue = venue_cls(
                     rest,
-                    mode=TradingMode.TESTNET,
+                    mode=self.mode,
                     api_key=api_key,
                     signer=signer,
                     ws_url=endpoints.ws,
@@ -249,24 +305,29 @@ class ExecutionService:
             self.markets[market] = execution
             self.last_error.pop(market, None)
             if self.guard is not None:
+                self.start_guard()  # ilk bağlantıda (gerçek hesap bekçisi ancak o zaman başlar)
                 self.guard.attach(market)
             await self.audit.record(
                 actor="system",
                 action="execution.connected",
-                details={"market": market.value, "mode": "testnet", "symbols": len(symbols)},
+                details={
+                    "market": market.value,
+                    "mode": self.environment,
+                    "symbols": len(symbols),
+                },
             )
             return execution
 
     async def connect_configured(self) -> None:
         """Anahtarı kayıtlı piyasalara bağlanır (açılışta). Hata motoru durdurmaz."""
         for market in self.cfg.markets:
-            if await self.keys.info("testnet", market) is None:
+            if await self.keys.info(self.environment, market) is None:
                 continue
             try:
                 await self.connect(market)
             except ExecutionUnavailable as exc:
                 logger.warning(
-                    "Test ağı yürütücüsü bağlanamadı",
+                    "Yürütücü bağlanamadı",
                     extra={"market": market.value, "error": str(exc)},
                 )
 
@@ -296,7 +357,7 @@ class ExecutionService:
     def _get(self, market: Market) -> MarketExecution:
         execution = self.markets.get(market)
         if execution is None:
-            raise ExecutionUnavailable(f"{market.value} test ağı yürütücüsü bağlı değil")
+            raise ExecutionUnavailable(f"{market.value} {self.label} yürütücüsü bağlı değil")
         return execution
 
     # --- İşlemler -------------------------------------------------------------------------------
@@ -304,9 +365,9 @@ class ExecutionService:
     def _validate(self, intent: TradeIntent) -> None:
         # Diğer tüm kurallar (zorunlu stop, işlem başına risk, günlük zarar, kaldıraç, tasfiye
         # uzaklığı...) risk kapısındadır ve motor her açılışta onu çağırır.
-        if self.trading_mode() is not TradingMode.TESTNET:
+        if self.trading_mode() is not self.mode:
             raise ExecutionBlocked(
-                "İşlem modu TESTNET değil: test ağı işlemi için önce işlem modunu TESTNET yapın"
+                f"İşlem modu {self.label} değil: önce Ayarlar'dan işlem modunu seçin"
             )
 
     async def open(self, intent: TradeIntent, *, actor: str) -> ManagedPosition:
@@ -321,7 +382,7 @@ class ExecutionService:
                 "direction": intent.direction,
                 "quantity": str(intent.quantity),
                 "decision_id": intent.decision_id,
-                "mode": "testnet",
+                "mode": self.environment,
             },
         )
         return await execution.engine.open(intent)
@@ -338,7 +399,7 @@ class ExecutionService:
         return await execution.engine.close(symbol, reason=reason)
 
     async def close_all(self, *, reason: str, actor: str) -> int:
-        """Acil durumda tüm test ağı pozisyonlarını kapatır."""
+        """Acil durumda bu ortamdaki tüm pozisyonları kapatır."""
         closed = 0
         for execution in list(self.markets.values()):
             closed += await execution.engine.close_all(reason=reason, emergency=True)
@@ -355,7 +416,7 @@ class ExecutionService:
     async def status(self) -> dict[str, Any]:
         markets: dict[str, Any] = {}
         for market in self.cfg.markets:
-            stored = await self.keys.info("testnet", market)
+            stored = await self.keys.info(self.environment, market)
             execution = self.markets.get(market)
             entry: dict[str, Any] = {
                 "key_stored": stored is not None,
@@ -377,9 +438,9 @@ class ExecutionService:
             markets[market.value] = entry
         snapshot = self.monitor.last
         return {
-            "environment": "testnet",
+            "environment": self.environment,
             "trading_mode": self.trading_mode().value,
-            "live_locked": True,
+            "live_locked": not self.settings.live_trading_enabled,
             "markets": markets,
             "risk": {
                 "limits": self.settings.risk.model_dump(mode="json"),

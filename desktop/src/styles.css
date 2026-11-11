@@ -1253,3 +1253,48 @@ dl.kv dd {
   flex: 1;
   min-width: 0;
 }
+
+/* İşlem modu seçici: Sanal / Demo para / Gerçek para */
+.mode-switch {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 8px;
+}
+.mode-switch button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 12px;
+}
+.mode-switch button small {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.mode-switch button.active {
+  border-color: var(--accent);
+  background: rgba(109, 149, 255, 0.12);
+  box-shadow: var(--glow);
+}
+.mode-switch button.live.active {
+  border-color: var(--down);
+  background: rgba(255, 91, 107, 0.12);
+  box-shadow: 0 8px 26px -12px rgba(229, 56, 74, 0.8);
+}
+.mode-switch button:disabled.active {
+  opacity: 1;
+}
+.notice.danger-notice {
+  background: rgba(255, 91, 107, 0.1);
+  border-color: rgba(255, 91, 107, 0.45);
+  color: #ffc2c8;
+}
+.section-title {
+  margin: 8px 2px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}

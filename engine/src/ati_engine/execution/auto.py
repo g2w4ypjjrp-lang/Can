@@ -1,7 +1,8 @@
-"""Otomatik işlem: fırsat sinyallerini Binance **test ağında** işleme dönüştürür.
+"""Otomatik işlem: fırsat sinyallerini işleme dönüştürür.
 
-Varsayılan olarak **kapalıdır**; kullanıcı açar. Gerçek hesapla çalışmaz (LIVE kilitli, G1/G2).
-Her işlem risk kapısından geçer; bu modül yalnızca niyet üretir:
+Varsayılan olarak **kapalıdır**; kullanıcı açar. Seçili işlem moduna göre **Demo Trading**'de
+ya da kullanıcı gerçek hesap modunu (onay ifadesiyle) açtıysa **gerçek hesapta** çalışır; sanal
+modda işlem açmaz. Her işlem risk kapısından geçer; bu modül yalnızca niyet üretir:
 
 1. Sinyal: eşik üstü ``OpportunityScored`` (yön, stop ve hedef seviyesiyle). Mum kapanışından
    bu yana ``max_signal_age_s``'den eski sinyal kullanılmaz.
@@ -78,14 +79,15 @@ class AutoTrader:
         *,
         settings: AutoTradeSettings,
         limits: RiskLimits,
-        service: ExecutionService,
+        service: ExecutionService | Callable[[], ExecutionService],
         trading_mode: Callable[[], TradingMode],
         clock: Callable[[], int] | None = None,
     ) -> None:
         self.cfg = settings
         self.defaults = settings
         self.limits = limits
-        self.service = service
+        # Tek servis (testler) ya da işlem moduna göre Demo / gerçek hesap servisini veren işlev.
+        self._service = service
         self.trading_mode = trading_mode
         self.enabled = settings.enabled
         self._clock = clock or (lambda: int(time.time() * 1000))
@@ -95,10 +97,14 @@ class AutoTrader:
         self.stats = {"signals": 0, "opened": 0, "rejected": 0, "failed": 0}
         self.recent: deque[dict[str, Any]] = deque(maxlen=50)
         # Kayıp serisi: botun açtığı pozisyonların kapanış sonuçları (kısmi kapanışlar toplanır).
-        self._open_pnl: dict[tuple[str, str], Decimal] = {}
+        self._open_pnl: dict[tuple[str, str, str], Decimal] = {}  # (mod, piyasa, sembol)
         self.loss_streak = 0
         self.paused_until_ms: int | None = None
         self.results = {"wins": 0, "losses": 0}
+
+    @property
+    def service(self) -> ExecutionService:
+        return self._service if isinstance(self._service, ExecutionService) else self._service()
 
     def _skip(self, reason: str) -> None:
         self.skipped[reason] += 1
@@ -107,8 +113,9 @@ class AutoTrader:
         self.stats["signals"] += 1
         if not self.enabled:
             return self._skip("kapalı")
-        if self.trading_mode() is not TradingMode.TESTNET:
-            return self._skip("mod_testnet_değil")
+        mode = self.trading_mode()
+        if mode is TradingMode.PAPER:
+            return self._skip("mod_sanal")
         if event.market not in self.cfg.markets:
             return self._skip("piyasa")
         if event.score < self.cfg.min_score:
@@ -177,7 +184,7 @@ class AutoTrader:
         else:
             if managed.state == "open":
                 self.stats["opened"] += 1
-                self._open_pnl[(event.market.value, event.symbol)] = Decimal(0)
+                self._open_pnl[(mode.value, event.market.value, event.symbol)] = Decimal(0)
             entry.update(result=managed.state, filled=str(managed.filled_qty))
         self.recent.appendleft(entry)
         return None
@@ -185,11 +192,13 @@ class AutoTrader:
     async def on_trade_notice(self, notice: TradeNotice) -> None:
         """Botun açtığı pozisyonların sonucu: kısmi kapanışlar toplanır, pozisyon tamamen
         kapanınca kazanç/kayıp sayılır. Art arda ``max_consecutive_losses`` kayıpta mola."""
-        key = (notice.market, notice.symbol)
+        key = (notice.mode, notice.market, notice.symbol)
         if notice.action != "closed" or key not in self._open_pnl:
             return
         self._open_pnl[key] += Decimal(notice.net_pnl or "0")
         execution = self.service.markets.get(Market(notice.market))
+        if execution is not None and execution.engine.mode.value != notice.mode:
+            execution = None
         if execution is not None and notice.symbol in execution.engine.positions.positions:
             return  # kısmi kapanış (ör. ilk hedef); pozisyon sürüyor
         pnl = self._open_pnl.pop(key)
@@ -259,7 +268,10 @@ class AutoTrader:
         else:
             take_profits = (TakeProfit(target, Decimal(1)),)
         return TradeIntent(
-            decision_id=f"oto-{event.market.value}-{event.symbol}-{event.bar_open_time_ms}",
+            decision_id=(
+                f"oto-{'canli-' if self.trading_mode() is TradingMode.LIVE else ''}"
+                f"{event.market.value}-{event.symbol}-{event.bar_open_time_ms}"
+            ),
             market=event.market,
             symbol=event.symbol,
             direction=direction,
@@ -279,7 +291,11 @@ class AutoTrader:
     def status(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
-            "environment": "testnet",
+            "environment": {
+                TradingMode.LIVE: "live",
+                TradingMode.TESTNET: "testnet",
+                TradingMode.PAPER: "paper",
+            }[self.trading_mode()],
             "settings": self.cfg.model_dump(mode="json"),
             "defaults": {
                 k: v for k, v in self.defaults.model_dump(mode="json").items() if k in EDITABLE
@@ -295,6 +311,10 @@ class AutoTrader:
             "paused_until_ms": self.paused_until_ms,
             "results": dict(self.results),
             "recent": list(self.recent),
-            "disclaimer": "Test ağı işlemleridir; gerçek para kullanılmaz. Sonuçlar garanti "
-            "değildir ve gelecekteki performansı göstermez.",
+            "disclaimer": (
+                "GERÇEK PARA ile işlem yapılır; kayıp riski vardır."
+                if self.trading_mode() is TradingMode.LIVE
+                else "Demo Trading işlemleridir; gerçek para kullanılmaz."
+            )
+            + " Sonuçlar garanti değildir ve gelecekteki performansı göstermez.",
         }

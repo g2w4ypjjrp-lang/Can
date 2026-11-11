@@ -68,9 +68,16 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: "gercek-hesap",
-    title: "Gerçek hesapla işlem",
-    lead: "Gerçek hesapla işlem varsayılan olarak kapalıdır ve ayrı, açık onay gerektirir.",
+    title: "Gerçek parayla işlem (Demo para / Gerçek para)",
+    lead: "Uygulama sanal modda açılır. Bot ve elle işlemler için Demo para (Binance Demo Trading) ya da Gerçek para seçilebilir; gerçek para ayrı ve açık onay gerektirir.",
+    steps: [
+      "binance.com → Profil → API Yönetimi → API Oluştur. Yetkiler: Okuma ve Futures için Vadeli işlemler (Spot için Spot ve Marjin işlemi). Para çekme yetkisini açmayın.",
+      "Uygulamada Ayarlar → Binance gerçek hesap anahtarları bölümüne anahtarı girin. Uygulama yetkileri okur; para çekme veya transfer yetkisi açıksa anahtarı reddeder.",
+      "Ayarlar → İşlem modu → Gerçek para'ya basın, açılan pencerede onay ifadesini birebir yazın. Lisansın geçerli ve acil durdurmanın kapalı olması gerekir.",
+      "Bot kartındaki 'Bot hangi hesapla işlem yapsın?' seçiciyle Demo para ve Gerçek para arasında geçebilirsiniz; Demo'ya dönüş onay istemez.",
+    ],
     notes: [
+      "Uygulama yeniden başladığında güvenlik için sanal moda döner; gerçek parayı her seferinde yeniden onaylarsınız.",
       "Gerçek hesap anahtarında yalnızca okuma ve işlem izni verin; para çekme (withdraw) iznini asla açmayın. Para çekme izni açık anahtar uygulama tarafından reddedilir.",
       "Anahtara IP kısıtı koymanız önerilir (yalnızca kendi bilgisayarınızın IP adresi).",
       "Gerçek moda geçerken onay ifadesini yazmanız istenir. Kayıp riski size aittir; geçmiş ve sanal sonuçlar gelecekteki sonuçları göstermez.",

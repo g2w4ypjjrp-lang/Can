@@ -8,8 +8,10 @@ Bu dosyada hiçbir gizli bilgi (API anahtarı, belirteç) tutulmaz; gizli bilgil
 
 Güvenli varsayılanlar:
 * ``trading_mode`` = PAPER (sanal işlem).
-* ``live_trading_enabled`` = False. Gerçek işlem için kullanıcının bunu ayar dosyasında
-  bilerek açması *ve* çalışma anında onay ifadesini girmesi gerekir.
+* Motor her açılışta sanal modda başlar; gerçek hesap modu kendiliğinden geri gelmez. Gerçek
+  işlem için uygulamada onay ifadesinin girilmesi, para çekme yetkisi kapalı gerçek hesap
+  anahtarı ve geçerli lisans gerekir. ``live_trading_enabled = false`` gerçek hesabı tamamen
+  kapatır.
 * Yerel API yalnızca loopback adresine bağlanabilir.
 """
 
@@ -141,6 +143,13 @@ class BinanceEndpoints(BaseModel):
     # REST demo-api, WebSocket API demo-ws-api. Eski test ağı anahtarı olan kullanıcı eski adresleri
     # ATI_BINANCE__* ortam değişkenleriyle verebilir (testnet.binancefuture.com,
     # testnet.binance.vision).
+    # Gerçek hesap yürütmesi (kullanıcı onayıyla). Piyasa verisi adreslerinden ayrıdır; testlerde
+    # sahte borsaya yönlendirilir. Yürütücü yalnızca gerçek Binance adreslerini (ve yerel test
+    # adresini) kabul eder.
+    spot_live_rest: str = "https://api.binance.com"
+    spot_live_ws_api: str = "wss://ws-api.binance.com:443/ws-api/v3"
+    futures_live_rest: str = "https://fapi.binance.com"
+    futures_live_ws_private: str = "wss://fstream.binance.com/private"
     spot_testnet_rest: str = "https://demo-api.binance.com"
     spot_testnet_ws_api: str = "wss://demo-ws-api.binance.com/ws-api/v3"
     futures_testnet_rest: str = "https://demo-fapi.binance.com"
@@ -148,8 +157,9 @@ class BinanceEndpoints(BaseModel):
 
 
 class AutoTradeSettings(BaseModel):
-    """Otomatik işlem (Aşama 11): eşik üstü fırsat sinyallerini Binance test ağında işleme
-    dönüştürür. Varsayılan KAPALI; gerçek hesapla çalışmaz. Her işlem risk kapısından geçer."""
+    """Otomatik işlem (Aşama 11): eşik üstü fırsat sinyallerini işleme dönüştürür. Varsayılan
+    KAPALI. Seçili işlem moduna göre Demo Trading'de ya da (kullanıcı gerçek hesap modunu
+    onayladıysa) gerçek hesapta çalışır. Her işlem risk kapısından geçer."""
 
     enabled: bool = False
     markets: list[Market] = Field(default_factory=lambda: [Market.USDM_FUTURES])
@@ -476,7 +486,8 @@ class EngineSettings(BaseSettings):
 
     data_dir: Path = Field(default_factory=default_data_dir)
     trading_mode: TradingMode = TradingMode.PAPER
-    live_trading_enabled: bool = False
+    # Kullanıcı onayıyla açıldı (2026-11-11); false yapılırsa gerçek hesap modu hiç açılmaz.
+    live_trading_enabled: bool = True
     markets: list[Market] = Field(default_factory=lambda: [Market.SPOT, Market.USDM_FUTURES])
     quote_asset: str = "USDT"
 

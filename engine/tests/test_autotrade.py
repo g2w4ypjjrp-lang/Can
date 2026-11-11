@@ -166,7 +166,7 @@ async def test_disabled_or_wrong_mode_never_trades(
     mode[0] = TradingMode.PAPER
     auto = trader(svc, mode)
     await auto.on_opportunity(signal())
-    assert auto.skipped["mod_testnet_değil"] == 1
+    assert auto.skipped["mod_sanal"] == 1  # sanal modda bot işlem açmaz
     assert exchange.futures_positions == {}
 
 
@@ -234,7 +234,7 @@ async def test_loss_streak_pauses_new_entries(
     await auto.on_trade_notice(notice("closed", "-5", symbol="ETHUSDT"))
     assert auto.loss_streak == 0
     for pnl in ("-3", "-4"):
-        auto._open_pnl[("usdm_futures", "BTCUSDT")] = D(0)
+        auto._open_pnl[("testnet", "usdm_futures", "BTCUSDT")] = D(0)
         await auto.on_trade_notice(notice("closed", pnl))
     assert auto.loss_streak == 2 and auto.paused_until_ms == clock[0] + 3_600_000
     await auto.on_opportunity(signal(bar_open_time_ms=clock[0] - 3_600_000))
@@ -252,7 +252,7 @@ async def test_partial_close_is_summed_until_position_closes(
     svc, mode = service
     auto = trader(svc, mode)
     await auto.on_opportunity(signal())
-    assert ("usdm_futures", "BTCUSDT") in auto._open_pnl
+    assert ("testnet", "usdm_futures", "BTCUSDT") in auto._open_pnl
     # İlk hedef kârla (pozisyon sürüyor) → sonuç henüz sayılmaz.
     await auto.on_trade_notice(notice("closed", "10"))
     assert auto.results == {"wins": 0, "losses": 0}

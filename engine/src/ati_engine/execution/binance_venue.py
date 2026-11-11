@@ -53,7 +53,6 @@ from ati_engine.execution.venue import (
     VenueEvent,
     VenuePosition,
 )
-from ati_engine.safety.trading_mode import LIVE_LOCKED_MESSAGE, LiveTradingLocked
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +60,8 @@ logger = logging.getLogger(__name__)
 PRODUCTION_HOST_RE = re.compile(
     r"^(api\d*|fapi|dapi|papi|www|ws-api|ws-fapi|stream|fstream|dstream)\.binance\.com$"
 )
+
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 NOT_FOUND_CODES = {-2013, -2011}  # emir yok / iptal edilecek emir yok
 UNKNOWN_CODES = {-1007, -1006}  # borsa yanıt vermedi: durum bilinmiyor
@@ -126,12 +127,16 @@ class _BaseBinanceVenue:
     ) -> None:
         if mode is TradingMode.PAPER:
             raise ValueError("Binance yürütücüsü sanal modda kullanılmaz")
-        if mode is TradingMode.LIVE:
-            raise LiveTradingLocked(LIVE_LOCKED_MESSAGE)
         for url in (rest.base_url, ws_url):
             host = urlsplit(url).hostname or ""
-            if PRODUCTION_HOST_RE.match(host):
+            if mode is TradingMode.TESTNET and PRODUCTION_HOST_RE.match(host):
                 raise ValueError(f"Test ağı modunda gerçek Binance adresine ({host}) bağlanılamaz")
+            # Gerçek hesap yalnızca gerçek Binance adreslerine (testlerde yerel sahte borsaya)
+            # bağlanır; Demo/test ağı adresiyle karışmaz.
+            if mode is TradingMode.LIVE and not (
+                PRODUCTION_HOST_RE.match(host) or host in LOOPBACK_HOSTS
+            ):
+                raise ValueError(f"Gerçek hesap modunda Binance dışı adrese ({host}) bağlanılamaz")
         self.rest = rest
         self.mode = mode
         self._api_key = api_key

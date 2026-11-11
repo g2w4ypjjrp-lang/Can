@@ -58,6 +58,11 @@ async def main(args: argparse.Namespace) -> int:
                 futures_testnet_ws_private=exchange.private_ws_url,
                 spot_testnet_rest=exchange.rest_url,
                 spot_testnet_ws_api=exchange.ws_api_url,
+                # Gerçek hesap adresleri de sahte borsaya: testte gerçek Binance'e istek gitmez.
+                spot_live_rest=exchange.rest_url,
+                spot_live_ws_api=exchange.ws_api_url,
+                futures_live_rest=exchange.rest_url,
+                futures_live_ws_private=exchange.private_ws_url,
             ),
             market_data=MarketDataSettings(
                 enabled=True,

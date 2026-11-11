@@ -16,7 +16,9 @@ from ati_engine.system.single_instance import AlreadyRunningError, SingleInstanc
 def test_safe_defaults(tmp_path: Path) -> None:
     s = EngineSettings(data_dir=tmp_path)
     assert s.trading_mode is TradingMode.PAPER
-    assert s.live_trading_enabled is False
+    # Gerçek hesap kullanıcı onayıyla açıldı; yine de motor sanal modda başlar ve gerçek moda
+    # yalnızca onay ifadesi + bağlı gerçek anahtar + geçerli lisansla geçilir.
+    assert s.live_trading_enabled is True
     assert s.api.host == "127.0.0.1"
     assert s.risk.max_leverage <= 3
     assert s.binance.futures_ws_market.endswith("/market")

@@ -1,8 +1,9 @@
 import { type FormEvent, useState } from "react";
 import { useAction, usePoll } from "../api/hooks";
-import type { AuditEntry, Market, StatusResponse, TestnetKeyResponse, TradingModeResponse } from "../api/types.gen";
+import type { AuditEntry, Market, TestnetKeyResponse } from "../api/types.gen";
+import { ModeSwitch } from "../components/ModeSwitch";
 import { Badge, Card, DataTable, ErrorBox, Field } from "../components/ui";
-import { MARKET_LABELS, MODE_LABELS, time } from "../lib/format";
+import { MARKET_LABELS, time } from "../lib/format";
 import { CrashReportsSection } from "./CrashReports";
 import { LicenseSection } from "./License";
 import { TelegramSection } from "./Telegram";
@@ -13,70 +14,32 @@ interface ExecutionStatus {
 }
 
 export function Settings() {
-  const status = usePoll((c) => c.get<StatusResponse>("/v1/status"), 3000);
-  const execution = usePoll((c) => c.get<ExecutionStatus>("/v1/execution/status"), 5000);
+  const execution = usePoll((c) => c.get<ExecutionStatus>("/v1/execution/status", { environment: "testnet" }), 5000);
+  const live = usePoll((c) => c.get<ExecutionStatus>("/v1/execution/status", { environment: "live" }), 5000);
   const audit = usePoll((c) => c.get<AuditEntry[]>("/v1/audit", { limit: 30 }), 10000);
-  const [modeResult, setModeResult] = useState<TradingModeResponse | null>(null);
-  const setMode = useAction(async (c, mode: string) => {
-    try {
-      return await c.post<TradingModeResponse>("/v1/trading-mode", { mode });
-    } catch (e) {
-      // 409: kontrol(ler) geçmedi; gövdede ayrıntı var
-      const detail = (e as { detail?: unknown }).detail;
-      if (detail && typeof detail === "object" && "checks" in (detail as object)) return detail as TradingModeResponse;
-      throw e;
-    }
-  });
-
-  const current = status.data?.trading_mode;
   return (
     <div className="page" data-testid="page-settings">
       <LicenseSection />
 
-      <Card title="İşlem modu">
-        <div className="row">
-          <span>Şu an:</span>
-          <Badge tone={current === "testnet" ? "info" : "neutral"} testId="settings-mode">
-            {MODE_LABELS[current ?? ""] ?? "—"}
-          </Badge>
-          {(["paper", "testnet"] as const).map((mode) => (
-            <button
-              key={mode}
-              disabled={setMode.pending || current === mode}
-              onClick={async () => {
-                setModeResult((await setMode.execute(mode)) ?? null);
-                await status.refresh();
-              }}
-              data-testid={`mode-${mode}`}
-            >
-              {MODE_LABELS[mode]}
-            </button>
-          ))}
-          <button disabled title="Kullanıcı onayı (G1/G2) olmadan açılamaz" data-testid="mode-live">
-            Gerçek hesap (kilitli)
-          </button>
-        </div>
-        <ErrorBox error={setMode.error} />
-        {modeResult && !modeResult.accepted && (
-          <ul className="reasons">
-            {modeResult.checks
-              .filter((c) => !c.passed)
-              .map((c) => (
-                <li key={c.name} className="down">
-                  {c.message}
-                </li>
-              ))}
-          </ul>
-        )}
+      <Card title="İşlem modu" testId="trading-mode-card">
+        <ModeSwitch onChanged={() => void execution.refresh()} />
         <p className="muted small">
-          Sanal işlem gerçek emir göndermez. Demo Trading, Binance'in sahte bakiyeyle ve gerçek fiyatlarla çalışan ortamıdır. Gerçek hesapla işlem bu sürümde
-          kilitlidir: işlem yetkili canlı anahtar (G1) ve ilk gerçek işlem (G2) için açık onayınız gerekir.
+          <b>Sanal</b> emir göndermez. <b>Demo para</b>, Binance'in sahte bakiyeyle ve gerçek fiyatlarla çalışan Demo Trading
+          ortamıdır. <b>Gerçek para</b> gerçek Binance hesabınızda işlem yapar: para çekme yetkisi kapalı gerçek hesap anahtarı,
+          geçerli lisans ve onay ifadesi gerekir; uygulama yeniden başladığında güvenlik için sanal moda döner.
         </p>
       </Card>
 
+      <h3 className="section-title">Binance Demo Trading anahtarları (demo para)</h3>
       <div className="grid-2">
         {(["usdm_futures", "spot"] as Market[]).map((market) => (
-          <KeyForm key={market} market={market} info={execution.data?.markets[market]} onChange={execution.refresh} />
+          <KeyForm key={market} environment="testnet" market={market} info={execution.data?.markets[market]} onChange={execution.refresh} />
+        ))}
+      </div>
+      <h3 className="section-title">Binance gerçek hesap anahtarları (gerçek para)</h3>
+      <div className="grid-2">
+        {(["usdm_futures", "spot"] as Market[]).map((market) => (
+          <KeyForm key={market} environment="live" market={market} info={live.data?.markets[market]} onChange={live.refresh} />
         ))}
       </div>
 
@@ -102,20 +65,24 @@ export function Settings() {
 }
 
 function KeyForm({
+  environment,
   market,
   info,
   onChange,
 }: {
+  environment: "testnet" | "live";
   market: Market;
   info: ExecutionStatus["markets"][string] | undefined;
   onChange: () => Promise<void>;
 }) {
+  const live = environment === "live";
   const [apiKey, setApiKey] = useState("");
   const [secret, setSecret] = useState("");
   const [result, setResult] = useState<TestnetKeyResponse | null>(null);
-  const save = useAction((c) => c.post<TestnetKeyResponse>("/v1/execution/testnet-key", { market, api_key: apiKey, secret }));
-  const remove = useAction((c) => c.post("/v1/execution/testnet-key/delete", undefined, { market }));
-  const testId = `key-${market}`;
+  const path = live ? "/v1/execution/live-key" : "/v1/execution/testnet-key";
+  const save = useAction((c) => c.post<TestnetKeyResponse>(path, { market, api_key: apiKey, secret }));
+  const remove = useAction((c) => c.post(`${path}/delete`, undefined, { market }));
+  const testId = `${live ? "live-key" : "key"}-${market}`;
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -129,13 +96,28 @@ function KeyForm({
   };
 
   return (
-    <Card title={`Binance Demo Trading anahtarı — ${MARKET_LABELS[market]}`} testId={testId}>
-      <p className="muted small">
-        Sahte bakiyeyle, gerçek piyasa fiyatlarında çalışan Binance Demo Trading anahtarı. Oluşturmak için:{" "}
-        <b>demo.binance.com</b> → Binance hesabınızla giriş → <b>API Management</b> → <b>Create API</b>. Gerçek hesap
-        anahtarı burada çalışmaz. Anahtar doğrulanır ve bu bilgisayarda şifreli saklanır; ekranda yalnızca son 4
-        karakter görünür.
-      </p>
+    <Card title={`${live ? "Gerçek hesap" : "Demo Trading"} anahtarı — ${MARKET_LABELS[market]}`} testId={testId}>
+      {live ? (
+        <div className="muted small stack" style={{ gap: 6 }}>
+          <span>
+            <b>binance.com</b> → Profil → <b>API Yönetimi</b> → <b>API Oluştur</b>. Yetkiler: <b>Okuma</b> ve{" "}
+            {market === "spot" ? <b>Spot ve Marjin işlemi</b> : <b>Vadeli işlemler (Futures)</b>}.
+          </span>
+          <span className="down">
+            <b>Para çekme yetkisini KESİNLİKLE açmayın.</b> Para çekme veya transfer yetkisi açık anahtar uygulama
+            tarafından reddedilir ve saklanmaz.
+          </span>
+          <span>Güvenlik için "Güvenilir IP'lerle kısıtla" seçeneğiyle yalnızca bu bilgisayarın IP adresine izin verin.</span>
+          <span>Anahtar bu bilgisayarda şifreli saklanır; sunucularımıza gönderilmez. Ekranda yalnızca son 4 karakter görünür.</span>
+        </div>
+      ) : (
+        <p className="muted small">
+          Sahte bakiyeyle, gerçek piyasa fiyatlarında çalışan Binance Demo Trading anahtarı. Oluşturmak için:{" "}
+          <b>demo.binance.com</b> → Binance hesabınızla giriş → <b>API Management</b> → <b>Create API</b>. Gerçek hesap
+          anahtarı burada çalışmaz. Anahtar doğrulanır ve bu bilgisayarda şifreli saklanır; ekranda yalnızca son 4
+          karakter görünür.
+        </p>
+      )}
       <div className="row">
         <Badge tone={info?.connected ? "ok" : info?.key_stored ? "warn" : "neutral"} testId={`${testId}-state`}>
           {info?.connected ? `Bağlı ${info.key_hint ?? ""}` : info?.key_stored ? `Kayıtlı ${info.key_hint ?? ""}` : "Anahtar yok"}

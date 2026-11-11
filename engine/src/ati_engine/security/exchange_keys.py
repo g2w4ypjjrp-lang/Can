@@ -2,11 +2,11 @@
 
 * Anahtarlar yalnızca şifreli kasada (Windows'ta DPAPI) tutulur; günlüklere, API yanıtlarına ve
   hata mesajlarına yazılmaz (yalnızca son 4 karakter gösterilir).
-* **Test ağı** anahtarları saklanabilir ve test ağı işlem moduyla kullanılabilir.
-* **Gerçek hesap (canlı)** anahtarlarının saklanması bu sürümde **kod düzeyinde kapalıdır**:
-  kullanıcının açık onayı (G1: işlem yetkili canlı anahtar) verilmeden açılmaz. Onay sonrası
-  kullanılacak denetim (``/sapi/v1/account/apiRestrictions`` ile para çekme ve transfer
-  yetkilerinin KAPALI olduğunun doğrulanması) şimdiden yazılmış ve test edilmiştir.
+* **Demo Trading (test ağı)** anahtarları Demo modunda kullanılır.
+* **Gerçek hesap (canlı)** anahtarı kullanıcının onayıyla (G1, 2026-11-11) açıldı. Saklanmadan
+  önce ``/sapi/v1/account/apiRestrictions`` ile yetkileri okunur: **para çekme** veya transfer
+  yetkisi açıksa ya da işlem yetkisi yoksa anahtar REDDEDİLİR ve saklanmaz (bkz.
+  ``binance_key_policy``). İki ortamın anahtarları kasada ayrı adlarla tutulur.
 """
 
 from __future__ import annotations
@@ -26,17 +26,6 @@ from ati_engine.security.vault import SecretVault
 
 KeyEnvironment = Literal["testnet", "live"]
 _KEY_RE = re.compile(r"^[A-Za-z0-9]{16,128}$")
-
-
-class LiveKeysLocked(PermissionError):
-    """Canlı hesap anahtarı işlemleri kullanıcı onayı (G1) olmadan yapılamaz."""
-
-
-LIVE_KEYS_LOCKED_MESSAGE = (
-    "Gerçek hesap (canlı) API anahtarı bu sürümde saklanamaz ve kullanılamaz. Bunun için "
-    "kullanıcının açık onayı (G1) gerekir. Bu sürümde yalnızca Binance test ağı anahtarları "
-    "kabul edilir."
-)
 
 
 @dataclass(frozen=True)
@@ -60,11 +49,9 @@ class ExchangeKeyStore:
         return f"{base}.api_key", f"{base}.secret"
 
     @staticmethod
-    def _require_testnet(environment: str) -> None:
-        if environment == "live":
-            raise LiveKeysLocked(LIVE_KEYS_LOCKED_MESSAGE)
-        if environment != "testnet":
-            raise ValueError("Ortam 'testnet' olmalı")
+    def _check_environment(environment: str) -> None:
+        if environment not in ("testnet", "live"):
+            raise ValueError("Ortam 'testnet' ya da 'live' olmalı")
 
     async def store(
         self,
@@ -73,7 +60,7 @@ class ExchangeKeyStore:
         api_key: str | SecretStr,
         secret: str | SecretStr,
     ) -> StoredKey:
-        self._require_testnet(environment)
+        self._check_environment(environment)
         key = api_key.get_secret_value() if isinstance(api_key, SecretStr) else api_key
         sec = secret.get_secret_value() if isinstance(secret, SecretStr) else secret
         key, sec = key.strip(), sec.strip()
@@ -87,7 +74,7 @@ class ExchangeKeyStore:
     async def load(
         self, environment: KeyEnvironment, market: Market
     ) -> tuple[str, RequestSigner] | None:
-        self._require_testnet(environment)
+        self._check_environment(environment)
         key_name, secret_name = self._names(environment, market)
         key = await self._vault.get(key_name)
         secret = await self._vault.get(secret_name)
@@ -113,8 +100,11 @@ class KeyCheck:
     can_trade: bool | None = None
 
 
-async def verify_key(rest: BinanceRestClient, market: Market) -> KeyCheck:
+async def verify_key(
+    rest: BinanceRestClient, market: Market, *, help_text: str | None = None
+) -> KeyCheck:
     """Anahtarı imzalı salt-okunur bir istekle dener (bakiye/hesap). Emir göndermez."""
+    help_text = help_text or KEY_HELP
     try:
         if market is Market.SPOT:
             data: Any = await rest.request(
@@ -134,7 +124,7 @@ async def verify_key(rest: BinanceRestClient, market: Market) -> KeyCheck:
     except Exception as exc:
         code = getattr(exc, "code", None)
         if code in (-2014, -2015, -1022):
-            return KeyCheck(False, f"Binance anahtarı reddetti ({code}). {KEY_HELP}")
+            return KeyCheck(False, f"Binance anahtarı reddetti ({code}). {help_text}")
         if code == -1021:
             return KeyCheck(
                 False,
@@ -149,6 +139,13 @@ async def verify_key(rest: BinanceRestClient, market: Market) -> KeyCheck:
         )
 
 
+# Gerçek hesap anahtarı reddinin olası nedenleri.
+LIVE_KEY_HELP = (
+    "Anahtar binance.com → Hesap → API Yönetimi'nde oluşturulmalı (Demo Trading anahtarı gerçek "
+    "hesapta çalışmaz). Gizli anahtarı eksiksiz yapıştırın. IP kısıtı koyduysanız bu bilgisayarın "
+    "IP adresini ekleyin."
+)
+
 # Anahtar reddinin olası nedenleri (en sık görülenden başlayarak).
 KEY_HELP = (
     "Anahtar demo.binance.com → API Yönetimi'nde (Demo Trading) oluşturulmalı; gerçek hesap "
@@ -162,9 +159,7 @@ async def check_live_key_policy(
     rest: BinanceRestClient, *, markets: list[Market], trading_required: bool = True
 ) -> KeyPolicyVerdict:
     """Canlı anahtarın yetkilerini okur ve değerlendirir (para çekme açıksa REDDEDİLİR).
-
-    G1 onayından sonra canlı anahtar kabulünün ön koşuludur; kendi başına hiçbir şeyi açmaz.
-    """
+    Canlı anahtar kabulünün ön koşuludur."""
     restrictions = await rest.request(
         "GET",
         "/sapi/v1/account/apiRestrictions",

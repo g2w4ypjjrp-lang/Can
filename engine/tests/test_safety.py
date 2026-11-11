@@ -172,27 +172,31 @@ async def test_engine_starts_in_paper(
     assert controller.mode is TradingMode.PAPER
 
 
-async def test_live_is_impossible_in_phase_one(
-    live_settings: EngineSettings, bus: EventBus, audit: AuditLog, kill_switch: KillSwitch
+async def test_live_disabled_in_config_is_refused_even_with_phrase(
+    tmp_path,
+    bus: EventBus,
+    audit: AuditLog,
+    kill_switch: KillSwitch,  # type: ignore[no-untyped-def]
 ) -> None:
-    """Ayar açık ve onay ifadesi doğru olsa bile yürütücü olmadığı için LIVE reddedilir."""
-    controller = TradingModeController(
-        settings=live_settings, bus=bus, audit=audit, kill_switch=kill_switch
-    )
+    """Yöneticinin acil kapısı: ayar dosyasında gerçek hesap kapatılmışsa hiçbir şey açamaz."""
+    off = EngineSettings(data_dir=tmp_path / "off", live_trading_enabled=False)
+    controller = TradingModeController(settings=off, bus=bus, audit=audit, kill_switch=kill_switch)
     result = await controller.request_mode(
         TradingMode.LIVE, actor="kullanıcı", acknowledgement=LIVE_TRADING_ACK_PHRASE
     )
-    assert not result.accepted
-    assert controller.mode is TradingMode.PAPER
-    failed = {c.name for c in result.checks if not c.passed}
-    assert failed == {"live_execution_available"}
+    assert not result.accepted and controller.mode is TradingMode.PAPER
+    assert {c.name for c in result.checks if not c.passed} == {"config_live_enabled"}
 
 
 async def test_live_requires_every_prerequisite(
-    settings: EngineSettings, bus: EventBus, audit: AuditLog, kill_switch: KillSwitch
+    tmp_path,
+    bus: EventBus,
+    audit: AuditLog,
+    kill_switch: KillSwitch,  # type: ignore[no-untyped-def]
 ) -> None:
+    off = EngineSettings(data_dir=tmp_path / "off", live_trading_enabled=False)
     controller = TradingModeController(
-        settings=settings, bus=bus, audit=audit, kill_switch=kill_switch, checks=[_Pass()]
+        settings=off, bus=bus, audit=audit, kill_switch=kill_switch, checks=[_Pass()]
     )
     result = await controller.request_mode(TradingMode.LIVE, actor="u", acknowledgement="evet")
     failed = {c.name for c in result.checks if not c.passed}

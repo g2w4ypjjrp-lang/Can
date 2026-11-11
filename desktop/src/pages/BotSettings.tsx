@@ -1,6 +1,7 @@
 import { SlidersHorizontal } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { useAction, usePoll } from "../api/hooks";
+import { ModeSwitch } from "../components/ModeSwitch";
 import { Badge, Card, ErrorBox, Field } from "../components/ui";
 import { MARKET_LABELS } from "../lib/format";
 
@@ -18,6 +19,7 @@ interface BotSettings {
 
 interface AutoTradeStatus {
   enabled: boolean;
+  environment?: "paper" | "testnet" | "live";
   settings: BotSettings;
   defaults: BotSettings;
   limits: { max_risk_per_trade_pct: string; max_leverage: number };
@@ -103,16 +105,26 @@ export function BotSettingsCard() {
       title="Bot ayarları"
       testId="bot-settings"
       actions={
-        <Badge tone={s.enabled ? "ok" : "neutral"} testId="bot-settings-state">
-          Bot {s.enabled ? "çalışıyor" : "durdu"}
-        </Badge>
+        <div className="row">
+          {s.environment === "live" && <Badge tone="bad">GERÇEK PARA</Badge>}
+          <Badge tone={s.enabled ? "ok" : "neutral"} testId="bot-settings-state">
+            Bot {s.enabled ? "çalışıyor" : "durdu"}
+          </Badge>
+        </div>
       }
     >
+      <div className="stack" style={{ gap: 6, marginBottom: 12 }}>
+        <span className="small">
+          <b>Bot hangi hesapla işlem yapsın?</b>{" "}
+          {s.environment === "paper" && <span className="muted">(şu an Sanal: bot işlem açmaz)</span>}
+        </span>
+        <ModeSwitch compact onChanged={() => void auto.refresh()} />
+      </div>
       <form className="stack" onSubmit={submit}>
         <p className="muted small" style={{ display: "flex", gap: 8 }}>
           <SlidersHorizontal aria-hidden="true" size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-          Bot, puanı eşik üstündeki fırsatlarda Demo Trading'de işlem açar. Her işlem yine risk kapısından geçer; zarar
-          durdur zorunludur. Sonuçlar garanti değildir.
+          Bot, puanı eşik üstündeki fırsatlarda seçili hesapta (Demo para ya da Gerçek para) işlem açar. Her işlem yine
+          risk kapısından geçer; zarar durdur zorunludur. Sonuçlar garanti değildir.
         </p>
         <div className="grid-2">
           <Field label="En düşük fırsat puanı" hint="50–100. Yükseldikçe daha az ama daha seçici işlem.">

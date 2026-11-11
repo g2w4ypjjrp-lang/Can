@@ -120,3 +120,21 @@ yapıldı.
   `--debug-slow` çıktısıyla belirlenip giderilecek; kararlı durumda sorun yok (p99 ~16 ms).
 * **Dış sızma testi:** bu aşamadaki testler kod içinden ve gerçek sunuculara karşı
   otomatiktir. Yayından önce bağımsız bir sızma testi önerilir (canlı ortam, G5).
+
+## Gerçek hesap modu (kullanıcı onayı G1/G2, 2026-11-11)
+
+Kullanıcı gerçek parayla işlem seçeneğinin eklenmesine açıkça izin verdi. Korumalar:
+
+- **Ayrı hesaplar:** Demo Trading ve gerçek hesap için ayrı yürütme servisleri, ayrı anahtarlar
+  (kasada ayrı adlar), ayrı hesap izleyicisi ve risk bekçisi (koşullar `live.` önekli). Demo
+  servisi gerçek Binance adresine, gerçek hesap servisi Binance dışı / Demo adresine bağlanamaz.
+- **Anahtar:** Saklanmadan önce `/sapi/v1/account/apiRestrictions` okunur. Para çekme, iç
+  transfer veya evrensel transfer yetkisi açıksa (ya da alan yoksa) ve gerekli işlem yetkisi
+  kapalıysa anahtar reddedilir, saklanmaz. IP kısıtı yoksa uyarı verilir. Açık gerçek pozisyon
+  varken gerçek hesap anahtarı silinemez.
+- **Mod geçişi:** Onay ifadesi birebir, acil durdurma kapalı, gerçek hesap anahtarı bağlı,
+  lisans geçerli (zorunluysa); `live_trading_enabled = false` yöneticinin acil kapısıdır. Her
+  deneme denetim kaydına yazılır. Motor her açılışta sanal modda başlar; gerçek mod kendiliğinden
+  geri gelmez. Telefondan (uzaktan) mod değiştirilemez.
+- **İşlem:** Bot ve elle işlemler gerçek modda da aynı risk kapısından geçer (zorunlu zarar
+  durdur, işlem başına risk, günlük zarar, kaldıraç, tasfiye uzaklığı).

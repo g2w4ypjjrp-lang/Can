@@ -113,7 +113,7 @@ async def test_kill_switch_flow(running: RunningEngine) -> None:
     ]
 
 
-async def test_live_mode_refused_in_phase_one(running: RunningEngine) -> None:
+async def test_live_mode_refused_without_live_key(running: RunningEngine) -> None:
     async with httpx.AsyncClient(base_url=running.base_url, headers=running.auth) as client:
         response = await client.post(
             "/v1/trading-mode",
@@ -124,7 +124,7 @@ async def test_live_mode_refused_in_phase_one(running: RunningEngine) -> None:
         assert body["accepted"] is False
         assert body["mode"] == "paper"
         failed = {c["name"] for c in body["checks"] if not c["passed"]}
-        assert {"config_live_enabled", "live_execution_available"} <= failed
+        assert failed == {"live_key_connected"}  # onay ifadesi doğru; gerçek hesap anahtarı yok
 
         testnet = await client.post("/v1/trading-mode", json={"mode": "testnet"})
         assert testnet.status_code == 200

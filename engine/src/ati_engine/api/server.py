@@ -117,7 +117,7 @@ from ati_engine.backtest.engine import BacktestConfig
 from ati_engine.backtest.service import BacktestJob, BacktestService
 from ati_engine.core.bus import OverflowPolicy
 from ati_engine.core.events import Event, SystemEvent, encode_event
-from ati_engine.core.models import Market
+from ati_engine.core.models import Market, TradingMode
 from ati_engine.execution.auto import EDITABLE, AutoTrader, merged_settings
 from ati_engine.execution.auto import SETTINGS_KEY as AUTOTRADE_SETTINGS_KEY
 from ati_engine.execution.engine import TakeProfit, TradeIntent
@@ -137,7 +137,6 @@ from ati_engine.safety.kill_switch import KillSwitchConfirmationError
 from ati_engine.scanner.scanner import MarketScanner, row_dict
 from ati_engine.scoring.live import OpportunityEngine, top_reasons
 from ati_engine.scoring.score import Opportunity
-from ati_engine.security.exchange_keys import LiveKeysLocked
 from ati_engine.storage.settings_store import SettingsStore
 from ati_engine.strategies.library import ALL_STRATEGIES
 from ati_engine.whales.radar import WhaleRadar
@@ -1062,17 +1061,27 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
     # --- Emir yürütme: Binance test ağı (Aşama 10) --------------------------------------------
 
     def execution_or_404() -> ExecutionService:
-        if runtime.execution is None:
+        """İşlem moduna göre etkin servis: gerçek hesap modunda gerçek hesap, aksi halde Demo."""
+        service = runtime.active_execution()
+        if service is None:
             raise HTTPException(status_code=404, detail="Emir yürütme servisi etkin değil")
-        return runtime.execution
+        return service
+
+    def service_for(environment: Literal["testnet", "live"] | None) -> ExecutionService:
+        if environment is None:
+            return execution_or_404()
+        service = runtime.execution_live if environment == "live" else runtime.execution
+        if service is None:
+            raise HTTPException(status_code=404, detail="Emir yürütme servisi etkin değil")
+        return service
 
     @app.get("/v1/execution/status")
-    async def execution_status(_: Auth) -> dict[str, Any]:
-        return await execution_or_404().status()
+    async def execution_status(
+        _: Auth, environment: Literal["testnet", "live"] | None = None
+    ) -> dict[str, Any]:
+        return await service_for(environment).status()
 
-    @app.post("/v1/execution/testnet-key", response_model=TestnetKeyResponse)
-    async def execution_testnet_key(body: TestnetKeyRequest, _: Auth) -> TestnetKeyResponse:
-        service = execution_or_404()
+    async def store_key(service: ExecutionService, body: TestnetKeyRequest) -> TestnetKeyResponse:
         try:
             check, stored = await service.store_key(
                 body.market,
@@ -1080,8 +1089,6 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
                 body.secret.get_secret_value(),
                 actor=LOCAL_ACTOR,
             )
-        except LiveKeysLocked as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         message = check.message
@@ -1098,14 +1105,40 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             can_trade=check.can_trade,
         )
 
+    @app.post("/v1/execution/testnet-key", response_model=TestnetKeyResponse)
+    async def execution_testnet_key(body: TestnetKeyRequest, _: Auth) -> TestnetKeyResponse:
+        return await store_key(service_for("testnet"), body)
+
     @app.post("/v1/execution/testnet-key/delete")
     async def execution_delete_key(market: Market, _: Auth) -> dict[str, Any]:
-        removed = await execution_or_404().delete_key(market, actor=LOCAL_ACTOR)
+        removed = await service_for("testnet").delete_key(market, actor=LOCAL_ACTOR)
+        return {"removed": removed}
+
+    @app.post("/v1/execution/live-key", response_model=TestnetKeyResponse)
+    async def execution_live_key(body: TestnetKeyRequest, _: Auth) -> TestnetKeyResponse:
+        """Gerçek hesap anahtarı: para çekme/transfer yetkisi açıksa reddedilir, saklanmaz."""
+        return await store_key(service_for("live"), body)
+
+    @app.post("/v1/execution/live-key/delete")
+    async def execution_delete_live_key(market: Market, _: Auth) -> dict[str, Any]:
+        if (
+            runtime.trading_mode.mode is TradingMode.LIVE
+            and runtime.execution_live is not None
+            and market in runtime.execution_live.markets
+            and runtime.execution_live.markets[market].engine.positions.positions
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Açık gerçek hesap pozisyonu varken anahtar silinemez; önce kapatın",
+            )
+        removed = await service_for("live").delete_key(market, actor=LOCAL_ACTOR)
         return {"removed": removed}
 
     @app.post("/v1/execution/connect")
-    async def execution_connect(market: Market, _: Auth) -> dict[str, Any]:
-        service = execution_or_404()
+    async def execution_connect(
+        market: Market, _: Auth, environment: Literal["testnet", "live"] | None = None
+    ) -> dict[str, Any]:
+        service = service_for(environment)
         try:
             await service.connect(market)
         except ExecutionUnavailable as exc:

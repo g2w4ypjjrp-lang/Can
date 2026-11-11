@@ -11,7 +11,7 @@ from ati_engine.analysis.service import AnalysisService
 from ati_engine.backtest.service import BacktestService
 from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus
-from ati_engine.core.models import Market
+from ati_engine.core.models import Market, TradingMode
 from ati_engine.core.supervisor import TaskSupervisor
 from ati_engine.execution.auto import AutoTrader
 from ati_engine.execution.service import ExecutionService
@@ -53,12 +53,20 @@ class EngineRuntime:
     opportunities: OpportunityEngine | None = None
     backtests: BacktestService | None = None
     paper: PaperCompetition | None = None
-    execution: ExecutionService | None = None
+    execution: ExecutionService | None = None  # Demo Trading (test ağı)
+    execution_live: ExecutionService | None = None  # gerçek hesap (kullanıcı onayıyla)
     autotrader: AutoTrader | None = None
     remote: RemoteService | None = None
     license: LicenseManager | None = None
     telegram: TelegramNotifier | None = None
     crash: CrashReporter | None = None
+
+    def active_execution(self) -> ExecutionService | None:
+        """İşlem moduna göre kullanılan yürütme servisi (gerçek hesap modunda canlı servis)."""
+        if self.trading_mode.mode is TradingMode.LIVE:
+            return self.execution_live
+        return self.execution
+
     version: str = __version__
     started_monotonic: float = field(default_factory=time.monotonic)
     shutdown_requested: asyncio.Event = field(default_factory=asyncio.Event)

@@ -65,7 +65,7 @@ from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.safety.kill_switch import KillSwitch
 from ati_engine.safety.state import EngineStateMachine
-from ati_engine.safety.trading_mode import TradingModeController
+from ati_engine.safety.trading_mode import CallableCheck, TradingModeController
 from ati_engine.scanner.scanner import MarketScanner
 from ati_engine.scoring.live import OpportunityEngine, OpportunityScored
 from ati_engine.security.exchange_keys import ExchangeKeyStore
@@ -355,24 +355,52 @@ class Engine:
 
     @staticmethod
     def _start_execution(runtime: EngineRuntime) -> None:
-        """Test ağı yürütme servisi. Gerçek hesap bu sürümde kilitlidir (G1/G2). Kayıtlı test ağı
-        anahtarı varsa bağlantı arka planda kurulur; başarısızlık motoru durdurmaz."""
-        service = ExecutionService(
-            settings=runtime.settings,
-            db=runtime.db,
-            audit=runtime.audit,
-            keys=ExchangeKeyStore(runtime.vault),
-            trading_mode=lambda: runtime.trading_mode.mode,
-            engine_state=lambda: runtime.safety.state.state,
-            safety=runtime.safety,
-            bus=runtime.bus,
-        )
-        runtime.execution = service
-        service.start_guard()
+        """Yürütme servisleri: Demo Trading ve gerçek hesap (ayrı anahtar, hesap izleyicisi ve risk
+        bekçisi). Gerçek hesap modu yalnızca kullanıcı onay ifadesini girince, para çekme yetkisi
+        kapalı gerçek hesap anahtarı bağlıyken ve lisans geçerliyken açılır. Kayıtlı anahtarlar
+        arka planda bağlanır; başarısızlık motoru durdurmaz."""
+        services = []
+        for environment in ("testnet", "live"):
+            service = ExecutionService(
+                settings=runtime.settings,
+                db=runtime.db,
+                audit=runtime.audit,
+                keys=ExchangeKeyStore(runtime.vault),
+                trading_mode=lambda: runtime.trading_mode.mode,
+                engine_state=lambda: runtime.safety.state.state,
+                safety=runtime.safety,
+                bus=runtime.bus,
+                environment=environment,
+            )
+            if environment == "testnet":
+                service.start_guard()
+            services.append(service)
+        demo, live = services
+        runtime.execution = demo
+        runtime.execution_live = live
+
+        async def live_key() -> tuple[bool, str]:
+            if live.markets:
+                names = ", ".join(m.value for m in live.markets)
+                return True, f"Gerçek hesap anahtarı bağlı ({names}); para çekme yetkisi kapalı"
+            return False, (
+                "Ayarlar → Binance gerçek hesap anahtarı bölümünden para çekme yetkisi KAPALI bir "
+                "anahtar girin ve bağlanmasını bekleyin"
+            )
+
+        async def license_ok() -> tuple[bool, str]:
+            manager = runtime.license
+            if manager is None or not manager.settings.enforce:
+                return True, "Lisans denetimi bu kurulumda kapalı"
+            return (True, "Lisans geçerli") if manager.valid else (False, "Geçerli lisans gerekli")
+
+        runtime.trading_mode.add_check(CallableCheck("live_key_connected", live_key))
+        runtime.trading_mode.add_check(CallableCheck("license_valid", license_ok))
+
         autotrader = AutoTrader(
             settings=runtime.settings.autotrade,
             limits=runtime.settings.risk,
-            service=service,
+            service=lambda: runtime.active_execution() or demo,
             trading_mode=lambda: runtime.trading_mode.mode,
         )
         runtime.autotrader = autotrader
@@ -380,10 +408,14 @@ class Engine:
         runtime.bus.subscribe(TradeNotice, autotrader.on_trade_notice, name="autotrader-results")
 
         async def connect() -> None:
-            try:
-                await service.connect_configured()
-            except Exception as exc:
-                logger.error("Test ağı yürütücüsü başlatılamadı", extra={"error": repr(exc)})
+            for service in services:
+                try:
+                    await service.connect_configured()
+                except Exception as exc:
+                    logger.error(
+                        "Yürütücü başlatılamadı",
+                        extra={"environment": service.environment, "error": repr(exc)},
+                    )
 
         runtime.supervisor.spawn("execution-connect", connect, RestartPolicy(restart=False))
 
@@ -516,9 +548,10 @@ class Engine:
                 if runtime.remote is not None:
                     with contextlib.suppress(Exception):
                         await runtime.remote.stop()
-                if runtime.execution is not None:
-                    with contextlib.suppress(Exception):
-                        await runtime.execution.close()
+                for execution in (runtime.execution, runtime.execution_live):
+                    if execution is not None:
+                        with contextlib.suppress(Exception):
+                            await execution.close()
                 for service in runtime.market_data.values():
                     with contextlib.suppress(Exception):
                         await service.close()
