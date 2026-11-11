@@ -1170,6 +1170,9 @@ export interface OpportunityStatsResponse {
   warmup_symbols: {
     [k: string]: number;
   };
+  warmup_total?: {
+    [k: string]: number;
+  };
 }
 /**
  * This interface was referenced by `EngineProtocol`'s JSON-Schema

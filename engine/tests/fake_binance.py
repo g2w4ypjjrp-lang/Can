@@ -60,6 +60,7 @@ class FakeBinance:
         self.depth_requests: list[str] = []
         self.agg_trade_requests: list[tuple[str, int, int]] = []
         self.kline_requests = 0
+        self.ticker_requests = 0
         self.kline_intervals: dict[str, int] = {}  # aralık → istek sayısı
         self.skip_trades = 0  # bir sonraki tikte her işlem akışında atlanacak kimlik sayısı
 
@@ -359,6 +360,32 @@ class FakeBinance:
         @app.get("/fapi/v1/klines")
         async def futures_klines(symbol: str, interval: str, limit: int = 500) -> JSONResponse:
             return klines(limit, interval)
+
+        def tickers(info: dict[str, Any]) -> JSONResponse:
+            self.ticker_requests += 1
+            now = _now()
+            rows = [
+                {
+                    "symbol": item["symbol"],
+                    "lastPrice": "100.5",
+                    "openPrice": "100",
+                    "highPrice": "101",
+                    "lowPrice": "99",
+                    "volume": "10",
+                    "quoteVolume": str(1_000_000 - i),
+                    "closeTime": now,
+                }
+                for i, item in enumerate(info.get("symbols", []))
+            ]
+            return JSONResponse(rows, headers=headers)
+
+        @app.get("/api/v3/ticker/24hr")
+        async def spot_tickers() -> JSONResponse:
+            return tickers(self.spot_info)
+
+        @app.get("/fapi/v1/ticker/24hr")
+        async def futures_tickers() -> JSONResponse:
+            return tickers(self.futures_info)
 
         @app.get("/api/v3/time")
         @app.get("/fapi/v1/time")

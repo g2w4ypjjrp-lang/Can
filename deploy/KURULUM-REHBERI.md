@@ -120,7 +120,10 @@ Kurulum dosyasını (EXE) GitHub derler.
    uygulamada Ayarlar → **Demo Trading anahtarları** → Futures (ve/veya Spot) → Doğrula ve kaydet.
    Ayarlar → İşlem modu → **Demo para**.
 4. **Bot:** Spot / Futures işlemler ekranı → **Bot ayarları** (puan eşiği, risk, kaldıraç, iz süren
-   stop, kayıp molası) → Genel bakış → **Botu başlat**.
+   stop, kayıp molası) → Genel bakış → **Botu başlat**. Bot paneli, işlem açılamıyorsa nedenini
+   (ör. işlem modu Sanal, anahtar yok) **Düzelt** düğmesiyle gösterir; kararlar her saat başı
+   verilir, sonraki karar saati panelde yazar. Coin listesi açılışta birkaç saniyede, fırsat taraması
+   1–3 dakikada (büyük coinler önce) dolar.
 5. **Gerçek para (isteğe bağlı):** binance.com → API Yönetimi → yeni anahtar: **Okuma** +
    **Vadeli işlemler** (Spot için Spot işlem), **para çekme KAPALI**, mümkünse IP kısıtlı →
    uygulamada Ayarlar → **Binance gerçek hesap anahtarları** → kaydedin (para çekme açıksa

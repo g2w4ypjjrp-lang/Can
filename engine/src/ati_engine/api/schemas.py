@@ -641,6 +641,7 @@ class OpportunityStatsResponse(BaseModel):
     published: int
     symbols: int
     warmup_symbols: dict[str, int]
+    warmup_total: dict[str, int] = {}
     batch_ms_max: float
     incomplete_bars: int
     repaired_bars: int

@@ -397,11 +397,24 @@ class Engine:
         runtime.trading_mode.add_check(CallableCheck("live_key_connected", live_key))
         runtime.trading_mode.add_check(CallableCheck("license_valid", license_ok))
 
+        def market_price(market: Market, symbol: str) -> float | None:
+            """Gerçek piyasa fiyatı (piyasa verisi akışından): Futures'ta işaret fiyatı."""
+            data = runtime.market_data.get(market)
+            if data is None:
+                return None
+            mark = data.state.marks.get(symbol)
+            if mark is not None and mark.mark_price > 0:
+                return mark.mark_price
+            ticker = data.state.tickers.get(symbol)
+            return ticker.last if ticker is not None and ticker.last > 0 else None
+
         autotrader = AutoTrader(
             settings=runtime.settings.autotrade,
             limits=runtime.settings.risk,
             service=lambda: runtime.active_execution() or demo,
             trading_mode=lambda: runtime.trading_mode.mode,
+            interval=runtime.settings.scoring.interval,
+            market_price=market_price,
         )
         runtime.autotrader = autotrader
         runtime.bus.subscribe(OpportunityScored, autotrader.on_opportunity, name="autotrader")

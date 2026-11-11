@@ -155,13 +155,20 @@ test("risk ekranı kararları ve gerekçeleri gösterir", async ({ page }) => {
   await expect(page.getByTestId("risk-limits")).toContainText("%0.5");
 });
 
-test("bot (otomatik işlem) başlatılıp durdurulur", async ({ page }) => {
+test("bot paneli: başlat/durdur, hazırlık listesi ve sonraki karar", async ({ page }) => {
   await open(page);
-  await expect(page.getByTestId("auto-state")).toHaveText("Kapalı");
-  await page.getByTestId("auto-toggle").click();
-  await expect(page.getByTestId("auto-state")).toHaveText("Açık");
-  await page.getByTestId("auto-toggle").click();
-  await expect(page.getByTestId("auto-state")).toHaveText("Kapalı");
+  const panel = page.getByTestId("bot-panel");
+  await expect(panel.getByTestId("auto-state")).toHaveText("Durdu");
+  await expect(panel.getByTestId("bot-env")).toHaveText(/^(Sanal|Demo para)$/);
+  await expect(panel.getByTestId("bot-next")).toContainText("Sonraki karar");
+  // Ya her şey hazır ya da eksikler "Düzelt" bağlantısıyla listelenir.
+  await expect(panel.getByTestId("bot-ready").or(panel.getByTestId("bot-checks"))).toBeVisible();
+  await panel.getByTestId("auto-toggle").click();
+  await expect(panel.getByTestId("auto-state")).toHaveText("Çalışıyor");
+  await expect(panel.getByTestId("bot-message")).toContainText("Bot başladı");
+  await panel.getByTestId("auto-toggle").click();
+  await expect(panel.getByTestId("auto-state")).toHaveText("Durdu");
+  await expect(panel.getByTestId("bot-message")).toContainText("durduruldu");
 });
 
 test("lisans: yazım hatası yakalanır, geçerli anahtar etkinleşir, bilgisayar lisanstan çıkarılır", async ({ page }) => {

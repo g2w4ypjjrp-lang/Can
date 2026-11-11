@@ -6,6 +6,8 @@ modda işlem açmaz. Her işlem risk kapısından geçer; bu modül yalnızca ni
 
 1. Sinyal: eşik üstü ``OpportunityScored`` (yön, stop ve hedef seviyesiyle). Mum kapanışından
    bu yana ``max_signal_age_s``'den eski sinyal kullanılmaz.
+   Bu süre içinde fiyat stop uzaklığının yarısından fazla kaymışsa (kaçmış ya da ters gitmiş)
+   giriş yapılmaz. Bot açıldığında son mumun hâlâ taze sinyalleri hemen değerlendirilir.
 2. Fiyat dönüşümü: test ağı fiyatı gerçek piyasadan farklıdır. Sinyalin stop ve hedef
    **uzaklıkları (yüzde)** test ağındaki güncel fiyata uygulanır.
 3. Boyutlandırma: zarar durdurda kayıp (komisyon ve kayma payı dahil) özsermayenin
@@ -39,6 +41,9 @@ from ati_engine.risk.gate import DEFAULT_FEES, size_for_risk
 from ati_engine.scoring.live import OpportunityScored
 
 logger = logging.getLogger(__name__)
+
+# Sinyal fiyatından bu kadar R (stop uzaklığı) kaymış fiyatla giriş yapılmaz.
+MAX_DRIFT_R = Decimal("0.5")
 
 # Kullanıcının uygulamadan değiştirebildiği bot ayarları (kalıcı; motor açılışında uygulanır).
 SETTINGS_KEY = "autotrade.settings"
@@ -82,6 +87,8 @@ class AutoTrader:
         service: ExecutionService | Callable[[], ExecutionService],
         trading_mode: Callable[[], TradingMode],
         clock: Callable[[], int] | None = None,
+        interval: str = "1h",
+        market_price: Callable[[Market, str], float | None] | None = None,
     ) -> None:
         self.cfg = settings
         self.defaults = settings
@@ -101,6 +108,11 @@ class AutoTrader:
         self.loss_streak = 0
         self.paused_until_ms: int | None = None
         self.results = {"wins": 0, "losses": 0}
+        # Puanlama aralığı (sonraki karar zamanı) ve gerçek piyasa fiyatı (kayma denetimi).
+        self.interval = interval
+        self._market_price = market_price
+        # Son sinyaller (bot kapalıyken de): açılışta yeniden değerlendirme ve "en yakın adaylar".
+        self._latest: dict[tuple[Market, str], OpportunityScored] = {}
 
     @property
     def service(self) -> ExecutionService:
@@ -109,8 +121,41 @@ class AutoTrader:
     def _skip(self, reason: str) -> None:
         self.skipped[reason] += 1
 
+    def _close_ms(self, event: OpportunityScored) -> int:
+        return event.bar_open_time_ms + INTERVAL_MS.get(event.interval, 0)
+
+    def _remember(self, event: OpportunityScored) -> None:
+        self._latest[(event.market, event.symbol)] = event
+        horizon = self._clock() - 2 * 3_600_000 - int(self.cfg.max_signal_age_s * 1000)
+        for key in [k for k, e in self._latest.items() if self._close_ms(e) < horizon]:
+            del self._latest[key]
+
+    def _drifted(self, event: OpportunityScored) -> bool:
+        """Sinyalden bu yana gerçek piyasa fiyatı stop uzaklığının yarısından fazla kaydı mı."""
+        if self._market_price is None or not event.stop_price or event.price <= 0:
+            return False
+        current = self._market_price(event.market, event.symbol)
+        if not current or current <= 0:
+            return False
+        signal = Decimal(str(event.price))
+        stop_pct = abs(signal - Decimal(str(event.stop_price))) / signal
+        move = abs(Decimal(str(current)) - signal) / signal
+        return stop_pct > 0 and move > stop_pct * MAX_DRIFT_R
+
     async def on_opportunity(self, event: OpportunityScored) -> None:
         self.stats["signals"] += 1
+        self._remember(event)
+        await self._consider(event)
+
+    async def replay(self) -> int:
+        """Bot açıldığında son mumun hâlâ taze sinyallerini (yüksek puan önce) değerlendirir;
+        böylece bir sonraki saat başı beklenmez. Açılan işlem sayısını döner."""
+        before = self.stats["opened"]
+        for event in sorted(self._latest.values(), key=lambda e: e.score, reverse=True):
+            await self._consider(event)
+        return self.stats["opened"] - before
+
+    async def _consider(self, event: OpportunityScored) -> None:
         if not self.enabled:
             return self._skip("kapalı")
         mode = self.trading_mode()
@@ -132,9 +177,11 @@ class AutoTrader:
         if not event.stop_price or not event.target_price or event.price <= 0:
             return self._skip("seviye_yok")
         now = self._clock()
-        close_ms = event.bar_open_time_ms + INTERVAL_MS.get(event.interval, 0)
+        close_ms = self._close_ms(event)
         if (now - close_ms) / 1000 > self.cfg.max_signal_age_s:
             return self._skip("eski_sinyal")
+        if self._drifted(event):
+            return self._skip("fiyat_kaçtı")
         while self._entries and now - self._entries[0] > 3_600_000:
             self._entries.popleft()
         if len(self._entries) >= self.cfg.max_entries_per_hour:
@@ -288,9 +335,37 @@ class AutoTrader:
             signals=tuple(event.reasons[:10]),
         )
 
+    def candidates(self, limit: int = 5) -> list[dict[str, Any]]:
+        """Son kapanan mumun en yüksek puanlı sinyalleri (eşik altı olanlar dahil)."""
+        if not self._latest:
+            return []
+        latest_close = max(self._close_ms(e) for e in self._latest.values())
+        rows = [e for e in self._latest.values() if self._close_ms(e) == latest_close]
+        rows.sort(key=lambda e: e.score, reverse=True)
+        now = self._clock()
+        return [
+            {
+                "market": e.market.value,
+                "symbol": e.symbol,
+                "direction": e.direction,
+                "score": round(e.score, 1),
+                "close_ms": self._close_ms(e),
+                "age_s": max(0, (now - self._close_ms(e)) // 1000),
+                "fresh": (now - self._close_ms(e)) / 1000 <= self.cfg.max_signal_age_s,
+            }
+            for e in rows[:limit]
+        ]
+
+    def next_decision_ms(self) -> int:
+        step = INTERVAL_MS.get(self.interval, 3_600_000)
+        return (self._clock() // step + 1) * step
+
     def status(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
+            "interval": self.interval,
+            "next_decision_ms": self.next_decision_ms(),
+            "candidates": self.candidates(),
             "environment": {
                 TradingMode.LIVE: "live",
                 TradingMode.TESTNET: "testnet",

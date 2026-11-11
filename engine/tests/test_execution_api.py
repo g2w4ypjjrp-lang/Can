@@ -149,7 +149,13 @@ async def test_testnet_trading_through_local_api(
     assert {"gate.stop_required", "gate.stop_side", "gate.leverage"} <= {e["rule"] for e in events}
     auto = await client.post("/v1/autotrade", json={"enabled": True})
     assert auto.json()["enabled"] is True and auto.json()["environment"] == "testnet"
-    assert (await client.get("/v1/autotrade")).json()["enabled"] is True
+    assert auto.json()["replayed_opened"] == 0
+    view = (await client.get("/v1/autotrade")).json()
+    assert view["enabled"] is True
+    checks = {c["key"]: c for c in view["checks"]}
+    assert checks["mode"]["ok"] and checks["enabled"]["ok"]
+    assert checks["keys.usdm_futures"]["ok"] and checks["keys.usdm_futures"]["page"] == "settings"
+    assert view["ready"] is all(c["ok"] for c in view["checks"])
 
     audit = (await client.get("/v1/audit?limit=200")).text
     assert "execution.open" in audit and "execution.testnet_key" in audit

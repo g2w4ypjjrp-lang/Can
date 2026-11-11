@@ -885,6 +885,7 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             published=engine.stats.published,
             symbols=len(engine.books),
             warmup_symbols=engine.stats.warmup_symbols,
+            warmup_total=engine.stats.warmup_total,
             batch_ms_max=round(engine.stats.batch_ms_max, 3),
             incomplete_bars=engine.aggregator.incomplete,
             repaired_bars=engine.stats.repaired,
@@ -1289,20 +1290,106 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             raise HTTPException(status_code=404, detail="Otomatik işlem etkin değil")
         return runtime.autotrader
 
+    market_names = {Market.SPOT: "Spot", Market.USDM_FUTURES: "Futures"}
+
+    async def autotrade_checks(trader: AutoTrader) -> list[dict[str, Any]]:
+        """Botun işlem açabilmesi için gerekenler; her madde arayüzde düzeltme sayfasına
+        bağlanır. Sıra, kullanıcının yapacağı sıradır."""
+        checks: list[dict[str, Any]] = []
+
+        def add(key: str, ok: bool, title: str, detail: str, page: str) -> None:
+            checks.append({"key": key, "ok": ok, "title": title, "detail": detail, "page": page})
+
+        if runtime.license is not None and runtime.license.settings.enforce:
+            valid = runtime.license.valid
+            add("license", valid, "Lisans", "Etkin" if valid else "Lisans anahtarı girin",
+                "license")  # fmt: skip
+        mode = runtime.trading_mode.mode
+        add(
+            "mode",
+            mode is not TradingMode.PAPER,
+            "İşlem modu",
+            {
+                TradingMode.PAPER: "Sanal modda bot işlem açmaz; Demo para seçin",
+                TradingMode.TESTNET: "Demo para (sahte bakiye)",
+                TradingMode.LIVE: "GERÇEK PARA",
+            }[mode],
+            "settings",
+        )
+        execution = runtime.active_execution()
+        info = await execution.status() if execution is not None else {"markets": {}}
+        account = "gerçek hesap" if mode is TradingMode.LIVE else "Demo Trading"
+        for market in trader.cfg.markets:
+            entry = info["markets"].get(market.value) or {}
+            connected = bool(entry.get("connected"))
+            if connected:
+                detail = "Bağlı"
+            elif entry.get("error"):
+                detail = str(entry["error"])[:160]
+            elif entry.get("key_stored"):
+                detail = "Anahtar kayıtlı; bağlanılıyor"
+            else:
+                detail = f"Ayarlar'dan {account} anahtarı ekleyin"
+            add(f"keys.{market.value}", connected,
+                f"Binance {market_names[market]} ({account})", detail, "settings")  # fmt: skip
+        conditions = {c.name: c for c in runtime.safety.conditions()}
+        for market in trader.cfg.markets:
+            cond = conditions.get(f"market_data.{market.value}")
+            if cond is not None:
+                add(f"data.{market.value}", cond.ready,
+                    f"{market_names[market]} piyasa verisi",
+                    "Akıyor" if cond.ready else cond.detail, "markets")  # fmt: skip
+        engine = runtime.opportunities
+        if engine is not None:
+            for market in trader.cfg.markets:
+                total = engine.stats.warmup_total.get(market.value)
+                done = engine.stats.warmup_symbols.get(market.value, 0)
+                ready = total is not None and done >= total
+                detail = (
+                    f"{done} coin puanlandı"
+                    if ready
+                    else (f"Hazırlanıyor: {done} / {total} coin" if total else "Başlıyor")
+                )
+                add(f"warmup.{market.value}", ready,
+                    f"{market_names[market]} fırsat taraması", detail, "opportunities")  # fmt: skip
+        ks = runtime.safety.kill_switch.status
+        add("kill_switch", not ks.engaged, "Acil durdurma",
+            "Kapalı" if not ks.engaged else f"Devrede: {ks.reason}", "dashboard")  # fmt: skip
+        state = runtime.safety.state
+        add("engine", state.can_open_positions(), "Motor",
+            "Çalışıyor" if state.can_open_positions() else state.reason, "dashboard")  # fmt: skip
+        if trader.paused_until_ms is not None and trader.paused_until_ms > int(time.time() * 1000):
+            add("loss_pause", False, "Kayıp molası",
+                "Art arda kayıptan sonra mola; süre bitince sürer", "bot")  # fmt: skip
+        add("enabled", trader.enabled, "Bot",
+            "Çalışıyor" if trader.enabled else "Botu başlatın", "dashboard")  # fmt: skip
+        return checks
+
+    async def autotrade_view(trader: AutoTrader, **extra: Any) -> dict[str, Any]:
+        status = trader.status()
+        checks = await autotrade_checks(trader)
+        status["checks"] = checks
+        status["ready"] = all(c["ok"] for c in checks)
+        status.update(extra)
+        return status
+
     @app.get("/v1/autotrade")
     async def autotrade_status(_: Auth) -> dict[str, Any]:
-        return autotrader_or_404().status()
+        return await autotrade_view(autotrader_or_404())
 
     @app.post("/v1/autotrade")
     async def autotrade_toggle(body: AutoTradeRequest, _: Auth) -> dict[str, Any]:
         trader = autotrader_or_404()
+        was = trader.enabled
         trader.enabled = body.enabled
         await runtime.audit.record(
             actor=LOCAL_ACTOR,
             action="autotrade.toggle",
-            details={"enabled": body.enabled, "environment": "testnet"},
+            details={"enabled": body.enabled, "environment": runtime.trading_mode.mode.value},
         )
-        return trader.status()
+        # Açılışta son mumun hâlâ taze sinyalleri hemen değerlendirilir (saat başı beklenmez).
+        opened = await trader.replay() if body.enabled and not was else 0
+        return await autotrade_view(trader, replayed_opened=opened)
 
     @app.post("/v1/autotrade/settings")
     async def autotrade_settings(body: AutoTradeSettingsUpdate, _: Auth) -> dict[str, Any]:
@@ -1322,9 +1409,9 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         await runtime.audit.record(
             actor=LOCAL_ACTOR,
             action="autotrade.settings_changed",
-            details={"before": before, "after": after, "environment": "testnet"},
+            details={"before": before, "after": after},
         )
-        return trader.status()
+        return await autotrade_view(trader)
 
     @app.post("/v1/autotrade/settings/reset")
     async def autotrade_settings_reset(_: Auth) -> dict[str, Any]:
@@ -1332,7 +1419,7 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         await SettingsStore(runtime.db).set(AUTOTRADE_SETTINGS_KEY, None)
         trader.cfg = trader.defaults
         await runtime.audit.record(actor=LOCAL_ACTOR, action="autotrade.settings_reset")
-        return trader.status()
+        return await autotrade_view(trader)
 
     # --- Hata raporları (isteğe bağlı) --------------------------------------------------------
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAction, usePoll } from "../api/hooks";
 import type { OpportunitySummary, StatusResponse, WhaleAlertInfo } from "../api/types.gen";
+import { BotPanel } from "../components/BotPanel";
 import { GettingStarted } from "../components/GettingStarted";
 import { Badge, Card, Confirm, DataTable, Disclaimer, ErrorBox, Stat } from "../components/ui";
 import { duration, MARKET_LABELS, MODE_LABELS, num, pct, price, STATE_LABELS, time } from "../lib/format";
@@ -17,7 +18,6 @@ export function stateTone(state?: string): "ok" | "warn" | "bad" | "neutral" {
 export function Dashboard() {
   const status = usePoll((c) => c.get<StatusResponse>("/v1/status"), 2000);
   const risk = usePoll((c) => c.get<Record<string, unknown>>("/v1/risk/status"), 5000);
-  const auto = usePoll((c) => c.get<{ enabled: boolean; stats: Record<string, number> }>("/v1/autotrade"), 5000);
   const opportunities = usePoll((c) => c.get<OpportunitySummary[]>("/v1/opportunities", { limit: 8, min_score: 50 }), 15000);
   const whales = usePoll((c) => c.get<WhaleAlertInfo[]>("/v1/whales/alerts", { limit: 8 }), 10000);
   const [askEngage, setAskEngage] = useState(false);
@@ -25,7 +25,6 @@ export function Dashboard() {
 
   const engage = useAction((c) => c.post("/v1/kill-switch/engage", { reason: "Kullanıcı arayüzden durdurdu" }));
   const release = useAction((c) => c.post("/v1/kill-switch/release", { confirmation: RELEASE_PHRASE }));
-  const toggleAuto = useAction((c, enabled: boolean) => c.post("/v1/autotrade", { enabled }));
 
   const s = status.data;
   const account = (risk.data?.account ?? null) as Record<string, unknown> | null;
@@ -35,6 +34,7 @@ export function Dashboard() {
     <div className="page" data-testid="page-dashboard">
       <ErrorBox error={status.error} what="Motor durumu" />
       <GettingStarted />
+      <BotPanel />
       <div className="stats">
         <Stat
           label="Motor"
@@ -53,7 +53,7 @@ export function Dashboard() {
       </div>
 
       <div className="grid-2">
-        <Card title="Acil durdurma ve bot" testId="controls">
+        <Card title="Acil durdurma" testId="controls">
           <p className="muted">
             Acil durdurma yeni işlemleri hemen durdurur; açık pozisyonların borsadaki stopları yerinde kalır.
           </p>
@@ -69,29 +69,7 @@ export function Dashboard() {
             )}
             {engaged && <Badge tone="bad">Devrede: {s?.kill_switch.reason}</Badge>}
           </div>
-          <hr />
-          <div className="row">
-            <span>Otomatik işlem (yalnızca Demo Trading):</span>
-            <Badge tone={auto.data?.enabled ? "ok" : "neutral"} testId="auto-state">
-              {auto.data?.enabled ? "Açık" : "Kapalı"}
-            </Badge>
-            <button
-              disabled={toggleAuto.pending || !auto.data}
-              onClick={async () => {
-                await toggleAuto.execute(!auto.data?.enabled);
-                await auto.refresh();
-              }}
-              data-testid="auto-toggle"
-            >
-              {auto.data?.enabled ? "Botu durdur" : "Botu başlat"}
-            </button>
-          </div>
-          {auto.data && (
-            <p className="muted small">
-              Sinyal {auto.data.stats.signals ?? 0} · açılan {auto.data.stats.opened ?? 0} · risk reddi {auto.data.stats.rejected ?? 0}
-            </p>
-          )}
-          <ErrorBox error={engage.error ?? release.error ?? toggleAuto.error} />
+          <ErrorBox error={engage.error ?? release.error} />
         </Card>
 
         <Card title="Hazırlık koşulları">

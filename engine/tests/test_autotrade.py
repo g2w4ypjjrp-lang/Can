@@ -212,6 +212,65 @@ async def test_trailing_runner_takes_half_at_1r_and_trails_the_rest(
     assert D(trailing[0]["activatePrice"]) == D(102)  # 1R'de devreye girer
 
 
+async def test_late_signal_within_window_trades_but_runaway_price_does_not(
+    service: tuple[ExecutionService, list[TradingMode]], exchange: FakeExchange
+) -> None:
+    """Saat başını 10 dk kaçıran sinyal hâlâ kullanılır; fiyat stop uzaklığının yarısından
+    fazla kaymışsa (kaçmış ya da ters gitmiş) giriş yapılmaz."""
+    svc, mode = service
+    now = int(time.time() * 1000)
+    late = now - 3_600_000 - 600_000  # mum 10 dk önce kapandı
+    prices = {"BTCUSDT": 75_900.0, "ETHUSDT": 4_010.0}  # BTC +%1,2 (0,6R) kaçtı; ETH +%0,25
+    auto = AutoTrader(
+        settings=AutoTradeSettings(enabled=True),
+        limits=svc.settings.risk,
+        service=svc,
+        trading_mode=lambda: mode[0],
+        market_price=lambda market, symbol: prices.get(symbol),
+    )
+    await auto.on_opportunity(signal(bar_open_time_ms=late))
+    assert auto.skipped["fiyat_kaçtı"] == 1 and auto.stats["opened"] == 0
+    await auto.on_opportunity(
+        signal(symbol="ETHUSDT", bar_open_time_ms=late, price=4000.0, stop_price=3920.0,
+               target_price=4160.0)
+    )  # fmt: skip
+    assert auto.stats["opened"] == 1, auto.status()
+    # 20 dk sonra (varsayılan pencere 15 dk) aynı mumun sinyali artık eski.
+    await auto.on_opportunity(
+        signal(symbol="SOLUSDT", bar_open_time_ms=now - 3_600_000 - 1_200_000)
+    )
+    assert auto.skipped["eski_sinyal"] == 1
+
+
+async def test_starting_bot_replays_fresh_signals_best_first(
+    service: tuple[ExecutionService, list[TradingMode]], exchange: FakeExchange
+) -> None:
+    """Bot kapalıyken gelen taze sinyaller, bot açılınca hemen (yüksek puan önce)
+    değerlendirilir; saat başı beklenmez. Durum ekranı sonraki kararı ve adayları gösterir."""
+    svc, mode = service
+    auto = AutoTrader(
+        settings=AutoTradeSettings(max_entries_per_hour=1),
+        limits=svc.settings.risk,
+        service=svc,
+        trading_mode=lambda: mode[0],
+    )
+    await auto.on_opportunity(signal(symbol="ETHUSDT", score=72.0, price=4000.0,
+                                     stop_price=3920.0, target_price=4160.0))  # fmt: skip
+    await auto.on_opportunity(signal(score=81.0))
+    await auto.on_opportunity(signal(symbol="SOLUSDT", score=64.0))
+    assert auto.skipped["kapalı"] == 3 and auto.stats["opened"] == 0
+    status = auto.status()
+    assert [c["symbol"] for c in status["candidates"]] == ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    assert all(c["fresh"] for c in status["candidates"])
+    assert status["next_decision_ms"] > int(time.time() * 1000)
+    assert status["next_decision_ms"] % 3_600_000 == 0
+    auto.enabled = True
+    assert await auto.replay() == 1
+    (entry,) = auto.status()["recent"]
+    assert entry["symbol"] == "BTCUSDT"  # en yüksek puan önce; saatlik sınır 1
+    assert auto.skipped["saatlik_sınır"] == 1 and auto.skipped["puan"] == 1
+
+
 def notice(action: str, pnl: str | None = None, symbol: str = "BTCUSDT") -> TradeNotice:
     return TradeNotice(market="usdm_futures", mode="testnet", symbol=symbol, action=action,
                        side="long", quantity="1", price="100", net_pnl=pnl)  # fmt: skip

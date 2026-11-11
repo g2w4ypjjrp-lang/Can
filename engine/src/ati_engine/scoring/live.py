@@ -185,6 +185,7 @@ class EngineStats:
     scored: int = 0
     published: int = 0
     warmup_symbols: dict[str, int] = field(default_factory=dict)
+    warmup_total: dict[str, int] = field(default_factory=dict)
     batch_ms_max: float = 0.0
     last_batch_size: int = 0
 
@@ -605,8 +606,16 @@ class OpportunityEngine:
             loaded += 1
         return loaded
 
-    async def warmup(self, service: MarketDataService, *, concurrency: int = 3) -> int:
+    async def warmup(
+        self, service: MarketDataService, *, concurrency: int = 6, tickers_wait_s: float = 10.0
+    ) -> int:
         await service.discovered.wait()
+        # Hacim sırası için 24 saatlik özetler kısa süre beklenir (gelmezse keşif sırası).
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(service.tickers_ready.wait(), tickers_wait_s)
+        order = service.warmup_order()
+        self.stats.warmup_total[service.market.value] = len(order)
+        self.stats.warmup_symbols[service.market.value] = 0
         endpoints = service.endpoints
         limit = self.cfg.warmup_bars
         sem = asyncio.Semaphore(concurrency)
@@ -648,7 +657,7 @@ class OpportunityEngine:
                 done += 1
                 self.stats.warmup_symbols[service.market.value] = done
 
-        await asyncio.gather(*(one(s) for s in service.tracked_symbols()))
+        await asyncio.gather(*(one(s) for s in order))
         logger.info(
             "Puanlama ısınması tamamlandı", extra={"market": service.market.value, "symbols": done}
         )

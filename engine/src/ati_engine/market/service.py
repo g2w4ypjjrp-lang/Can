@@ -319,6 +319,11 @@ class MarketDataService:
         self.last_discovery_error: str | None = None
         self._ready: bool | None = None
         self._ready_detail: str | None = None
+        # Coin listesi canlı akışı beklemeden REST'ten doldurulur; akış sustuğunda da yenilenir.
+        self.tickers_ready = asyncio.Event()
+        self._ws_ticker_at = -1e18
+        self.ticker_snapshots = 0
+        self.last_ticker_error: str | None = None
 
     # --- Akış seçimi -------------------------------------------------------------------
 
@@ -369,6 +374,8 @@ class MarketDataService:
             elif isinstance(event, TickerBatch):
                 for ticker in event.tickers:
                     self.state.tickers[ticker.symbol] = ticker
+                self._ws_ticker_at = asyncio.get_running_loop().time()
+                self.tickers_ready.set()
             elif isinstance(event, MarkPriceBatch):
                 for mark in event.items:
                     self.state.marks[mark.symbol] = mark
@@ -431,6 +438,72 @@ class MarketDataService:
             },
         )
 
+    async def refresh_tickers(self) -> int:
+        """24 saatlik özetleri tek REST isteğiyle alır (açılışta ve canlı akış sustuğunda).
+
+        Akıştan gelen daha yeni değerin üzerine yazılmaz; yalnızca izlenen semboller alınır."""
+        rows = await self.rest.get(
+            self.endpoints.ticker_24h_path,
+            weight=self.endpoints.ticker_24h_weight,
+            priority=Priority.NORMAL,
+        )
+        tracked = {s.symbol for s in self._registry.tracked(self.market)}
+        updated = 0
+        for row in rows or []:
+            symbol = row.get("symbol") if isinstance(row, dict) else None
+            if symbol not in tracked:
+                continue
+            try:
+                ticker = Ticker24h(
+                    symbol=symbol,
+                    last=float(row["lastPrice"]),
+                    open=float(row["openPrice"]),
+                    high=float(row["highPrice"]),
+                    low=float(row["lowPrice"]),
+                    base_volume=float(row["volume"]),
+                    quote_volume=float(row["quoteVolume"]),
+                    event_time_ms=int(row.get("closeTime") or 0),
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+            current = self.state.tickers.get(symbol)
+            if current is None or current.event_time_ms < ticker.event_time_ms:
+                self.state.tickers[symbol] = ticker
+                updated += 1
+        self.ticker_snapshots += 1
+        self.last_ticker_error = None
+        if self.state.tickers:
+            self.tickers_ready.set()
+        return updated
+
+    async def _ticker_snapshot_loop(self, *, every_s: float = 60.0, silent_s: float = 45.0) -> None:
+        await self.discovered.wait()
+        loop = asyncio.get_running_loop()
+        while True:
+            if loop.time() - self._ws_ticker_at > silent_s:
+                try:
+                    await self.refresh_tickers()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    self.last_ticker_error = f"{type(exc).__name__}: {exc}"[:300]
+                    logger.warning(
+                        "24 saatlik özetler REST'ten alınamadı",
+                        extra={"market": self.market.value, "error": repr(exc)},
+                    )
+            await asyncio.sleep(every_s)
+
+    def warmup_order(self) -> list[str]:
+        """Isınma sırası: odak sembolleri, sonra 24 saatlik hacme göre azalan; böylece büyük
+        coinler ilk saniyelerde puanlanır."""
+        symbols = self.tracked_symbols()
+        focus = [s for s in self._focus if s in set(symbols)]
+        volume = {s: t.quote_volume for s, t in self.state.tickers.items()}
+        rest = sorted(
+            (s for s in symbols if s not in focus), key=lambda s: volume.get(s, 0.0), reverse=True
+        )
+        return focus + rest
+
     async def _discovery_loop(self) -> None:
         backoff = 2.0
         while True:
@@ -460,6 +533,9 @@ class MarketDataService:
                 group.create_task(self.streams.run(), name=f"streams-{self.market.value}")
                 group.create_task(self.books.run(), name=f"books-{self.market.value}")
                 group.create_task(self.gaps.run(), name=f"gapfill-{self.market.value}")
+                group.create_task(
+                    self._ticker_snapshot_loop(), name=f"ticker-snapshot-{self.market.value}"
+                )
         finally:
             with contextlib.suppress(Exception):
                 await self._on_ready(False, "piyasa verisi servisi durdu")
@@ -481,4 +557,7 @@ class MarketDataService:
             "focus": self.focus,
             "rest_budget": self.rest.budget.snapshot(),
             "last_discovery_error": self.last_discovery_error,
+            "tickers": len(self.state.tickers),
+            "ticker_snapshots": self.ticker_snapshots,
+            "last_ticker_error": self.last_ticker_error,
         }

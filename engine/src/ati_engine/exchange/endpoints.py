@@ -57,6 +57,15 @@ class MarketEndpoints:
             return 10
         return 20
 
+    @property
+    def ticker_24h_path(self) -> str:
+        return "/api/v3/ticker/24hr" if self.market is Market.SPOT else "/fapi/v1/ticker/24hr"
+
+    @property
+    def ticker_24h_weight(self) -> int:
+        # Tüm semboller tek istekte: Spot 80, Futures 40 ağırlık (Binance belgeleri).
+        return 80 if self.market is Market.SPOT else 40
+
     def klines_weight(self, limit: int) -> int:
         if self.market is Market.SPOT:
             return 2

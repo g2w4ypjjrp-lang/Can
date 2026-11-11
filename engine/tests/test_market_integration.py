@@ -224,6 +224,36 @@ async def test_ui_stream_gets_system_events_only(stack: Stack) -> None:
     assert not types & {"AggTrade", "Kline", "TickerBatch", "DepthDiff", "OrderBookTop"}
 
 
+async def test_coin_list_fills_from_rest_when_stream_is_silent(tmp_path: Path) -> None:
+    """Canlı akış hiç veri göndermese de coin listesi açılışta REST'ten dolar."""
+    fake = await FakeBinance(interval_s=0.05).start()
+    fake.paused = True  # akış bağlanır ama tek mesaj gelmez
+    settings = EngineSettings(
+        data_dir=tmp_path / "data",
+        log_to_console=False,
+        api=LocalApiSettings(port=0),
+        markets=[Market.USDM_FUTURES],
+        binance=BinanceEndpoints(**fake.binance_endpoints()),
+        market_data=MarketDataSettings(enabled=True, symbol_allowlist=["BTCUSDT", "ETHUSDT"]),
+    )
+    engine = Engine(settings)
+    task = asyncio.create_task(engine.run())
+    await asyncio.wait_for(engine.ready.wait(), timeout=10)
+    runtime = engine.runtime
+    assert runtime is not None
+    try:
+        service = runtime.market_data[Market.USDM_FUTURES]
+        await wait_until(lambda: len(service.tickers(10)) == 2)
+        assert fake.ticker_requests >= 1
+        assert {t.symbol for t in service.tickers(10)} == {"BTCUSDT", "ETHUSDT"}
+        assert service.warmup_order()[:1] == ["BTCUSDT"]  # odak sembolü önce
+        assert service.status()["tickers"] == 2
+    finally:
+        runtime.request_shutdown()
+        await asyncio.wait_for(task, timeout=15)
+        await fake.stop()
+
+
 async def test_unreachable_exchange_keeps_engine_safe(tmp_path: Path) -> None:
     """Binance'e hiç ulaşılamıyorsa motor güvenli modda kalır ve nedenini raporlar."""
     settings = EngineSettings(

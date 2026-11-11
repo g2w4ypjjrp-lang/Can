@@ -51,7 +51,7 @@ Platformda dikkat edilecekler:
    işi imzasız `*-setup.exe` dosyasını, yanında
    `.sha256` dosyasıyla üretir; iş özetinde sürüm, boyut (bayt) ve SHA-256 yazar.
 2. Dosya, sürüm numaralı ve **değişmeyen** bir adla indirme deposuna yüklenir (ör.
-   `AI-Trading-Intelligence_0.13.1_x64-setup.exe`). Aynı ada farklı dosya yüklenmez; yeni sürüm yeni
+   `AI-Trading-Intelligence_0.13.2_x64-setup.exe`). Aynı ada farklı dosya yüklenmez; yeni sürüm yeni
    addır. Depo herkese açık okunur, yazma yetkisi yalnızca dağıtımı yapan kişidedir.
 3. Yönetim paneli → **Sürümler**: adres, SHA-256 ve boyut girilerek taslak eklenir, kontrol edilir ve
    doğrulama kodu (TOTP) ile yayınlanır. Site İndir sayfasında en son yayındaki sürümü gösterir.

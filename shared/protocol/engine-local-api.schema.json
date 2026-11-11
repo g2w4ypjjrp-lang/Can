@@ -2518,6 +2518,14 @@
           },
           "title": "Warmup Symbols",
           "type": "object"
+        },
+        "warmup_total": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Warmup Total",
+          "type": "object"
         }
       },
       "required": [

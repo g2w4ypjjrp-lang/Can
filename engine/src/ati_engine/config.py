@@ -170,7 +170,9 @@ class AutoTradeSettings(BaseModel):
     leverage: int = Field(default=2, ge=1, le=HARD_MAX_LEVERAGE)
     max_entries_per_hour: int = Field(default=4, ge=1, le=100)
     symbol_cooldown_s: float = Field(default=3600.0, ge=0)
-    max_signal_age_s: float = Field(default=120.0, gt=0, le=3600)
+    # Mum kapanışından sonra sinyalin kullanılabileceği süre. Fiyat bu sürede stop uzaklığının
+    # yarısından fazla kaçtıysa giriş yapılmaz (AutoTrader).
+    max_signal_age_s: float = Field(default=900.0, gt=0, le=3600)
     # Futures: ilk hedefte yarısı alınır, kalan yarı sabit hedef yerine iz süren stopla taşınır.
     trailing_runner: bool = True
     # Art arda bu kadar zararlı pozisyondan sonra yeni giriş durur (0 = kapalı).

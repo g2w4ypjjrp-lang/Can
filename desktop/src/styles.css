@@ -1298,3 +1298,155 @@ dl.kv dd {
   color: var(--muted);
   letter-spacing: 0.01em;
 }
+
+/* --- Bot paneli (Genel bakış) ---------------------------------------------------------------- */
+.bot-panel {
+  margin-bottom: 16px;
+  padding: 18px 20px;
+}
+.bot-panel.on {
+  border-color: rgba(31, 209, 142, 0.35);
+  background: linear-gradient(180deg, rgba(31, 209, 142, 0.06), transparent 140px);
+}
+.bot-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.bot-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(109, 149, 255, 0.14);
+  color: #a9c0ff;
+  flex-shrink: 0;
+}
+.bot-panel.on .bot-icon {
+  background: rgba(31, 209, 142, 0.14);
+  color: var(--up);
+}
+.bot-title {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bot-title h2 {
+  margin: 0;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bot-title .small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bot-message {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(109, 149, 255, 0.1);
+  border: 1px solid rgba(109, 149, 255, 0.3);
+}
+.bot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin-top: 14px;
+}
+.bot-ok {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  color: var(--up);
+}
+.bot-checks,
+.bot-reasons,
+.bot-candidates {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bot-checks li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(245, 176, 65, 0.08);
+  border: 1px solid rgba(245, 176, 65, 0.3);
+}
+.bot-checks li > svg {
+  color: var(--warn);
+  flex-shrink: 0;
+}
+.bot-check-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.bot-reasons li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+.bot-candidates li {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) 2fr 36px;
+  align-items: center;
+  gap: 10px;
+}
+.bot-cand-name {
+  display: flex;
+  flex-direction: column;
+}
+.bot-meter {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.bot-meter span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.bot-meter span.pass {
+  background: var(--up);
+}
+.bot-meter i {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--warn);
+}
+.bot-foot {
+  margin: 4px 0 0;
+}
+.warmup-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 14px;
+}
+.warmup-item progress {
+  width: 120px;
+  height: 6px;
+}

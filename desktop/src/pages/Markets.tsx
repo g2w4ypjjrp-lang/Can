@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { usePoll } from "../api/hooks";
-import type { Market, ScannerTopResponse, SignalInfo, TickersResponse } from "../api/types.gen";
+import type { Market, ScannerTopResponse, SignalInfo, StatusResponse, TickersResponse } from "../api/types.gen";
 import { Badge, Card, DataTable, ErrorBox, Tabs } from "../components/ui";
 import { compact, num, pct, price, time, tone } from "../lib/format";
 
@@ -28,6 +28,8 @@ export function Markets() {
     [market],
   );
   const signals = usePoll((c) => c.get<SignalInfo[]>("/v1/scanner/signals", { limit: 30 }), 5000);
+  const status = usePoll((c) => c.get<StatusResponse>("/v1/status"), 5000);
+  const feed = status.data?.readiness.find((r) => r.name === `market_data.${market}`);
 
   const filtered = useMemo(() => {
     const q = query.trim().toUpperCase();
@@ -49,6 +51,11 @@ export function Markets() {
         <span className="muted">{tickers.data ? `${filtered.length} / ${tickers.data.count} coin` : ""}</span>
       </div>
       <ErrorBox error={tickers.error} what="Piyasa verisi" />
+      {feed && !feed.ready && (
+        <p className="notice" role="status" data-testid="feed-notice">
+          Binance canlı veri bağlantısı: {feed.detail}. Coin listesi bu sırada dakikada bir yenilenir.
+        </p>
+      )}
       <div className="grid-main">
         <Card title="Tüm coinler">
           <DataTable
@@ -56,7 +63,7 @@ export function Markets() {
             rows={filtered}
             rowKey={(r) => r.symbol}
             initialSort={{ key: "vol", desc: true }}
-            empty="Piyasa verisi bekleniyor"
+            empty="Binance'ten coin listesi alınıyor…"
             columns={[
               { key: "symbol", label: "Sembol", render: (r) => <b>{r.symbol}</b>, sort: (r) => r.symbol },
               { key: "last", label: "Fiyat", align: "right", render: (r) => price(r.last), sort: (r) => r.last },

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { usePoll } from "../api/hooks";
-import type { Market, OpportunityDetail, OpportunitySummary } from "../api/types.gen";
+import type { Market, OpportunityDetail, OpportunityStatsResponse, OpportunitySummary } from "../api/types.gen";
 import { Badge, Card, DataTable, Disclaimer, ErrorBox, Field, Stat } from "../components/ui";
 import { MARKET_LABELS, num, pct, price, time } from "../lib/format";
 
@@ -12,6 +12,10 @@ export function Opportunities() {
     (c) => c.get<OpportunitySummary[]>("/v1/opportunities", { min_score: minScore, market: market || undefined, limit: 200 }),
     10000,
     [minScore, market],
+  );
+  const stats = usePoll((c) => c.get<OpportunityStatsResponse>("/v1/opportunities/stats"), 5000);
+  const warming = Object.entries(stats.data?.warmup_total ?? {}).filter(
+    ([m, total]) => (stats.data?.warmup_symbols[m] ?? 0) < total,
   );
   const detail = usePoll(
     (c) =>
@@ -37,6 +41,20 @@ export function Opportunities() {
         </Field>
       </div>
       <ErrorBox error={list.error} what="Fırsat motoru" />
+      {warming.length > 0 && (
+        <div className="notice" role="status" data-testid="warmup-progress">
+          <b>Fırsat taraması hazırlanıyor</b> (büyük coinler önce):{" "}
+          {warming.map(([m, total]) => {
+            const done = stats.data?.warmup_symbols[m] ?? 0;
+            return (
+              <span key={m} className="warmup-item">
+                {MARKET_LABELS[m] ?? m} {done} / {total}
+                <progress max={total} value={done} aria-label={`${MARKET_LABELS[m] ?? m} hazırlık`} />
+              </span>
+            );
+          })}
+        </div>
+      )}
       <div className="grid-main">
         <Card title="Fırsatlar (açıklanabilir 0-100 puan)">
           <DataTable
@@ -45,7 +63,11 @@ export function Opportunities() {
             rowKey={(r) => `${r.market}-${r.symbol}`}
             onRowClick={setSelected}
             initialSort={{ key: "score", desc: true }}
-            empty="Eşik üstü fırsat yok"
+            empty={
+              warming.length > 0
+                ? "Tarama sürüyor; ilk fırsatlar birkaç dakika içinde görünür"
+                : `Şu an ${minScore} puan üstü fırsat yok. Puanlar her saat başı yenilenir; daha fazlası için "En düşük puan"ı düşürün.`
+            }
             columns={[
               { key: "symbol", label: "Sembol", render: (r) => <b>{r.symbol}</b>, sort: (r) => r.symbol },
               { key: "market", label: "Piyasa", render: (r) => MARKET_LABELS[r.market] },
