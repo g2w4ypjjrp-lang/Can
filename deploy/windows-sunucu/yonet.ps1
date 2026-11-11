@@ -57,7 +57,18 @@ function Durdur {
             ($_.ExecutablePath -and $_.ExecutablePath -like "$Kok\*") -or
             ($_.Name -eq "node.exe" -and $_.CommandLine -like "*$Kok\uygulama\web*"))
     }
-    foreach ($s in $surecler) { Invoke-CimMethod -InputObject $s -MethodName Terminate | Out-Null }
+    # Bir süreç kapanınca alt süreçleri de kapanır; listedeki süreç o an çoktan bitmiş olabilir
+    # ("Not found"). Bu durum hata değildir, yok sayılır.
+    $kimlikler = @($surecler | ForEach-Object { $_.ProcessId })
+    foreach ($no in $kimlikler) {
+        Stop-Process -Id $no -Force -ErrorAction SilentlyContinue
+    }
+    # Dosyalar serbest kalsın diye süreçlerin gerçekten kapanması beklenir (en çok ~15 sn).
+    for ($i = 0; $i -lt 30; $i++) {
+        $yasayan = @($kimlikler | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })
+        if ($yasayan.Count -eq 0) { break }
+        Start-Sleep -Milliseconds 500
+    }
     if (-not $Sessiz) { Write-Host "Servisler durduruldu." }
 }
 
@@ -99,7 +110,7 @@ function Eposta-Yeniden {
         Stop-ScheduledTask -TaskPath "\ATI\" -TaskName "Eposta"
         Get-CimInstance Win32_Process | Where-Object {
             ($_.CommandLine -like "*calistir.ps1*-Servis eposta*") -or ($_.Name -eq "ati-cloud-mail.exe")
-        } | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }
+        } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
         Start-ScheduledTask -TaskPath "\ATI\" -TaskName "Eposta"
     }
 }

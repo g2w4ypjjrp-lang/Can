@@ -200,7 +200,7 @@ Bilgi (& $UvExe --version)
 
 $CaddyExe = Join-Path $Araclar "caddy.exe"
 if (-not (Test-Path $CaddyExe) -or -not ((& $CaddyExe version) -like "v2.10.2*")) {
-    Get-Process caddy -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-Process caddy -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     $zip = Indir-Dogrula "caddy"
     $gecici = Join-Path $env:TEMP "caddy-acilan"
     Expand-Archive -Path $zip -DestinationPath $gecici -Force
@@ -423,8 +423,19 @@ Adim "Servisler durduruluyor (güncelleme)"
 Adim "Uygulama dosyaları kopyalanıyor"
 if (Test-Path $Uygulama) {
     $onceki = "$Uygulama-onceki"
-    if (Test-Path $onceki) { Remove-Item $onceki -Recurse -Force }
-    Rename-Item $Uygulama $onceki
+    # Kapanan servislerin dosyaları birkaç saniye kilitli kalabilir: birkaç kez denenir.
+    for ($deneme = 1; $deneme -le 10; $deneme++) {
+        try {
+            if (Test-Path $onceki) { Remove-Item $onceki -Recurse -Force }
+            Rename-Item $Uygulama $onceki
+            break
+        } catch {
+            if ($deneme -eq 10) {
+                Hata "Eski uygulama klasörü taşınamadı (bir program dosyaları kullanıyor): $($_.Exception.Message). Sunucuyu yeniden başlatıp kurulumu tekrar çalıştırın."
+            }
+            Start-Sleep -Seconds 3
+        }
+    }
 }
 foreach ($parca in "cloud", "web", "deploy") {
     & robocopy.exe (Join-Path $Kaynak $parca) (Join-Path $Uygulama $parca) /E /NFL /NDL /NJH /NJS /NP `
