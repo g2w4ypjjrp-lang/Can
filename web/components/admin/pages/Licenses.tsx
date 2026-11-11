@@ -68,6 +68,12 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
     };
   }
 
+  function assign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const email = String(new FormData(event.currentTarget).get("customer_email") ?? "").trim();
+    void post("assign", { customer_email: email }, "Lisans müşteriye atandı; artık uygulamada etkinleştirilebilir");
+  }
+
   async function reveal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const code = new FormData(event.currentTarget).get("code");
@@ -76,6 +82,7 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
   }
 
   if (!d) return <Feedback error={detail.error} />;
+  const unassigned = d.status === "generated" || d.status === "ready_for_sale";
   return (
     <Card className="space-y-4" as="section">
       <h2 className="text-lg font-semibold text-fg">
@@ -98,7 +105,21 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
         ) : null}
       </dl>
       <Feedback error={action.error} message={action.message} />
+      {unassigned ? (
+        <p className="text-sm text-muted" data-testid="license-pool-note">
+          Bu lisans satış havuzunda; bir müşteriye atanmadan uygulamada etkinleştirilemez.
+        </p>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-2">
+        {unassigned && can(me, "license.generate") ? (
+          <form onSubmit={assign} className="flex items-end gap-2">
+            <label className="flex-1 text-sm text-fg">
+              Atanacak müşterinin e-postası
+              <input name="customer_email" type="email" required className={`mt-1 ${inputClass}`} />
+            </label>
+            <Button type="submit">Müşteriye ata</Button>
+          </form>
+        ) : null}
         {can(me, "license.freeze") && d.status !== "cancelled" ? (
           d.status === "frozen" ? (
             <Button variant="secondary" onClick={() => void post("unfreeze", {}, "Dondurma kaldırıldı")}>
@@ -232,6 +253,9 @@ export function Licenses() {
                   Müşteri e-postası (boşsa satış havuzuna)
                   <input name="email" type="email" className={`mt-1 ${inputClass}`} />
                 </label>
+                <p className="text-xs text-muted">
+                  Havuzdaki lisans uygulamada etkinleşmez; önce Ayrıntı → Müşteriye ata gerekir.
+                </p>
                 <Button type="submit" disabled={generate.pending}>Üret</Button>
               </form>
               {issued ? (

@@ -56,6 +56,10 @@ class GenerateRequest(BaseModel):
     customer_email: EmailStr | None = None
 
 
+class AssignRequest(BaseModel):
+    customer_email: EmailStr
+
+
 class BatchRequest(BaseModel):
     plan_code: str = Field(min_length=1, max_length=40)
     quantity: int = Field(ge=1, le=1000)
@@ -488,6 +492,37 @@ def create_admin_manage_router(ctx: AdminContext) -> APIRouter:
                 },
             )  # fmt: skip
         return {"batch_id": batch["id"], "licenses": keys}
+
+    @router.post("/licenses/{license_id}/assign")
+    async def assign(
+        license_id: str,
+        body: AssignRequest,
+        request: Request,
+        admin: Admin = need["license.generate"],
+    ) -> dict[str, Any]:
+        """Satış havuzundaki (müşterisiz) lisansı bir müşteriye elle satar/teslim eder.
+
+        Ödeme teslimindeki gibi paket koşulları satış anında güncellenir; yalnızca henüz kimseye
+        ait olmayan (``generated``/``ready_for_sale``) lisans atanabilir.
+        """
+        async with ctx.db.connection() as conn, conn.transaction():
+            cur = await conn.execute(
+                "SELECT id FROM customers WHERE email = %s AND status = 'active'",
+                (str(body.customer_email).lower(),),
+            )
+            customer = await cur.fetchone()
+            if customer is None:
+                raise HTTPException(status_code=404, detail="Etkin müşteri bulunamadı")
+            return await change_license(
+                conn, admin, request, license_id,
+                "UPDATE licenses l SET status = 'sold', customer_id = %s, sold_at = now(), "
+                "duration_days = p.duration_days, device_limit = p.device_limit, "
+                "companion_device_limit = p.companion_device_limit FROM license_plans p "
+                "WHERE p.code = l.plan_code AND l.id = %s "
+                "AND l.status IN ('generated', 'ready_for_sale') "
+                "RETURNING l.status::text AS status",
+                (customer["id"],), "admin.license_assigned", {"customer": str(customer["id"])},
+            )  # fmt: skip
 
     @router.post("/licenses/{license_id}/freeze")
     async def freeze(

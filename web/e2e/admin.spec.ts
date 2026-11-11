@@ -140,6 +140,25 @@ test("lisans üretilir, dondurulur, tam anahtar TOTP ile gösterilir", async () 
   await noAxeViolations(page);
 });
 
+test("satış havuzundaki lisans müşteriye atanır", async () => {
+  await sql("INSERT INTO customers (email, password_hash, email_verified_at) VALUES ('havuz@example.com', $1, now())", [ARGON2]);
+  await page.goto("/yonetim/lisanslar");
+  await page.getByLabel("Müşteri e-postası (boşsa satış havuzuna)").fill("");
+  await page.getByRole("button", { name: "Üret", exact: true }).click();
+  const key = (await page.getByTestId("issued-key").textContent())!.trim();
+  await page.getByLabel("Lisans ara").fill(key);
+  await page.getByRole("button", { name: "Ara" }).click();
+  await expect(page.getByTestId("license-total")).toHaveText("1 lisans");
+  await page.getByRole("button", { name: /ayrıntı$/ }).first().click();
+  await expect(page.getByTestId("license-status")).toHaveText("Hazırlanıyor");
+  await expect(page.getByTestId("license-pool-note")).toBeVisible();
+  await page.getByLabel("Atanacak müşterinin e-postası").fill("havuz@example.com");
+  await page.getByRole("button", { name: "Müşteriye ata" }).click();
+  await expect(page.getByTestId("license-status")).toHaveText("Etkinleştirilmeyi bekliyor");
+  await expect(page.getByTestId("license-pool-note")).toHaveCount(0);
+  await noAxeViolations(page);
+});
+
 test("mesajlar, denetim zinciri ve yönetici daveti", async () => {
   await sql("INSERT INTO contact_messages (name, email, topic, message) VALUES ('Ayşe', 'ayse.yonetim@example.com', 'license', 'Lisansımı taşımak istiyorum, yardım eder misiniz?')");
   await page.goto("/yonetim/mesajlar");

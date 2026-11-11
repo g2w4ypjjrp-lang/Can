@@ -68,7 +68,10 @@ parola belirleyin, **doğrulama uygulamasıyla** QR'ı okutun (aşağıda "SMS v
 ### A9. Yönetim paneli ayarları
 - **Paketler ve fiyatlar:** fiyat girip paketi etkinleştirin (başlangıçta hepsi pasif).
 - **Ayarlar:** şirket bilgileri (yasal metinlerde görünür), **Site görünümü** (5 tasarım).
-- **Lisanslar → Lisans üret:** müşteri sitede hesap açtıktan sonra e-postasıyla elle lisans.
+- **Lisanslar → Lisans üret:** müşteri sitede hesap açtıktan sonra **e-postasıyla** elle lisans.
+  E-posta boş bırakılırsa lisans satış havuzuna girer ("Hazırlanıyor") ve uygulamada
+  **etkinleşmez**; böyle bir lisansı **Ayrıntı → Müşteriye ata** ile bir müşteriye bağlayın.
+  Kendi bilgisayarınız için de önce sitede kendinize bir müşteri hesabı açın.
 - **İndirim kuponları:** yüzde/tutar, kullanım sınırı, kişiye özel kod.
 - **Hata raporları:** uygulamada açanların ayıklanmış hata raporları.
 - Ödeme sağlayıcısı (PayTR/iyzico) ve **canlı ödeme ayrı onay ister**; şu an kapalı.

@@ -356,6 +356,36 @@ async def test_license_lifecycle(
     assert key not in dump  # anahtar denetim kaydına yazılmaz
 
 
+async def test_pool_license_is_assigned_to_customer(
+    root: AdminClient, dsn: str, factory: Any
+) -> None:
+    """E-postasız üretilen (satış havuzu) lisans sonradan müşteriye atanır ve etkinleşebilir olur."""
+    http = root.http
+    customer = factory.customer("havuz@example.com")
+    pool = (await http.post("/admin/v1/licenses", json={"plan_code": "d30_1dev"})).json()["id"]
+    path = f"/admin/v1/licenses/{pool}/assign"
+    missing = await http.post(path, json={"customer_email": "yok@example.com"})
+    assert missing.status_code == 404
+    with psycopg.connect(dsn) as conn:
+        conn.execute("UPDATE license_plans SET device_limit = 3 WHERE code = 'd30_1dev'")
+        conn.commit()
+    assigned = await http.post(path, json={"customer_email": "HAVUZ@example.com"})
+    assert assigned.status_code == 200, assigned.text
+    assert assigned.json() == {"id": pool, "status": "sold"}
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT customer_id, sold_at IS NOT NULL, device_limit FROM licenses WHERE id = %s",
+            (pool,),
+        ).fetchone()
+    assert row == (customer, True, 3)  # paket koşulları satış anında güncellenir
+    again = await http.post(path, json={"customer_email": "havuz@example.com"})
+    assert again.status_code == 409  # yalnızca kimseye ait olmayan lisans atanır
+    detail = (await http.get(f"/admin/v1/licenses/{pool}")).json()
+    assert detail["customer_email"] == "havuz@example.com"
+    assert any(e["to_status"] == "sold" and e["actor_type"] == "admin" for e in detail["events"])
+    assert "admin.license_assigned" in audit_actions(dsn)
+
+
 # --- Müşteriler ve cihazlar --------------------------------------------------------------------
 
 

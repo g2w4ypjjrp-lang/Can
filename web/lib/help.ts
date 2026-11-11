@@ -186,7 +186,7 @@ export const PROBLEMS: Problem[] = [
   },
   {
     q: "\"Lisans anahtarı geçersiz\"",
-    a: "Anahtarı müşteri panelinden kopyalayıp yapıştırın (O harfi ile 0 rakamı karışabilir; uygulama biçimi denetler). Sorun sürerse iletişim formundan yazın.",
+    a: "Anahtarı müşteri panelinden kopyalayıp yapıştırın (O harfi ile 0 rakamı karışabilir; uygulama biçimi denetler). \"Henüz bir müşteri hesabına atanmadı\" yazıyorsa anahtar satış havuzundadır ve önce hesabınıza tanımlanmalıdır. Sorun sürerse iletişim formundan yazın.",
   },
   {
     q: "\"Çevrim dışı tolerans süresi doldu\"",

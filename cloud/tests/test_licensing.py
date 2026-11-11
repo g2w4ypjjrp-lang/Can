@@ -371,6 +371,8 @@ async def test_invalid_unknown_and_unsold_keys(
     pool_key = await issue(app, dsn, None)  # satış havuzunda, kimseye satılmamış
     pool = await engine.activate(pool_key)
     assert pool.status_code == 404 and code(pool) == "not_found"
+    assert "müşteri hesabına atanmadı" in pool.json()["detail"]["message"]
+    assert "atanmadı" not in unknown.json()["detail"]["message"]
 
 
 async def test_forged_stale_and_replayed_requests_are_rejected(

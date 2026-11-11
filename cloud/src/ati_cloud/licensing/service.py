@@ -48,6 +48,11 @@ class LicenseError(Exception):
 
 
 # Motorun yerel kirayı silmesini gerektiren (kalıcı) hatalar. Ağ/sunucu hatalarında kira korunur.
+UNASSIGNED_MESSAGE = (
+    "Bu lisans henüz bir müşteri hesabına atanmadı (satış havuzunda). Yönetim panelinde "
+    "Lisanslar → Ayrıntı → Müşteriye ata ile atanması gerekir."
+)
+
 TERMINAL_CODES = frozenset(
     {"not_found", "cancelled", "frozen", "expired", "not_activated", "device_revoked"}
 )
@@ -199,7 +204,9 @@ class Licensing:
     def _usable(row: dict[str, Any], now_ms: int) -> None:
         status = row["status"]
         if status in ("generated", "ready_for_sale"):
-            raise LicenseError(404, "not_found", "Lisans anahtarı geçersiz")
+            # Satış havuzundaki anahtar: henüz kimseye ait değil. Anahtar 75 bit rastgele olduğu
+            # için ayrı ileti tahminle bilgi sızdırmaz; yöneticiye ne yapılacağını söyler.
+            raise LicenseError(404, "not_found", UNASSIGNED_MESSAGE)
         if status == "frozen":
             raise LicenseError(
                 403, "frozen", "Lisans dondurulmuş. Ayrıntı için destek ile iletişime geçin."
