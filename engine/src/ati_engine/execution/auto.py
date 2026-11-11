@@ -47,6 +47,9 @@ MAX_DRIFT_R = Decimal("0.5")
 
 # Kullanıcının uygulamadan değiştirebildiği bot ayarları (kalıcı; motor açılışında uygulanır).
 SETTINGS_KEY = "autotrade.settings"
+# Karar aralığı (fırsat puanının mum aralığı): kalıcı, motor yeniden başlayınca uygulanır.
+DECISION_INTERVAL_KEY = "scoring.interval"
+DECISION_INTERVALS = ("1m", "5m", "15m", "1h")
 EDITABLE = (
     "markets",
     "min_score",
@@ -121,12 +124,19 @@ class AutoTrader:
     def _skip(self, reason: str) -> None:
         self.skipped[reason] += 1
 
+    def max_signal_age_s(self) -> float:
+        """Sinyalin geçerlilik süresi: ayar, ama mum aralığının dörtte birini (en az 60 sn)
+        aşmaz; 1 saatte 15 dk, 15 dakikada ~4 dk, 1 dakikada 60 sn."""
+        step_s = INTERVAL_MS.get(self.interval, 3_600_000) / 1000
+        return min(self.cfg.max_signal_age_s, max(60.0, step_s / 4))
+
     def _close_ms(self, event: OpportunityScored) -> int:
         return event.bar_open_time_ms + INTERVAL_MS.get(event.interval, 0)
 
     def _remember(self, event: OpportunityScored) -> None:
         self._latest[(event.market, event.symbol)] = event
-        horizon = self._clock() - 2 * 3_600_000 - int(self.cfg.max_signal_age_s * 1000)
+        step = INTERVAL_MS.get(self.interval, 3_600_000)
+        horizon = self._clock() - 2 * step - int(self.max_signal_age_s() * 1000)
         for key in [k for k, e in self._latest.items() if self._close_ms(e) < horizon]:
             del self._latest[key]
 
@@ -178,7 +188,7 @@ class AutoTrader:
             return self._skip("seviye_yok")
         now = self._clock()
         close_ms = self._close_ms(event)
-        if (now - close_ms) / 1000 > self.cfg.max_signal_age_s:
+        if (now - close_ms) / 1000 > self.max_signal_age_s():
             return self._skip("eski_sinyal")
         if self._drifted(event):
             return self._skip("fiyat_kaçtı")
@@ -351,7 +361,7 @@ class AutoTrader:
                 "score": round(e.score, 1),
                 "close_ms": self._close_ms(e),
                 "age_s": max(0, (now - self._close_ms(e)) // 1000),
-                "fresh": (now - self._close_ms(e)) / 1000 <= self.cfg.max_signal_age_s,
+                "fresh": (now - self._close_ms(e)) / 1000 <= self.max_signal_age_s(),
             }
             for e in rows[:limit]
         ]
@@ -364,6 +374,7 @@ class AutoTrader:
         return {
             "enabled": self.enabled,
             "interval": self.interval,
+            "signal_valid_s": int(self.max_signal_age_s()),
             "next_decision_ms": self.next_decision_ms(),
             "candidates": self.candidates(),
             "environment": {

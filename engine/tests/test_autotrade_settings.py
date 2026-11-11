@@ -94,3 +94,28 @@ async def test_settings_are_validated_persisted_and_reset(engine_at: Callable[..
 
     async with engine_at() as http:
         assert (await http.get("/v1/autotrade")).json()["settings"]["min_score"] == 70.0
+
+
+async def test_decision_interval_is_saved_and_applied_after_restart(
+    engine_at: Callable[..., Any],
+) -> None:
+    """Karar aralığı (ör. 1 dakika) kaydedilir; motor yeniden başlayınca fırsat motoru ve bot o
+    aralıkla çalışır. Sinyal geçerliliği aralığa göre kısalır (1 dk → 60 sn)."""
+    async with engine_at() as http:
+        status = (await http.get("/v1/autotrade")).json()
+        assert status["interval"] == "1h" and status["signal_valid_s"] == 900
+        assert status["restart_required"] is False
+        bad = await http.post("/v1/autotrade/interval", json={"interval": "7m"})
+        assert bad.status_code == 422
+        saved = (await http.post("/v1/autotrade/interval", json={"interval": "1m"})).json()
+        assert saved["decision_interval_saved"] == "1m" and saved["restart_required"] is True
+        assert saved["interval"] == "1h"  # yeniden başlayana kadar eski aralık
+    async with engine_at() as http:
+        status = (await http.get("/v1/autotrade")).json()
+        assert status["interval"] == "1m" and status["restart_required"] is False
+        assert status["signal_valid_s"] == 60
+        assert status["next_decision_ms"] % 60_000 == 0
+        stats = (await http.get("/v1/opportunities/stats")).json()
+        assert stats["interval"] == "1m"
+        audit = (await http.get("/v1/audit?limit=50")).text
+        assert "autotrade.interval_changed" in audit

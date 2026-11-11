@@ -119,7 +119,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       "Üst zaman dilimi: 1 saatlik sinyal 4 saatlik trendle karşılaştırılır; büyük trende karşı işlemde puan düşürülür.",
       "Kendini ayarlama: her stratejinin sanal yarışmadaki sonuçlarına göre puandaki ağırlığı saatte bir güncellenir (en az 10 işlemden sonra, 0,4–1,4 arası).",
       "Risk kapısı: puan eşiği geçse bile her işlem zarar durdur, kaldıraç, günlük zarar ve pozisyon sınırlarından geçmek zorundadır.",
-      "Zamanlama: kararlar her saat başı (1 saatlik mum kapanınca) verilir. Sinyal 15 dakika geçerlidir; fiyat bu sürede stop uzaklığının yarısından fazla kaydıysa giriş yapılmaz. Bot başlatıldığında son saatin hâlâ geçerli sinyalleri hemen değerlendirilir.",
+      "Zamanlama: kararlar seçilen aralıkta mum kapanınca verilir (Bot panelinde Karar aralığı: 1 dk, 5 dk, 15 dk ya da 1 saat; varsayılan 1 saat). Sinyal aralığın dörtte biri kadar geçerlidir (1 saatte 15 dk, 1 dakikada 60 sn); fiyat bu sürede stop uzaklığının yarısından fazla kaydıysa giriş yapılmaz. Bot başlatıldığında son mumun hâlâ geçerli sinyalleri hemen değerlendirilir. Kısa aralık daha sık sinyal üretir ama gürültü ve komisyon payı da artar.",
     ],
     notes: [
       "Her fırsatın gerekçesi Fırsatlar ekranında bileşen bileşen görünür; stratejilerin ağırlıkları Strateji performansı ekranındadır.",

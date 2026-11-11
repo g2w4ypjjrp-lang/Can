@@ -41,6 +41,7 @@ from ati_engine.api.schemas import (
     CheckInfo,
     CrashToggle,
     DecisionInfo,
+    DecisionIntervalRequest,
     ErrorResponse,
     ExecutionCloseRequest,
     ExecutionOrderInfo,
@@ -118,7 +119,13 @@ from ati_engine.backtest.service import BacktestJob, BacktestService
 from ati_engine.core.bus import OverflowPolicy
 from ati_engine.core.events import Event, SystemEvent, encode_event
 from ati_engine.core.models import Market, TradingMode
-from ati_engine.execution.auto import EDITABLE, AutoTrader, merged_settings
+from ati_engine.execution.auto import (
+    DECISION_INTERVAL_KEY,
+    DECISION_INTERVALS,
+    EDITABLE,
+    AutoTrader,
+    merged_settings,
+)
 from ati_engine.execution.auto import SETTINGS_KEY as AUTOTRADE_SETTINGS_KEY
 from ati_engine.execution.engine import TakeProfit, TradeIntent
 from ati_engine.execution.service import ExecutionService, ExecutionUnavailable
@@ -1370,6 +1377,9 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         checks = await autotrade_checks(trader)
         status["checks"] = checks
         status["ready"] = all(c["ok"] for c in checks)
+        saved = await SettingsStore(runtime.db).get(DECISION_INTERVAL_KEY)
+        status["decision_interval_saved"] = saved if saved in DECISION_INTERVALS else None
+        status["restart_required"] = saved in DECISION_INTERVALS and saved != trader.interval
         status.update(extra)
         return status
 
@@ -1410,6 +1420,19 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             actor=LOCAL_ACTOR,
             action="autotrade.settings_changed",
             details={"before": before, "after": after},
+        )
+        return await autotrade_view(trader)
+
+    @app.post("/v1/autotrade/interval")
+    async def autotrade_interval(body: DecisionIntervalRequest, _: Auth) -> dict[str, Any]:
+        """Karar aralığını kaydeder; motor yeniden başlayınca uygulanır (fırsat taraması o
+        aralığın mumlarıyla yeniden ısınır)."""
+        trader = autotrader_or_404()
+        await SettingsStore(runtime.db).set(DECISION_INTERVAL_KEY, body.interval)
+        await runtime.audit.record(
+            actor=LOCAL_ACTOR,
+            action="autotrade.interval_changed",
+            details={"before": trader.interval, "after": body.interval},
         )
         return await autotrade_view(trader)
 

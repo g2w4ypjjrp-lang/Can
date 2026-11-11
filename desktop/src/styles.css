@@ -1450,3 +1450,23 @@ dl.kv dd {
   width: 120px;
   height: 6px;
 }
+.interval-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+.chip.active {
+  background: rgba(109, 149, 255, 0.18);
+  border-color: rgba(109, 149, 255, 0.55);
+  color: #dbe4ff;
+  opacity: 1;
+}

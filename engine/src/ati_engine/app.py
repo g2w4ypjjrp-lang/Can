@@ -35,8 +35,13 @@ from ati_engine.core.supervisor import RestartPolicy, TaskSupervisor
 from ati_engine.exchange.endpoints import endpoints_for
 from ati_engine.exchange.rate_limit import WeightBudget
 from ati_engine.exchange.rest import BinanceRestClient
+from ati_engine.execution.auto import (
+    DECISION_INTERVAL_KEY,
+    DECISION_INTERVALS,
+    AutoTrader,
+    merged_settings,
+)
 from ati_engine.execution.auto import SETTINGS_KEY as AUTOTRADE_SETTINGS_KEY
-from ati_engine.execution.auto import AutoTrader, merged_settings
 from ati_engine.execution.fills import FillSimulator
 from ati_engine.execution.service import ExecutionService
 from ati_engine.history.archive import INTERVAL_MS
@@ -186,6 +191,7 @@ class Engine:
                 runtime.analysis = AnalysisService(runtime.history, ModelRegistry(paths.models_dir))
                 runtime.backtests = BacktestService(runtime.history, db, paths.backtests_dir)
             if settings.scoring.enabled:
+                settings = await self._apply_decision_interval(runtime)
                 self._start_scoring(runtime)
             if settings.paper.enabled and runtime.opportunities is not None:
                 await self._start_paper(runtime)
@@ -284,6 +290,16 @@ class Engine:
         runtime.supervisor.spawn(
             "telegram", notifier.run, RestartPolicy(max_restarts=20, window_s=3600)
         )
+
+    @staticmethod
+    async def _apply_decision_interval(runtime: EngineRuntime) -> EngineSettings:
+        """Uygulamada seçilen karar aralığı (fırsat puanı mum aralığı) açılışta uygulanır."""
+        stored = await SettingsStore(runtime.db).get(DECISION_INTERVAL_KEY)
+        if stored in DECISION_INTERVALS and stored != runtime.settings.scoring.interval:
+            scoring = runtime.settings.scoring.model_copy(update={"interval": stored})
+            runtime.settings = runtime.settings.model_copy(update={"scoring": scoring})
+            logger.info("Karar aralığı uygulandı", extra={"interval": stored})
+        return runtime.settings
 
     @staticmethod
     async def _load_autotrade_settings(runtime: EngineRuntime) -> None:

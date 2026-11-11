@@ -902,6 +902,12 @@ class AutoTradeRequest(BaseModel):
     enabled: bool
 
 
+class DecisionIntervalRequest(BaseModel):
+    """Botun karar aralığı (fırsat puanının mum aralığı). Motor yeniden başlayınca uygulanır."""
+
+    interval: Literal["1m", "5m", "15m", "1h"]
+
+
 class AutoTradeSettingsUpdate(BaseModel):
     """Bot (otomatik işlem) ayarları. Boş bırakılan alan değişmez. Risk sınırları üst sınırdır."""
 

@@ -1,9 +1,10 @@
 import { AlertTriangle, Bot, CheckCircle2, ChevronRight, Clock, Play, Square } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAction, usePoll } from "../api/hooks";
+import { isTauri } from "../lib/connection";
 import { MARKET_LABELS, num } from "../lib/format";
 import { useNavigate } from "../lib/nav";
-import { Badge, ErrorBox } from "./ui";
+import { Badge, Confirm, ErrorBox } from "./ui";
 
 interface Check {
   key: string;
@@ -36,6 +37,9 @@ export interface BotStatus {
   enabled: boolean;
   environment: "paper" | "testnet" | "live";
   interval: string;
+  signal_valid_s: number;
+  decision_interval_saved: string | null;
+  restart_required: boolean;
   next_decision_ms: number;
   candidates: Candidate[];
   checks: Check[];
@@ -60,7 +64,7 @@ export const SKIP_LABELS: Record<string, string> = {
   yön: "Yön belirsiz",
   spot_short: "Spot'ta açığa satış yok",
   seviye_yok: "Stop/hedef seviyesi yok",
-  eski_sinyal: "Sinyal eskidi (mum kapanışından 15 dk geçti)",
+  eski_sinyal: "Sinyal eskidi (fiyat değişmiş olabilir)",
   fiyat_kaçtı: "Fiyat sinyalden çok uzaklaştı",
   saatlik_sınır: "Saatlik işlem sınırı doldu",
   bekleme: "Aynı coinde bekleme süresi",
@@ -78,6 +82,13 @@ const RESULT_LABELS: Record<string, string> = {
   blocked: "Engellendi",
   error: "Hata",
 };
+
+const INTERVALS: { key: string; label: string; every: string }[] = [
+  { key: "1m", label: "1 dk", every: "her dakika" },
+  { key: "5m", label: "5 dk", every: "5 dakikada bir" },
+  { key: "15m", label: "15 dk", every: "15 dakikada bir" },
+  { key: "1h", label: "1 saat", every: "her saat başı" },
+];
 
 const ENV_LABELS: Record<string, string> = { paper: "Sanal", testnet: "Demo para", live: "GERÇEK PARA" };
 
@@ -101,7 +112,9 @@ export function BotPanel() {
   const now = useNow();
   const auto = usePoll((c) => c.get<BotStatus>("/v1/autotrade"), 5000);
   const toggle = useAction((c, enabled: boolean) => c.post<BotStatus>("/v1/autotrade", { enabled }));
+  const saveInterval = useAction((c, interval: string) => c.post<BotStatus>("/v1/autotrade/interval", { interval }));
   const [message, setMessage] = useState<string | null>(null);
+  const [askInterval, setAskInterval] = useState<string | null>(null);
   const s = auto.data;
 
   if (!s) {
@@ -118,6 +131,24 @@ export function BotPanel() {
     .filter(([code]) => code !== "kapalı")
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4);
+
+  async function applyInterval(interval: string) {
+    setAskInterval(null);
+    const result = await saveInterval.execute(interval);
+    if (!result) return;
+    if (isTauri()) {
+      setMessage("Karar aralığı kaydedildi; motor yeniden başlatılıyor (birkaç saniye)…");
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("engine_restart");
+      } catch (e) {
+        setMessage(`Motor yeniden başlatılamadı: ${String(e)}. Uygulamayı kapatıp açın.`);
+      }
+    } else {
+      setMessage("Karar aralığı kaydedildi. Uygulamayı kapatıp açınca geçerli olur.");
+    }
+    await auto.refresh();
+  }
 
   async function onToggle() {
     setMessage(null);
@@ -151,9 +182,31 @@ export function BotPanel() {
             </Badge>
           </h2>
           <span className="muted small" data-testid="bot-next">
-            <Clock size={13} aria-hidden="true" /> Sonraki karar {clock(s.next_decision_ms)} ({minutes} dk sonra) · her{" "}
-            {s.interval === "1h" ? "saat başı" : s.interval} · puan eşiği {num(s.settings.min_score, 0)}
+            <Clock size={13} aria-hidden="true" /> Sonraki karar {clock(s.next_decision_ms)} (
+            {minutes > 0 ? `${minutes} dk sonra` : "1 dk içinde"}) · {INTERVALS.find((i) => i.key === s.interval)?.every ?? s.interval}{" "}
+            · puan eşiği {num(s.settings.min_score, 0)}
           </span>
+          <div className="interval-picker" role="radiogroup" aria-label="Karar aralığı" data-testid="interval-picker">
+            <span className="muted small">Karar aralığı</span>
+            {INTERVALS.map((i) => {
+              const target = s.decision_interval_saved ?? s.interval;
+              return (
+                <button
+                  key={i.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={target === i.key}
+                  className={`chip ${target === i.key ? "active" : ""}`}
+                  disabled={saveInterval.pending || target === i.key}
+                  onClick={() => setAskInterval(i.key)}
+                  data-testid={`interval-${i.key}`}
+                >
+                  {i.label}
+                </button>
+              );
+            })}
+            {s.restart_required && <Badge tone="warn">Yeniden başlatınca geçerli</Badge>}
+          </div>
         </div>
         <button
           type="button"
@@ -171,7 +224,19 @@ export function BotPanel() {
           {message}
         </p>
       )}
-      <ErrorBox error={toggle.error} />
+      <ErrorBox error={toggle.error ?? saveInterval.error} />
+      <Confirm
+        open={askInterval !== null}
+        title="Karar aralığını değiştir"
+        confirmLabel="Kaydet ve motoru yeniden başlat"
+        onCancel={() => setAskInterval(null)}
+        onConfirm={() => void applyInterval(askInterval ?? "1h")}
+      >
+        Bot, fırsatları {INTERVALS.find((i) => i.key === askInterval)?.every ?? ""} değerlendirecek. Kısa aralıkta daha sık
+        sinyal çıkar, ama fiyat gürültüsü ve komisyon payı da artar; saatlik giriş sınırı ve risk kapısı aynen geçerlidir.
+        Motor birkaç saniye yeniden başlar: bot kapanır, Gerçek para modundaysanız Sanal moda döner ve yeniden onay
+        gerekir. Fırsat taraması yeni aralıkla 1–3 dakikada yeniden dolar. Borsadaki stop emirleri yerinde kalır.
+      </Confirm>
 
       <div className="bot-grid">
         <div>

@@ -169,6 +169,16 @@ test("bot paneli: başlat/durdur, hazırlık listesi ve sonraki karar", async ({
   await panel.getByTestId("auto-toggle").click();
   await expect(panel.getByTestId("auto-state")).toHaveText("Durdu");
   await expect(panel.getByTestId("bot-message")).toContainText("durduruldu");
+
+  // Karar aralığı: kaydedilir, motor yeniden başlayınca geçerli olur (tarayıcıda yeniden başlatma yok).
+  await panel.getByTestId("interval-1m").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Kaydet ve motoru yeniden başlat" }).click();
+  await expect(panel.getByTestId("bot-message")).toContainText("Uygulamayı kapatıp açınca");
+  await expect(panel.getByTestId("interval-1m")).toHaveAttribute("aria-checked", "true");
+  await expect(panel.getByText("Yeniden başlatınca geçerli")).toBeVisible();
+  await panel.getByTestId("interval-1h").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Kaydet ve motoru yeniden başlat" }).click();
+  await expect(panel.getByText("Yeniden başlatınca geçerli")).toHaveCount(0);
 });
 
 test("lisans: yazım hatası yakalanır, geçerli anahtar etkinleşir, bilgisayar lisanstan çıkarılır", async ({ page }) => {

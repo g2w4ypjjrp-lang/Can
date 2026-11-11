@@ -401,7 +401,7 @@ class ScoringSettings(BaseModel):
     """Fırsat puanı (Aşama 7). Puan tek başına emir üretmez."""
 
     enabled: bool = True
-    interval: Literal["15m", "30m", "1h", "2h", "4h"] = "1h"
+    interval: Literal["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h"] = "1h"
     horizon_bars: int = Field(default=4, ge=1, le=100)
     warmup_bars: int = Field(default=300, ge=220, le=1000)
     publish_min_score: float = Field(default=60.0, ge=0, le=100)
