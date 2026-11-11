@@ -423,10 +423,14 @@ class MarketDataService:
             self.rest.budget.set_limit(limit)
         symbols = parse_exchange_info(self.market, payload)
         diff = await self._registry.apply(self.market, symbols)
+        # Bu süreçteki ilk keşifte akışlar her zaman kurulur. Semboller veritabanında önceki
+        # çalıştırmadan kalmışsa fark "boş" görünür; yalnızca farka bakmak akışları hiç
+        # başlatmıyordu (motor yeniden açıldığında "akış yok" ve güvenli mod).
+        first = not self._discovered
         self._discovered = True
         self.discovered.set()
         self.last_discovery_error = None
-        if diff.changed or diff.initial:
+        if first or diff.changed or diff.initial:
             self.streams.set_streams(self.desired_streams())
         logger.info(
             "Sembol keşfi tamamlandı",

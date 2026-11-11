@@ -224,6 +224,38 @@ async def test_ui_stream_gets_system_events_only(stack: Stack) -> None:
     assert not types & {"AggTrade", "Kline", "TickerBatch", "DepthDiff", "OrderBookTop"}
 
 
+async def test_streams_start_again_after_restart_with_known_symbols(tmp_path: Path) -> None:
+    """Regresyon: ikinci açılışta semboller veritabanında hazırdır (keşif farkı boş). Akışlar
+    yine kurulmalı; aksi halde "akış yok" ve motor güvenli modda kalır, bot işlem açamaz."""
+    fake = await FakeBinance(interval_s=0.05).start()
+    settings = EngineSettings(
+        data_dir=tmp_path / "data",
+        log_to_console=False,
+        api=LocalApiSettings(port=0),
+        markets=[Market.USDM_FUTURES],
+        binance=BinanceEndpoints(**fake.binance_endpoints()),
+        market_data=MarketDataSettings(
+            enabled=True, symbol_allowlist=["BTCUSDT", "ETHUSDT"], stale_after_s=3
+        ),
+    )
+    try:
+        for _ in range(2):  # aynı veri klasörüyle iki kez aç
+            engine = Engine(settings)
+            task = asyncio.create_task(engine.run())
+            await asyncio.wait_for(engine.ready.wait(), timeout=10)
+            runtime = engine.runtime
+            assert runtime is not None
+            try:
+                await wait_until(lambda rt=runtime: rt.safety.state.state is EngineState.RUNNING)
+                service = runtime.market_data[Market.USDM_FUTURES]
+                assert service.streams.stream_count > 0
+            finally:
+                runtime.request_shutdown()
+                await asyncio.wait_for(task, timeout=15)
+    finally:
+        await fake.stop()
+
+
 async def test_coin_list_fills_from_rest_when_stream_is_silent(tmp_path: Path) -> None:
     """Canlı akış hiç veri göndermese de coin listesi açılışta REST'ten dolar."""
     fake = await FakeBinance(interval_s=0.05).start()
