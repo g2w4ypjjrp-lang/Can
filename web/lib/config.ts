@@ -11,6 +11,8 @@ export interface RuntimeConfig {
   /** Paket listesinin önbellek süresi (sn). */
   plansRevalidateS: number;
   production: boolean;
+  /** Telefon sayfasının bağlandığı aktarma servisi (QR kodundaki adresle aynı olmalı). */
+  publicRelayUrl: string;
   /** Yönetim paneli alan adı (ör. admin.canarslan.net.tr). Tanımlıysa /yonetim yalnızca orada açılır. */
   adminHost: string | null;
 }
@@ -29,5 +31,6 @@ export function runtimeConfig(env: Record<string, string | undefined> = process.
     plansRevalidateS: Number.isFinite(revalidate) && revalidate >= 0 ? revalidate : 300,
     production: env.ATI_ENVIRONMENT === "production",
     adminHost: env.ATI_ADMIN_HOST?.trim().toLowerCase() || null,
+    publicRelayUrl: trimSlash(env.ATI_PUBLIC_RELAY_URL ?? "wss://relay.canarslan.net.tr"),
   };
 }

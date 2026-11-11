@@ -268,8 +268,23 @@ public struct PairingCode: Codable, Equatable, Sendable {
     public let exp: Int64
 
     /// QR metnini ayrıştırır ve denetler: güvenli adres, kimlik-anahtar uyumu, süre.
+    /// QR içeriği doğrudan JSON ya da telefon sayfasının adresi olabilir
+    /// (`https://…/telefon#p=<base64url JSON>`); adres biçiminde JSON # kısmından çıkarılır.
+    static func payloadText(_ text: String) -> String {
+        guard text.hasPrefix("https://") || text.hasPrefix("http://"),
+              let marker = text.range(of: "#p=") else { return text }
+        var encoded = String(text[marker.upperBound...])
+        if let end = encoded.firstIndex(of: "&") { encoded = String(encoded[..<end]) }
+        encoded = encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while encoded.count % 4 != 0 { encoded += "=" }
+        guard let data = Data(base64Encoded: encoded), let json = String(data: data, encoding: .utf8) else {
+            return text
+        }
+        return json
+    }
+
     public static func parse(_ text: String, now: Date = Date()) throws -> PairingCode {
-        guard let code = try? JSONDecoder().decode(PairingCode.self, from: Data(text.utf8)) else {
+        guard let code = try? JSONDecoder().decode(PairingCode.self, from: Data(payloadText(text).utf8)) else {
             throw ProtocolError.invalidPairingCode("Kod okunamadı")
         }
         guard code.v == 1 else { throw ProtocolError.invalidPairingCode("Desteklenmeyen sürüm") }

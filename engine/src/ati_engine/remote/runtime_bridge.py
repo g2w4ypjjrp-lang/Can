@@ -15,6 +15,7 @@ from ati_engine.core.events import (
     EngineStateChanged,
     KillSwitchEngaged,
     KillSwitchReleased,
+    TradeNotice,
 )
 from ati_engine.paper.competition import PaperTradeEvent
 from ati_engine.remote.protocol import Device
@@ -65,21 +66,21 @@ def build_executors(runtime: EngineRuntime) -> dict[str, Executor]:
     async def close_position(args: dict[str, Any], device: Device) -> str:
         from ati_engine.core.models import Market
 
-        if runtime.execution is None:
+        execution = runtime.active_execution()
+        if execution is None:
             raise RuntimeError("Emir yürütme etkin değil")
         market = Market(str(args.get("market")))
         symbol = str(args.get("symbol", "")).upper()
-        record = await runtime.execution.close_position(
+        record = await execution.close_position(
             market, symbol, actor=_actor(device), reason="telefondan kapatma"
         )
         return f"{symbol} kapatıldı" if record is not None else f"{symbol} için açık pozisyon yok"
 
     async def close_all(args: dict[str, Any], device: Device) -> str:
-        if runtime.execution is None:
+        execution = runtime.active_execution()
+        if execution is None:
             raise RuntimeError("Emir yürütme etkin değil")
-        closed = await runtime.execution.close_all(
-            reason="telefondan tümünü kapat", actor=_actor(device)
-        )
+        closed = await execution.close_all(reason="telefondan tümünü kapat", actor=_actor(device))
         return f"{closed} pozisyon kapatıldı"
 
     async def snapshot(args: dict[str, Any], device: Device) -> str:
@@ -122,8 +123,10 @@ async def build_snapshot(runtime: EngineRuntime) -> dict[str, Any]:
             "message": lic["message"],
         }
     try:
-        if runtime.execution is not None:
-            account = runtime.execution.monitor.last
+        # İşlem moduna göre Demo ya da gerçek hesap (gerçek para modunda canlı servis).
+        execution = runtime.active_execution()
+        if execution is not None:
+            account = execution.monitor.last
             data["risk"] = (
                 None
                 if account is None
@@ -142,15 +145,28 @@ async def build_snapshot(runtime: EngineRuntime) -> dict[str, Any]:
                     "realized_pnl": str(p["realized_pnl"]),
                     "protected": p["protected"],
                 }
-                for p in runtime.execution.positions()
+                for p in execution.positions()
             ]
     except Exception as exc:
         logger.debug("Özet: yürütme bölümü atlandı", extra={"error": repr(exc)})
     if runtime.autotrader is not None:
+        trader = runtime.autotrader
         data["autotrade"] = {
-            "enabled": runtime.autotrader.enabled,
-            "opened": runtime.autotrader.stats["opened"],
-            "rejected": runtime.autotrader.stats["rejected"],
+            "enabled": trader.enabled,
+            "opened": trader.stats["opened"],
+            "rejected": trader.stats["rejected"],
+            "signals": trader.stats["signals"],
+            "interval": trader.interval,
+            "min_score": trader.cfg.min_score,
+            "next_decision_ms": trader.next_decision_ms(),
+            "candidates": [
+                {k: c[k] for k in ("market", "symbol", "direction", "score")}
+                for c in trader.candidates(limit=5)
+            ],
+            "recent": [
+                {k: d.get(k) for k in ("ts_ms", "market", "symbol", "direction", "score", "result")}
+                for d in list(trader.recent)[:5]
+            ],
         }
     try:
         if runtime.opportunities is not None:
@@ -201,8 +217,27 @@ def subscribe_notifications(runtime: EngineRuntime, service: RemoteService) -> N
             body = f"{event.strategy}: {event.symbol} {event.direction} açıldı (sanal)"
         await service.notify("paper", "Sanal işlem", body)
 
+    async def on_trade(event: TradeNotice) -> None:
+        money = "GERÇEK" if event.mode == "live" else "Demo"
+        side = "Long" if event.side == "long" else "Short"
+        if event.action == "closed":
+            pnl = f", net {float(event.net_pnl):+.2f} USDT" if event.net_pnl else ""
+            body = f"{event.symbol} {side} kapandı{pnl} ({money})"
+        else:
+            body = f"{event.symbol} {side} açıldı, fiyat {event.price} ({money})"
+        await service.notify("trade", "İşlem", body)
+
+    states = {
+        "running": "Çalışıyor",
+        "safe_mode": "Güvenli mod",
+        "starting": "Başlıyor",
+        "halted": "Durduruldu",
+        "stopped": "Kapalı",
+    }
+
     async def on_state(event: EngineStateChanged) -> None:
-        await service.notify("state", "Motor durumu", f"{event.current.value}: {event.reason}")
+        label = states.get(event.current.value, event.current.value)
+        await service.notify("state", f"Motor: {label}", event.reason)
 
     async def on_kill(event: KillSwitchEngaged) -> None:
         await service.notify("kill_switch", "Acil durdurma devrede", event.reason)
@@ -214,6 +249,7 @@ def subscribe_notifications(runtime: EngineRuntime, service: RemoteService) -> N
     bus.subscribe(Alert, on_alert, name="remote-alerts")
     bus.subscribe(WhaleAlert, on_whale, name="remote-whales")
     bus.subscribe(PaperTradeEvent, on_paper, name="remote-paper")
+    bus.subscribe(TradeNotice, on_trade, name="remote-trades")
     bus.subscribe(EngineStateChanged, on_state, name="remote-state")
     bus.subscribe(KillSwitchEngaged, on_kill, name="remote-kill")
     bus.subscribe(KillSwitchReleased, on_release, name="remote-release")

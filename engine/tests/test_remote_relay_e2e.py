@@ -147,7 +147,8 @@ async def test_pair_and_control_through_real_relay(stack: Stack, relay_url: str)
     status = (await http.get("/v1/remote/status")).json()
     assert status["connected"] and status["devices"] == []
     pairing = (await http.post("/v1/remote/pairing")).json()
-    qr = json.loads(pairing["qr"])
+    qr = json.loads(pairing["payload"])
+    assert pairing["qr"].startswith("https://canarslan.net.tr/telefon#p=")
     assert qr["relay"] == relay_url
 
     phone = await Phone.connect(relay_url, DeviceSim("Can'ın iPhone'u"), qr)
@@ -284,7 +285,7 @@ async def test_phone_control_is_opt_in_and_toggles_from_desktop(
         on = await http.post("/v1/remote/enabled", json={"enabled": True})
         assert on.status_code == 200 and on.json()["enabled"] is True
         await _wait_connected(http, True)
-        qr = json.loads((await http.post("/v1/remote/pairing")).json()["qr"])
+        qr = json.loads((await http.post("/v1/remote/pairing")).json()["payload"])
         phone = await Phone.connect(relay_url, DeviceSim("Can'ın iPhone'u"), qr)
         await phone.send(phone.sim.pair_request(qr))
         paired = await phone.next("pair_result")

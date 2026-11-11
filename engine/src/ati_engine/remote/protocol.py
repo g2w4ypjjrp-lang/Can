@@ -249,7 +249,9 @@ class PairingManager:
         if not isinstance(ts, int) or abs(self._clock() - ts) > self.max_skew_s * 1000:
             raise PairingError("stale")
         protection = p.get("protection")
-        if protection not in ("secure_enclave", "software"):
+        # "browser": telefonun web tarayıcısı (QR → canarslan.net.tr/telefon). Biyometrik kanıt
+        # veremediği için yalnızca izleme ve imza anahtarlı komutlar (acil durdurma, botu durdurma).
+        if protection not in ("secure_enclave", "software", "browser"):
             raise PairingError("malformed")
         name = str(p.get("name") or "iPhone")[:MAX_NAME]
         limit = self.companion_limit() if self.companion_limit else None
@@ -345,6 +347,8 @@ class CommandVerifier:
             return CommandCheck(False, "not_allowed", device, seq, command)
         if required == "guarded" and key != "guarded":
             return CommandCheck(False, "biometric_required", device, seq, command)
+        if required == "guarded" and device.protection == "browser":
+            return CommandCheck(False, "browser_view_only", device, seq, command)
         if not await self.registry.advance_seq(device.id, seq, now):
             return CommandCheck(False, "replay", device, seq, command)  # eşzamanlı tekrar
         return CommandCheck(True, "ok", device, seq, command, args)

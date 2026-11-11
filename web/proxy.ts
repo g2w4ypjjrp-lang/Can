@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { runtimeConfig } from "@/lib/config";
-import { buildCsp, newNonce, originOf } from "@/lib/csp";
+import { buildCsp, newNonce, originOf, wsOriginOf } from "@/lib/csp";
 
 // Her sayfa isteğinde yeni nonce'lu CSP. Next.js nonce'u istek başlığındaki CSP'den okuyup
 // kendi betiklerine ekler (sayfalar bu yüzden dinamik oluşturulur: app/layout.tsx).
@@ -34,6 +34,7 @@ export function proxy(request: NextRequest) {
   const csp = buildCsp({
     nonce,
     apiOrigin: originOf(cfg.publicApiUrl),
+    relayOrigin: wsOriginOf(cfg.publicRelayUrl),
     dev: process.env.NODE_ENV === "development",
     https: cfg.siteUrl.startsWith("https://"),
   });

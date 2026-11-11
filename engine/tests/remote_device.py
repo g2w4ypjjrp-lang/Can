@@ -47,8 +47,9 @@ def b64(data: bytes) -> str:
 
 
 class DeviceSim:
-    def __init__(self, name: str = "Test iPhone") -> None:
+    def __init__(self, name: str = "Test iPhone", protection: str = "software") -> None:
         self.name = name
+        self.protection = protection
         self.signing = ec.generate_private_key(ec.SECP256R1())
         self.guarded = ec.generate_private_key(ec.SECP256R1())
         self.signing_key = x963(self.signing)
@@ -69,7 +70,7 @@ class DeviceSim:
             "name": self.name,
             "signing_key": b64(self.signing_key),
             "guarded_key": b64(x963(self.guarded)),
-            "protection": "software",
+            "protection": self.protection,
             "kx_key": b64(self.kx.public_x963),
             "ts_ms": ts if ts is not None else now_ms(),
             "nonce": secrets.token_hex(8),

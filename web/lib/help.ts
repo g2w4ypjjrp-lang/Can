@@ -90,10 +90,11 @@ export const HELP_TOPICS: HelpTopic[] = [
     steps: [
       "Masaüstünde Telefon ekranında \"Telefondan kontrol\" anahtarını açın.",
       "QR kodu göster'e basın (kod 5 dakika geçerli, tek kullanımlık).",
-      "iPhone uygulamasında Bilgisayarı eşleştir'e dokunup kodu okutun.",
+      "Telefonun kamerasıyla QR'ı okutun: tarayıcıda canarslan.net.tr/telefon açılır ve birkaç saniyede eşleşir. Uygulama kurmak gerekmez.",
     ],
     notes: [
-      "Kod yalnızca AI Trading Intelligence iPhone uygulamasının içinden okunur; telefonun kendi Kamera uygulaması bu kodu açmaz (bağlantı değil, şifreli eşleşme bilgisidir).",
+      "Tarayıcıdan durum, bot, pozisyonlar, fırsatlar ve bildirimler görünür; acil durdurma ve botu durdurma yapılabilir. Pozisyon kapatma, botu başlatma ve acil durdurmayı kaldırma yalnızca masaüstünden (ya da Face ID ile iPhone uygulamasından) yapılır.",
+      "Bağlantı uçtan uca şifrelidir: anahtarlar yalnızca telefonunuzda üretilir ve saklanır; eşleştirme kodu adresin # kısmında olduğu için siteye gönderilmez.",
       "Botu başlatma, pozisyon kapatma ve acil durdurmayı kaldırma Face ID onayı ister.",
     ],
   },

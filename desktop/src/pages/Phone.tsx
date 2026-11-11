@@ -254,10 +254,10 @@ export function Phone() {
                 </li>
                 <li>
                   <div>
-                    <b>AI Trading Intelligence iPhone uygulamasında "Bilgisayarı eşleştir"e dokunun</b>
+                    <b>Telefonun kamerasıyla okutun</b>
                     <span>
-                      Kodu uygulamanın içinden okutun; telefonun kendi Kamera uygulaması bu kodu açmaz (bağlantı
-                      değil, şifreli eşleşme bilgisidir). Eşleşme birkaç saniyede burada görünür.
+                      Telefonda tarayıcıda izleme sayfası açılır ve birkaç saniyede eşleşir (uygulama gerekmez). Durumu,
+                      botu, pozisyonları ve fırsatları görür; acil durdurabilirsiniz. Bağlantı uçtan uca şifrelidir.
                     </span>
                   </div>
                 </li>

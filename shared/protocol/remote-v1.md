@@ -35,7 +35,10 @@ Alıcı önce imzayı `p` metninin UTF-8 baytları üzerinde doğrular, sonra `p
 
 ## Eşleştirme
 
-1. Masaüstü QR kod gösterir. İçeriği:
+1. Masaüstü QR kod gösterir. QR, telefon sayfasının adresidir:
+   `https://canarslan.net.tr/telefon#p=<base64url(aşağıdaki JSON)>`. Telefonun kamerası açar;
+   `#` sonrası tarayıcıdan sunucuya gönderilmez ve sayfa açılır açılmaz adresten silinir. iPhone
+   uygulaması hem bu adresi hem doğrudan JSON'u okur. JSON:
 
    ```json
    {"v":1,"relay":"wss://…","engine_id":"…","engine_key":"<b64>","engine_kx":"<b64 X9.63>",
@@ -51,7 +54,10 @@ Alıcı önce imzayı `p` metninin UTF-8 baytları üzerinde doğrular, sonra `p
    gönderir.
    - `p` içeriği: `type`, `engine_id`, `device_id`, `name`, `signing_key`, `guarded_key`,
      `kx_key` (telefonun şifreleme anahtarı, X9.63), `protection` (`secure_enclave` |
-     `software`), `ts_ms`, `nonce`.
+     `software` | `browser`), `ts_ms`, `nonce`.
+   - `browser`: telefon tarayıcısı (WebCrypto, dışa aktarılamayan anahtarlar, IndexedDB).
+     Biyometrik kanıt veremediği için motor bu cihazdan **korumalı komutları reddeder**
+     (`browser_view_only`); izleme, acil durdurma ve botu durdurma serbesttir.
    - Kanıt: `proof` = base64(HMAC-SHA256(pair, p)).
    - İmza: `s`, imza anahtarıyla atılır (anahtara sahip olduğunu kanıtlar).
 3. Motor şunları denetler:

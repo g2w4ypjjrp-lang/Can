@@ -243,6 +243,34 @@ async def test_guarded_commands_need_biometric_key(db: Database) -> None:
     assert recorder.calls == [("close_position", args, device.device_id)]
 
 
+async def test_browser_device_can_watch_and_stop_but_not_run_guarded_commands(
+    db: Database,
+) -> None:
+    """Telefon tarayıcısı (QR → web sayfası) biyometrik kanıt veremez: izleme, acil durdurma ve
+    botu durdurma serbest; korumalı komutlar (pozisyon kapatma, botu başlatma, acil durdurmayı
+    kaldırma) korumalı anahtarla imzalansa da reddedilir."""
+    service, recorder = await make_service(db)
+    qr = json.loads(service.pairing.start("wss://relay.example")[0])
+    device = DeviceSim("Telefon tarayıcısı", protection="browser")
+    reply = await service.handle(device.pair_request(qr), device.device_id)
+    assert reply is not None and reply["ok"], reply
+    engine_id = service.identity.engine_id
+    for command in ("request_snapshot", "engage_kill_switch", "pause_autotrade"):
+        result = await service.handle(device.command(engine_id, command, {}), device.device_id)
+        assert result is not None and result["ok"], (command, result)
+    for command in ("close_all", "resume_autotrade", "release_kill_switch"):
+        result = await service.handle(
+            device.command(engine_id, command, {}, key="guarded"), device.device_id
+        )
+        assert result is not None and not result["ok"]
+        assert result["reason"] == "browser_view_only", result
+    assert [c[0] for c in recorder.calls] == [
+        "request_snapshot",
+        "engage_kill_switch",
+        "pause_autotrade",
+    ]
+
+
 async def test_unknown_and_revoked_devices(db: Database) -> None:
     service, recorder, device = await paired(db)
     engine_id = service.identity.engine_id

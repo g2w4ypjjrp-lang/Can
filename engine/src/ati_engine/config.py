@@ -202,6 +202,9 @@ class RemoteSettings(BaseModel):
 
     relay_url: str | None = None
     public_relay_url: str = PUBLIC_RELAY_URL
+    # QR kodu bu sayfanın adresidir; eşleştirme bilgisi adresin # kısmındadır (sunucuya
+    # gönderilmez). Telefonun kamerası açar; iPhone uygulaması da aynı kodu okur.
+    phone_web_url: str = "https://canarslan.net.tr/telefon"
     snapshot_interval_s: float = Field(default=15.0, ge=2, le=600)
     max_clock_skew_s: float = Field(default=120.0, ge=10, le=600)
     pairing_ttl_s: float = Field(default=300.0, ge=30, le=3600)

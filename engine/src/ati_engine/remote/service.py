@@ -59,6 +59,7 @@ REJECTION_MESSAGES = {
     "replay": "Bu komut daha önce işlendi (tekrar oynatma)",
     "not_allowed": "Bu komut uzaktan çalıştırılamaz",
     "biometric_required": "Bu komut Face ID ile onay gerektirir",
+    "browser_view_only": "Bu işlem telefon tarayıcısından yapılamaz; masaüstü uygulamasından yapın",
 }
 
 

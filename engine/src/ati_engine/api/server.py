@@ -138,6 +138,7 @@ from ati_engine.ml.registry import ModelError
 from ati_engine.notify.telegram import TelegramError, TelegramNotifier
 from ati_engine.observability.crash import CrashReporter
 from ati_engine.paper.competition import LIVE_CANDIDATE, PaperCompetition
+from ati_engine.remote.crypto import b64url
 from ati_engine.remote.service import REMOTE_ENABLED_KEY, RemoteService
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
@@ -1570,7 +1571,10 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             )
         payload, expires = service.pairing.start(service.relay_url)
         await runtime.audit.record(actor=LOCAL_ACTOR, action="remote.pairing_started")
-        return {"qr": payload, "expires_ms": expires}
+        # QR: telefon sayfasının adresi; eşleştirme bilgisi # sonrasında (tarayıcı sunucuya
+        # göndermez). Kamera uygulaması doğrudan açar.
+        url = f"{runtime.settings.remote.phone_web_url}#p={b64url(payload.encode('utf-8'))}"
+        return {"qr": url, "payload": payload, "expires_ms": expires}
 
     @app.post("/v1/remote/devices/revoke")
     async def remote_revoke(device_id: str, _: Auth) -> dict[str, Any]:

@@ -211,6 +211,17 @@ final class FactoryTests: XCTestCase {
         XCTAssertThrowsError(try PairingCode.parse(try Codec.json(noKX)))
     }
 
+    func testPairingCodeFromPhoneWebURL() throws {
+        // Masaüstü QR'ı telefon sayfasının adresidir; uygulama aynı kodu adresten de okur.
+        let (_, text) = try code()
+        let encoded = Data(text.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        let parsed = try PairingCode.parse("https://canarslan.net.tr/telefon#p=\(encoded)")
+        XCTAssertEqual(parsed.relay, "wss://relay.example")
+        XCTAssertThrowsError(try PairingCode.parse("https://canarslan.net.tr/telefon#p=bozuk!"))
+    }
+
     func testPairRequestCarriesProofAndSignature() throws {
         let (pairing, _) = try code()
         let signing = SoftwareSigner()
