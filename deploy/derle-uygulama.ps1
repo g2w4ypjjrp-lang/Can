@@ -13,7 +13,11 @@
   Eksikse winget ile kurar: Visual Studio 2022 Build Tools (C++), Rust, Node.js, uv (Python).
   İlk çalıştırmada indirme ~4 GB, süre 45-90 dakika; sonrakiler 10-20 dakika.
   Gerekli boş alan: en az 15 GB. Adımlar GitHub'daki derleme işiyle (desktop.yml) aynıdır.
+
+  Aynı klasörde tekrar çalıştırıldığında paketlenmiş motor yeniden kullanılır (zaman kazanılır);
+  her şeyi baştan derlemek için: -Temiz
 #>
+param([switch]$Temiz)
 $ErrorActionPreference = "Stop"
 $Kok = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
@@ -107,16 +111,91 @@ Bilgi (& uv --version)
 
 # ---------------------------------------------------------------------------------------------
 Adim "İşlem motoru paketleniyor (PyInstaller, 5-10 dakika)"
-Push-Location (Join-Path $Kok "engine")
-try {
-    Calistir "Motor bağımlılıkları" { & uv sync --locked --group packaging --python 3.13 }
-    Calistir "Motor paketleme" { & uv run --group packaging pyinstaller packaging/ati-engine.spec --noconfirm --distpath build/dist --workpath build/work }
-    Calistir "Paketlenmiş motor denetimi" { & .\build\dist\ati-engine\ati-engine.exe version }
-} finally { Pop-Location }
+$paketliMotor = Join-Path $Kok "engine\build\dist\ati-engine\ati-engine.exe"
+if ((Test-Path $paketliMotor) -and -not $Temiz) {
+    Bilgi "Önceki çalıştırmada paketlenmiş motor kullanılıyor (baştan derlemek için -Temiz)."
+} else {
+    Push-Location (Join-Path $Kok "engine")
+    try {
+        Calistir "Motor bağımlılıkları" { & uv sync --locked --group packaging --python 3.13 }
+        Calistir "Motor paketleme" { & uv run --group packaging pyinstaller packaging/ati-engine.spec --noconfirm --distpath build/dist --workpath build/work }
+    } finally { Pop-Location }
+}
+Calistir "Paketlenmiş motor denetimi" { & $paketliMotor version }
 $kaynak = Join-Path $Kok "desktop\src-tauri\resources\engine"
 if (Test-Path $kaynak) { Remove-Item $kaynak -Recurse -Force }
 New-Item -ItemType Directory -Force $kaynak | Out-Null
 Copy-Item -Recurse -Force (Join-Path $Kok "engine\build\dist\ati-engine\*") $kaynak
+
+# ---------------------------------------------------------------------------------------------
+Adim "NSIS kurulum aracı (Tauri'nin beklediği sürüm)"
+# Tauri NSIS'i kendi indiricisiyle GitHub'dan alır; bazı bağlantılarda "timeout: global" ile
+# başarısız olur. Aynı dosyalar burada Windows'un indiricisiyle (uzun bekleme + tekrar deneme)
+# önceden kurulur ve Tauri'nin denetlediği SHA-1 özetleriyle doğrulanır (tauri-bundler 2.10.4).
+$NsisZipUrl = "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip"
+$NsisZipSha1 = "DB14F8AF2EA346B786C6AE19343F61AAF5E09B8E"
+$NsisExeSha1 = "6D45D4E8CCF18FE1FDAC9164058F356102A2ECF2"
+$UtilsUrl = "https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll"
+$UtilsSha1 = "75197FEE3C6A814FE035788D1C34EAD39349B860"
+$TauriAraclar = Join-Path $env:LOCALAPPDATA "tauri"
+$NsisDizin = Join-Path $TauriAraclar "NSIS"
+$UtilsHedef = Join-Path $NsisDizin "Plugins\x86-unicode\additional\nsis_tauri_utils.dll"
+$Indirilenler = Join-Path $env:USERPROFILE "Downloads"
+
+function Sha1([string]$Yol) {
+    if (-not (Test-Path $Yol)) { return "" }
+    return (Get-FileHash $Yol -Algorithm SHA1).Hash.ToUpper()
+}
+
+function Dosya-Getir([string]$Url, [string]$Ozet, [string]$Ad) {
+    # Önce İndirilenler'de tarayıcıyla indirilmiş doğru dosya var mı bakılır.
+    $hazir = Join-Path $Indirilenler $Ad
+    if ((Sha1 $hazir) -eq $Ozet) { Bilgi "İndirilenler'deki $Ad kullanılıyor."; return $hazir }
+    $gecici = Join-Path $env:TEMP $Ad
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $eskiIlerleme = $ProgressPreference
+    $ProgressPreference = "SilentlyContinue"   # 5.1'de ilerleme çubuğu indirmeyi çok yavaşlatır
+    try {
+        for ($i = 1; $i -le 4; $i++) {
+            try {
+                Bilgi "İndiriliyor: $Ad (deneme $i)"
+                Invoke-WebRequest -Uri $Url -OutFile $gecici -UseBasicParsing -TimeoutSec 600
+                if ((Sha1 $gecici) -eq $Ozet) { return $gecici }
+                Bilgi "Dosya özeti tutmadı; yeniden indiriliyor."
+            } catch {
+                Bilgi "İndirilemedi: $($_.Exception.Message)"
+            }
+            Start-Sleep -Seconds (5 * $i)
+        }
+    } finally { $ProgressPreference = $eskiIlerleme }
+    Write-Host ""
+    Write-Host "Bu dosya indirilemedi. Tarayıcıda şu bağlantıyı açın (İndirilenler klasörüne iner)," -ForegroundColor Yellow
+    Write-Host "sonra bu betiği tekrar çalıştırın:" -ForegroundColor Yellow
+    Write-Host "  $Url" -ForegroundColor Yellow
+    Hata "$Ad indirilemedi."
+}
+
+$nsisTamam = $false
+if (Test-Path (Join-Path $NsisDizin "makensis.exe")) {
+    $nsisTamam = (Sha1 (Join-Path $NsisDizin "NSIS.exe")) -eq $NsisExeSha1
+}
+if (-not $nsisTamam) {
+    $zip = Dosya-Getir $NsisZipUrl $NsisZipSha1 "nsis-3.13.zip"
+    if (Test-Path $NsisDizin) { Remove-Item $NsisDizin -Recurse -Force }
+    $acilan = Join-Path $TauriAraclar "nsis-3.13"
+    if (Test-Path $acilan) { Remove-Item $acilan -Recurse -Force }
+    New-Item -ItemType Directory -Force $TauriAraclar | Out-Null
+    Expand-Archive -Path $zip -DestinationPath $TauriAraclar -Force
+    if (-not (Test-Path $acilan)) { Hata "NSIS arşivi beklenen biçimde açılmadı ($acilan yok)." }
+    Rename-Item $acilan $NsisDizin
+    if ((Sha1 (Join-Path $NsisDizin "NSIS.exe")) -ne $NsisExeSha1) { Hata "NSIS kurulumu doğrulanamadı." }
+}
+if ((Sha1 $UtilsHedef) -ne $UtilsSha1) {
+    $dll = Dosya-Getir $UtilsUrl $UtilsSha1 "nsis_tauri_utils.dll"
+    New-Item -ItemType Directory -Force (Split-Path $UtilsHedef) | Out-Null
+    Copy-Item $dll $UtilsHedef -Force
+}
+Bilgi "NSIS hazır: $NsisDizin"
 
 # ---------------------------------------------------------------------------------------------
 Adim "Kurulum dosyası derleniyor (Tauri + NSIS, ilk seferde 10-20 dakika)"
