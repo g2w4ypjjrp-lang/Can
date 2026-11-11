@@ -185,8 +185,8 @@ belirtilmelidir (hukukçu onayı).
 
 Kurulum dosyasını GitHub derler (ücretsiz kotadan ~25 dakika harcar, bu yüzden elle başlatılır):
 
-1. GitHub'da depo → **Actions** → soldan **Masaüstü** → sağda **Run workflow** → dal: `ana` →
-   yeşil **Run workflow**.
+1. GitHub'da depo → **Actions** → soldan **Masaüstü** → sağda **Run workflow** → dal:
+   `claude/laughing-hawking-wmt8mo` (en son kod bu daldadır) → yeşil **Run workflow**.
 2. ~15 dakika sonra çalıştırma yeşil olunca içine girin. Özet bölümünde sürüm, boyut (bayt) ve
    SHA-256 yazar. Sayfanın altındaki **Artifacts** → `ati-windows-installer-unsigned` ZIP'ini
    indirip açın.
@@ -200,8 +200,8 @@ powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 surum-hazirla
 Çıkan değerleri (sürüm, adres, SHA-256, boyut, **güncelleme imzası**) yönetim paneli → Sürümler →
 Yeni sürüm formuna girip doğrulama kodunuzla yayınlayın. Elle yapmak isterseniz: Windows kurulum
 dosyasını `C:\ATI\indir\` klasörüne **sürüm numaralı, değişmeyen bir adla**
-koyun (ör. `AI-Trading-Intelligence_0.12.0_x64-setup.exe`). Adresi
-`https://indir.canarslan.net.tr/AI-Trading-Intelligence_0.12.0_x64-setup.exe` olur. Sonra yönetim
+koyun (ör. `AI-Trading-Intelligence_0.13.0_x64-setup.exe`). Adresi
+`https://indir.canarslan.net.tr/AI-Trading-Intelligence_0.13.0_x64-setup.exe` olur. Sonra yönetim
 paneli → **Sürümler**'de bu adres, SHA-256 ve boyutla taslak ekleyip doğrulama kodunuzla
 yayınlayın. SHA-256'yı sunucuda şöyle alabilirsiniz:
 `(Get-FileHash C:\ATI\indir\<dosya> -Algorithm SHA256).Hash.ToLower()`.
