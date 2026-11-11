@@ -33,3 +33,4 @@ target/
 *.swp
 .DS_Store
 Thumbs.db
+cikti/
