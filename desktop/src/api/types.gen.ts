@@ -751,13 +751,17 @@ export interface ExecutionPositionInfo {
   entry_price: number | string;
   fees: number | string;
   funding: number | string;
+  mark_price?: number | string | null;
   market: string;
+  notional?: number | string | null;
+  pnl_pct?: number | null;
   protected: boolean;
   quantity: number | string;
   realized_pnl: number | string;
   state: string;
   symbol: string;
   take_profits_filled: number;
+  unrealized_pnl?: number | string | null;
 }
 /**
  * This interface was referenced by `EngineProtocol`'s JSON-Schema

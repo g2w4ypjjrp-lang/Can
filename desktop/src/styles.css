@@ -2301,3 +2301,38 @@ table thead th {
     stroke-dashoffset: 0;
   }
 }
+
+/* Anlık kâr/zarar: yön rengi ve değişimde kısa parlama */
+.pnl {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  border-radius: 8px;
+  transition: background 0.6s ease;
+}
+.pnl.up {
+  color: var(--up);
+  text-shadow: 0 0 10px rgba(61, 255, 168, 0.35);
+}
+.pnl.down {
+  color: var(--down);
+  text-shadow: 0 0 10px rgba(255, 92, 138, 0.35);
+}
+.pnl small {
+  font-weight: 600;
+  opacity: 0.85;
+}
+.pnl.flash-up {
+  background: rgba(61, 255, 168, 0.2);
+}
+.pnl.flash-down {
+  background: rgba(255, 92, 138, 0.22);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pnl {
+    transition: none;
+  }
+}

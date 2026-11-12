@@ -143,6 +143,8 @@ async def build_snapshot(runtime: EngineRuntime) -> dict[str, Any]:
                     "wallets": [w.as_dict() for w in account.wallets],
                 }
             )
+            from ati_engine.execution.pnl import with_pnl
+
             data["positions"] = [
                 {
                     "market": p["market"],
@@ -151,8 +153,13 @@ async def build_snapshot(runtime: EngineRuntime) -> dict[str, Any]:
                     "entry_price": str(p["entry_price"]),
                     "realized_pnl": str(p["realized_pnl"]),
                     "protected": p["protected"],
+                    "mark_price": None if p["mark_price"] is None else str(p["mark_price"]),
+                    "unrealized_pnl": (
+                        None if p["unrealized_pnl"] is None else str(p["unrealized_pnl"])
+                    ),
+                    "pnl_pct": p["pnl_pct"],
                 }
-                for p in execution.positions()
+                for p in with_pnl(execution.positions(), runtime.mark_price)
             ]
     except Exception as exc:
         logger.debug("Özet: yürütme bölümü atlandı", extra={"error": repr(exc)})

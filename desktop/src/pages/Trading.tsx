@@ -10,6 +10,7 @@ import type {
 import { Badge, Card, Confirm, DataTable, ErrorBox, Field } from "../components/ui";
 import { MARKET_LABELS, num, price, toNumber, tone } from "../lib/format";
 import { BotSettingsCard } from "./BotSettings";
+import { LivePnl } from "../components/LivePnl";
 
 interface ExecutionStatus {
   trading_mode: string;
@@ -103,6 +104,13 @@ export function Trading() {
                   render: (r) => <span className={tone(r.quantity)}>{num(r.quantity, 4)}</span>,
                 },
                 { key: "e", label: "Giriş", align: "right", render: (r) => price(r.entry_price) },
+                { key: "mk", label: "Güncel fiyat", align: "right", render: (r) => (r.mark_price ? price(r.mark_price) : "—") },
+                {
+                  key: "upnl",
+                  label: "Anlık K/Z",
+                  align: "right",
+                  render: (r) => <LivePnl value={r.unrealized_pnl} pct={r.pnl_pct} testId={`pnl-${r.symbol}`} />,
+                },
                 { key: "pnl", label: "Gerçekleşen K/Z", align: "right", render: (r) => <span className={tone(r.realized_pnl)}>{num(r.realized_pnl, 2)}</span> },
                 { key: "tp", label: "Dolan hedef", align: "right", render: (r) => r.take_profits_filled },
                 { key: "pr", label: "Koruma", render: (r) => (r.protected ? <Badge tone="ok">Stop var</Badge> : <Badge tone="bad">Stop yok</Badge>) },

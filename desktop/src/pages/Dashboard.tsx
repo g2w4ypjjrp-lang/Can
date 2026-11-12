@@ -5,6 +5,7 @@ import { usePoll } from "../api/hooks";
 import type { ExecutionPositionInfo, OpportunitySummary, StatusResponse } from "../api/types.gen";
 import { BotPanel } from "../components/BotPanel";
 import { GettingStarted } from "../components/GettingStarted";
+import { LivePnl } from "../components/LivePnl";
 import { Badge, Card, Confirm, DataTable, Disclaimer, ErrorBox } from "../components/ui";
 import { duration, MARKET_LABELS, MODE_LABELS, num, pct, price, STATE_LABELS } from "../lib/format";
 import { useNavigate } from "../lib/nav";
@@ -162,13 +163,16 @@ export function Dashboard() {
   const navigate = useNavigate();
   const status = usePoll((c) => c.get<StatusResponse>("/v1/status"), 2000);
   const risk = usePoll((c) => c.get<Record<string, unknown>>("/v1/risk/status"), 5000);
-  const positions = usePoll((c) => c.get<ExecutionPositionInfo[]>("/v1/execution/positions"), 5000);
+  const positions = usePoll((c) => c.get<ExecutionPositionInfo[]>("/v1/execution/positions"), 2000);
   const opportunities = usePoll((c) => c.get<OpportunitySummary[]>("/v1/opportunities", { limit: 6, min_score: 50 }), 15000);
 
   const s = status.data;
   const account = (risk.data?.account ?? null) as Record<string, unknown> | null;
   const live = s?.trading_mode === "live";
   const open = (positions.data ?? []).filter((p) => Number(p.quantity) !== 0);
+  const openPnl = open.some((p) => p.unrealized_pnl != null)
+    ? open.reduce((sum, p) => sum + Number(p.unrealized_pnl ?? 0), 0)
+    : null;
 
   return (
     <div className="page" data-testid="page-dashboard">
@@ -201,7 +205,12 @@ export function Dashboard() {
           value={account ? pct(account.daily_loss_pct as number, 2, false) : "—"}
           hint="Sınır aşılınca bot o gün durur"
         />
-        <Kpi icon={<Briefcase size={18} />} label="Açık pozisyon" value={open.length} hint={open.length ? "Ayrıntı: İşlemler" : "Pozisyon yok"} />
+        <Kpi
+          icon={<Briefcase size={18} />}
+          label="Açık pozisyon"
+          value={open.length}
+          hint={open.length ? <LivePnl value={openPnl} testId="open-pnl-total" /> : "Pozisyon yok"}
+        />
       </div>
 
       <BotPanel />
@@ -221,6 +230,13 @@ export function Dashboard() {
                 render: (r) => <Badge tone={Number(r.quantity) > 0 ? "up" : "down"}>{Number(r.quantity) > 0 ? "Long" : "Short"}</Badge>,
               },
               { key: "e", label: "Giriş", align: "right", render: (r) => price(r.entry_price) },
+              { key: "mk", label: "Fiyat", align: "right", render: (r) => (r.mark_price ? price(r.mark_price) : "—") },
+              {
+                key: "upnl",
+                label: "Anlık K/Z",
+                align: "right",
+                render: (r) => <LivePnl value={r.unrealized_pnl} pct={r.pnl_pct} testId={`dash-pnl-${r.symbol}`} />,
+              },
               { key: "p", label: "Stop", render: (r) => (r.protected ? <Badge tone="ok">Var</Badge> : <Badge tone="bad">Yok</Badge>) },
             ]}
           />

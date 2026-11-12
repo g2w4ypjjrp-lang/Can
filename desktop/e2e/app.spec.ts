@@ -158,6 +158,8 @@ test("test ağında işlem: risk kapısı stopsuz işlemi reddeder, korumalı i�
   await expect(positions).toContainText("Stop var");
   await expect(page.getByTestId("orders").locator("tbody tr")).toHaveCount(3);
 
+  // Açık pozisyonun anlık kâr/zararı (güncel fiyatla) görünür.
+  await expect(page.getByTestId("pnl-BTCUSDT")).toContainText("USDT", { timeout: 10_000 });
   await page.getByTestId("close-BTCUSDT").click();
   await page.getByRole("dialog").getByRole("button", { name: "Piyasa fiyatından kapat" }).click();
   await expect(page.getByText("Açık pozisyon yok")).toBeVisible();

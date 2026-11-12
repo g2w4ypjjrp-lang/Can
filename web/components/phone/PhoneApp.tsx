@@ -31,7 +31,17 @@ type Snap = {
     equity: string;
     wallets?: { market: string; asset: string; balance: string; available: string; unrealized_pnl: string }[];
   } | null;
-  positions?: { market: string; symbol: string; quantity: string; entry_price: string; realized_pnl: string; protected: boolean }[];
+  positions?: {
+    market: string;
+    symbol: string;
+    quantity: string;
+    entry_price: string;
+    realized_pnl: string;
+    protected: boolean;
+    mark_price?: string | null;
+    unrealized_pnl?: string | null;
+    pnl_pct?: number | null;
+  }[];
   autotrade?: {
     enabled: boolean;
     opened: number;
@@ -78,6 +88,29 @@ function Panel({ title, icon, children, testId, action }: { title: string; icon:
       </header>
       {children}
     </section>
+  );
+}
+
+/** Anlık kâr/zarar: yön oku, renk ve değişimde kısa parlama. */
+function PnlText({ value, pct }: { value?: string | number | null; pct?: number | null }) {
+  const n = value === null || value === undefined || value === "" ? null : Number(value);
+  const prev = useRef<number | null>(null);
+  const [flash, setFlash] = useState("");
+  useEffect(() => {
+    const before = prev.current;
+    prev.current = n;
+    if (n === null || before === null || n === before) return;
+    setFlash(n > before ? "bg-success-bg" : "bg-danger-bg");
+    const id = setTimeout(() => setFlash(""), 900);
+    return () => clearTimeout(id);
+  }, [n]);
+  if (n === null || Number.isNaN(n)) return <span className="text-sm text-muted">—</span>;
+  const tone = n > 0 ? "text-up" : n < 0 ? "text-down" : "text-fg";
+  return (
+    <span className={`inline-block rounded-lg px-1.5 text-sm font-bold tabular-nums transition-colors duration-500 ${tone} ${flash}`} data-testid="phone-pnl">
+      {n > 0 ? "▲ +" : n < 0 ? "▼ " : ""}
+      {money(n)} USDT{pct !== null && pct !== undefined ? ` (${pct > 0 ? "+" : ""}${pct.toFixed(2)}%)` : ""}
+    </span>
   );
 }
 
@@ -303,6 +336,12 @@ export function PhoneApp() {
             {money(snap.risk.wallets.reduce((sum, w) => sum + Number(w.balance) + Number(w.unrealized_pnl), 0))}{" "}
             <span className="text-lg">USDT</span>
           </p>
+          {snap.positions && snap.positions.some((p) => p.unrealized_pnl != null) && (
+            <p className="mt-1 text-sm text-muted">
+              Açık pozisyonlar:{" "}
+              <PnlText value={snap.positions.reduce((sum, p) => sum + Number(p.unrealized_pnl ?? 0), 0)} />
+            </p>
+          )}
           <ul className="mt-3 grid grid-cols-2 gap-2">
             {snap.risk.wallets.map((w) => (
               <li key={w.market} className="rounded-2xl border border-glass-border bg-surface-2 px-3 py-2">
@@ -429,8 +468,12 @@ export function PhoneApp() {
                       {MARKET[p.market] ?? p.market} · giriş {money(p.entry_price)} · miktar {money(Math.abs(qty))}
                     </span>
                   </span>
-                  <span className="text-right text-xs">
-                    {p.protected ? <span className="text-up">Stop var</span> : <span className="text-down">Stopsuz!</span>}
+                  <span className="text-right">
+                    <PnlText value={p.unrealized_pnl} pct={p.pnl_pct} />
+                    <span className="block text-[11px] text-muted">
+                      {p.mark_price ? `fiyat ${money(p.mark_price)} · ` : ""}
+                      {p.protected ? <span className="text-up">stop var</span> : <span className="text-down">stopsuz!</span>}
+                    </span>
                   </span>
                 </li>
               );

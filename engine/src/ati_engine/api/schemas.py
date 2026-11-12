@@ -810,6 +810,11 @@ class ExecutionPositionInfo(BaseModel):
     state: str
     take_profits_filled: int
     protected: bool
+    # Anlık kâr/zarar (güncel fiyat varsa): komisyon ve fonlama dahil değildir.
+    mark_price: Decimal | None = None
+    unrealized_pnl: Decimal | None = None
+    pnl_pct: float | None = None
+    notional: Decimal | None = None
 
 
 class ExecutionOrderInfo(BaseModel):

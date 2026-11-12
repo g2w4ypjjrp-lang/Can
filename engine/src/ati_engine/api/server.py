@@ -131,6 +131,7 @@ from ati_engine.execution.auto import (
 from ati_engine.execution.auto import ENABLED_KEY as AUTOTRADE_ENABLED_KEY
 from ati_engine.execution.auto import SETTINGS_KEY as AUTOTRADE_SETTINGS_KEY
 from ati_engine.execution.engine import TakeProfit, TradeIntent
+from ati_engine.execution.pnl import with_pnl
 from ati_engine.execution.service import ExecutionService, ExecutionUnavailable
 from ati_engine.execution.venue import ExecutionBlocked
 from ati_engine.history.service import HistoryService, SyncJob
@@ -1244,7 +1245,8 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
 
     @app.get("/v1/execution/positions", response_model=list[ExecutionPositionInfo])
     async def execution_positions(_: Auth) -> list[ExecutionPositionInfo]:
-        return [ExecutionPositionInfo.model_validate(p) for p in execution_or_404().positions()]
+        rows = with_pnl(execution_or_404().positions(), runtime.mark_price)
+        return [ExecutionPositionInfo.model_validate(p) for p in rows]
 
     @app.get("/v1/execution/orders", response_model=list[ExecutionOrderInfo])
     async def execution_orders(_: Auth, open_only: bool = True) -> list[ExecutionOrderInfo]:

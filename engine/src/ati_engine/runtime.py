@@ -61,6 +61,17 @@ class EngineRuntime:
     telegram: TelegramNotifier | None = None
     crash: CrashReporter | None = None
 
+    def mark_price(self, market: Market, symbol: str) -> float | None:
+        """Güncel piyasa fiyatı (piyasa verisi akışından): Futures'ta işaret fiyatı."""
+        data = self.market_data.get(market)
+        if data is None:
+            return None
+        mark = data.state.marks.get(symbol)
+        if mark is not None and mark.mark_price > 0:
+            return mark.mark_price
+        ticker = data.state.tickers.get(symbol)
+        return ticker.last if ticker is not None and ticker.last > 0 else None
+
     def active_execution(self) -> ExecutionService | None:
         """İşlem moduna göre kullanılan yürütme servisi (gerçek hesap modunda canlı servis)."""
         if self.trading_mode.mode is TradingMode.LIVE:
