@@ -59,7 +59,7 @@ function toForm(s: BotSettings): Form {
     losses: String(s.max_consecutive_losses),
     pause_min: String(s.loss_pause_minutes),
     rr: String(s.min_reward_risk ?? 1.5),
-    volume_m: String(Math.round((s.min_quote_volume_usdt ?? 25_000_000) / 1_000_000)),
+    volume_m: String(Math.round((s.min_quote_volume_usdt ?? 0) / 1_000_000)),
   };
 }
 
@@ -184,7 +184,7 @@ export function BotSettingsCard() {
           </Field>
           <Field
             label="En düşük 24 saatlik hacim (milyon USDT)"
-            hint="Az işlem gören, yeni listelenmiş coinler elenir (fiyat sıçrar, stop gereksiz tetiklenir). 0 = kapalı; önerilen 25 ve üstü."
+            hint="0 = kapalı (varsayılan): en çok hareket eden yeni coinler de işlenir. Yazarsanız bu hacmin altındaki coinler elenir."
           >
             <input type="number" min={0} max={10000} step={5} value={form.volume_m} onChange={set("volume_m")} data-testid="bot-volume" />
           </Field>

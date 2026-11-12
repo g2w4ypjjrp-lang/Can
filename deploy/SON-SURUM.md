@@ -9,8 +9,8 @@ yazar: stop ve hedef fiyatı, puan ve gerekçe, kaldıraç; kapanışta giriş�
 kapanış nedeni (stop / hedef / iz süren stop / elle) ve süre.
 
 Bot için **kalite filtreleri** (Bot ayarları → Kalite filtreleri): hedefi stop uzaklığının 1,5 katından
-yakın olan işlemlere girilmez (kazanç/risk oranı düşük) ve son 24 saatlik hacmi 25 milyon USDT'nin
-altındaki, az işlem gören/yeni listelenmiş coinler elenir. İkisi de değiştirilebilir. Bunlar zararı
+yakın olan işlemlere girilmez (kazanç/risk oranı düşük). İsteğe bağlı hacim filtresi varsayılan
+kapalıdır: en çok hareket eden yeni coinler de işlenir; istenirse en düşük 24 saatlik hacim yazılır. Bunlar zararı
 azaltmaya yönelik önlemlerdir; kazanç garantisi değildir.
 
 Site güncellemesi (yalnızca sunucu; uygulamayı yeniden derlemek gerekmez): yönetim paneli →

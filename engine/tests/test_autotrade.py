@@ -138,8 +138,6 @@ async def test_signal_becomes_risk_sized_testnet_trade(
         ({"symbol": "XYZUSDT"}, "test_ağında_yok"),
         # Hedef, stop uzaklığının 1,5 katından yakın: kazanç zararı karşılamaz.
         ({"target_price": 76_500.0}, "kazanç_oranı_düşük"),
-        # Az işlem gören (yeni listelenmiş) coin: fiyat sıçrar, stop gereksiz tetiklenir.
-        ({"quote_volume_24h": 3_000_000.0}, "hacim_düşük"),
     ],
 )
 async def test_unsuitable_signals_are_skipped(
@@ -349,3 +347,16 @@ async def test_small_account_uses_exchange_minimum_within_risk_limit(
     qty = exchange.futures_positions["BTCUSDT"][0]
     assert qty * 100 >= D(5)  # test ağı fiyatı 100: en küçük tutarın üstünde
     assert qty * 100 <= D(6)
+
+
+async def test_volume_filter_is_optional(
+    service: tuple[ExecutionService, list[TradingMode]], exchange: FakeExchange
+) -> None:
+    """Varsayılan kapalı: az hacimli, çok hareketli coinler de işlenir. Açılırsa elenir."""
+    svc, mode = service
+    strict = trader(svc, mode, min_quote_volume_usdt=25_000_000)
+    await strict.on_opportunity(signal(quote_volume_24h=3_000_000.0))
+    assert strict.skipped["hacim_düşük"] == 1 and strict.stats["opened"] == 0
+    open_ = trader(svc, mode)
+    await open_.on_opportunity(signal(quote_volume_24h=3_000_000.0))
+    assert open_.skipped["hacim_düşük"] == 0 and open_.stats["opened"] == 1

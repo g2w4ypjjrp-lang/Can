@@ -182,10 +182,11 @@ class AutoTradeSettings(BaseModel):
     small_account_min_order: bool = True
     loss_pause_minutes: int = Field(default=240, ge=15, le=2880)
     # Kalite filtreleri: hedef uzaklığı stop uzaklığının en az bu katı olmalı (düşük oranlı
-    # işlemlerde kazanç zararı karşılamaz) ve coinin son 24 saatlik işlem hacmi en az bu kadar
-    # USDT olmalı (yeni/az işlem gören coinlerde fiyat sıçrar, stop gereksiz yere tetiklenir).
+    # işlemlerde kazanç zararı karşılamaz). Hacim filtresi isteğe bağlıdır (varsayılan kapalı:
+    # en çok hareket eden yeni coinler de işlenir); açılırsa 24 saatlik hacmi bu kadar USDT'nin
+    # altındaki coinler elenir.
     min_reward_risk: float = Field(default=1.5, ge=1.0, le=5.0)
-    min_quote_volume_usdt: float = Field(default=25_000_000.0, ge=0)
+    min_quote_volume_usdt: float = Field(default=0.0, ge=0)
 
 
 PUBLIC_RELAY_URL = "wss://relay.canarslan.net.tr"

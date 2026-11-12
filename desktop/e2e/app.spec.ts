@@ -351,9 +351,9 @@ test("bot ayarları: risk sınırı aşılamaz, kaydedilir ve varsayılana döne
   await card.getByTestId("bot-trailing").uncheck();
   await card.getByTestId("bot-losses").fill("2");
   await card.getByTestId("bot-pause").fill("120");
-  // Kalite filtreleri: varsayılan kazanç/risk 1,5 ve 25 milyon USDT hacim.
+  // Kalite filtreleri: varsayılan kazanç/risk 1,5; hacim filtresi kapalı.
   await expect(card.getByTestId("bot-rr")).toHaveValue("1.5");
-  await expect(card.getByTestId("bot-volume")).toHaveValue("25");
+  await expect(card.getByTestId("bot-volume")).toHaveValue("0");
   await card.getByTestId("bot-rr").fill("2");
   await card.getByTestId("bot-volume").fill("50");
   await card.getByTestId("bot-save").click();
