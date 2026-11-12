@@ -11,7 +11,6 @@ import {
   Radio,
   RefreshCw,
   ShieldAlert,
-  Smartphone,
   Sparkles,
   Unplug,
   Waves,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
+import { LogoMark } from "@/components/Logo";
 import { parsePairing, RemoteError } from "@/lib/remote";
 import { deviceStore, type EngineEvent, type Phase, RemoteClient, type StoredDevice } from "@/lib/remoteClient";
 
@@ -263,9 +263,7 @@ export function PhoneApp() {
       <div className="phone-neon">
       <main id="icerik" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-5 py-10" data-testid="phone-welcome">
         <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-1 to-brand-2 text-white">
-            <Smartphone size={24} aria-hidden="true" />
-          </span>
+          <LogoMark className="h-12 w-12" />
           <div>
             <h1 className="text-xl font-semibold text-fg">Telefondan izleme</h1>
             <p className="text-sm text-muted">AI Trading Intelligence</p>
@@ -302,9 +300,7 @@ export function PhoneApp() {
     <div className="phone-neon">
     <main id="icerik" className="mx-auto max-w-md space-y-4 px-4 pb-28 pt-4" data-testid="phone-app">
       <header className="sticky top-0 z-10 -mx-4 flex items-center gap-3 bg-bg/80 px-4 py-3 backdrop-blur">
-        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-brand-1 to-brand-2 text-white" aria-hidden="true">
-          <Activity size={20} />
-        </span>
+        <LogoMark className="h-10 w-10" />
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-semibold text-fg">AI Trading Intelligence</h1>
           <p className="flex items-center gap-1.5 text-xs text-muted" data-testid="phone-phase">

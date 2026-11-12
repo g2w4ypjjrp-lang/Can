@@ -1,4 +1,8 @@
-# En son sürümü yükleme (0.14.5)
+# En son sürümü yükleme (0.14.6)
+
+0.14.6'da yeni: **yeni logo** (neon degrade rozet, yükselen mumlar, trend çizgisi, hedef düğümü) ve
+şekillendirilmiş isim (degrade "AI", kalın "Trading", geniş aralıklı "INTELLIGENCE"); uygulama simgesi,
+açılış ekranı, menü, lisans ekranı, site ve telefon sayfasında.
 
 0.14.5'te yeni: **işlem geçmişinde kâr/zarar**: her kapanan işlemin net kâr/zararı (USDT ve %),
 giriş/çıkış fiyatı, süre ve bot/elle bilgisi; özet olarak bugün, toplam net, başarı oranı, toplam
@@ -75,7 +79,7 @@ harcama sınırı tanımlanabilir).
 1. GitHub → depo → **Actions** → **Masaüstü** → **Run workflow** → dal:
    `claude/laughing-hawking-wmt8mo` → **Run workflow**. Yaklaşık 25 dakika sürer.
 2. Yeşil olunca çalıştırmanın altındaki **Artifacts** → `ati-windows-installer-unsigned` ZIP'ini
-   indirip açın: `AI Trading Intelligence_0.14.5_x64-setup.exe`.
+   indirip açın: `AI Trading Intelligence_0.14.6_x64-setup.exe`.
 3. Dosyayı VDS'ye kopyalayıp hazırlayın (indirme klasörüne koyar, SHA-256'yı ve varsa güncelleme
    imzasını yazar):
 
@@ -83,7 +87,7 @@ harcama sınırı tanımlanabilir).
    powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 surum-hazirla -Dosya "<setup.exe yolu>"
    ```
 
-4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.14.5), adres, SHA-256, boyut ve
+4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.14.6), adres, SHA-256, boyut ve
    imzayı girin → doğrulama kodunuzla **Yayınla**. Artık canarslan.net.tr/indir sayfasında görünür.
 
 ## C. Bilgisayarınızda kurulum / güncelleme

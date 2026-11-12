@@ -4,6 +4,7 @@ import { useAction } from "../api/hooks";
 import type { LicenseStatusResponse } from "../api/types.gen";
 import { Confirm, ErrorBox } from "../components/ui";
 import { formatKeyInput } from "./License";
+import { LogoMark, Wordmark } from "../components/Logo";
 
 const TITLES: Partial<Record<LicenseStatusResponse["state"], string>> = {
   unlicensed: "Lisansınızı etkinleştirin",
@@ -40,15 +41,8 @@ export function LicenseGate({ status, onChange }: { status: LicenseStatusRespons
     <div className="gate" data-testid="license-gate">
       <div className="gate-card">
         <div className="gate-brand">
-          <span className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32" width="22" height="22" focusable="false">
-              <path d="M7 22l6-7 4 4 8-10" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="25" cy="9" r="2.1" fill="#fff" />
-            </svg>
-          </span>
-          <span>
-            AI Trading <b>Intelligence</b>
-          </span>
+          <LogoMark size={48} />
+          <Wordmark large />
         </div>
         <span className="gate-icon" aria-hidden="true">
           <KeyRound />

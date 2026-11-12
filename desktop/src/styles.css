@@ -2367,3 +2367,84 @@ table thead th {
 .history-stats .down {
   color: var(--down);
 }
+
+/* --- Logo ve şekillendirilmiş isim (0.14.6) ----------------------------------------------------- */
+.logo-mark {
+  flex-shrink: 0;
+  border-radius: 28%;
+  filter: drop-shadow(0 0 12px rgba(59, 232, 255, 0.45)) drop-shadow(0 6px 14px rgba(106, 75, 255, 0.35));
+}
+.brand {
+  gap: 12px;
+  padding: 2px 6px 10px;
+}
+.wordmark {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.wm-top {
+  font-size: 17px;
+  color: #ffffff;
+}
+.wm-ai {
+  background: linear-gradient(90deg, #3be8ff, #9b6bff 55%, #ff4fd8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 8px rgba(59, 232, 255, 0.45));
+}
+.wm-bottom {
+  margin-top: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #9ff3ff, #c9b8ff 60%, #ffc2f3);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.wordmark.large .wm-top {
+  font-size: 30px;
+}
+.wordmark.large .wm-bottom {
+  font-size: 13px;
+  letter-spacing: 0.42em;
+  margin-top: 6px;
+}
+.splash-logo {
+  background: none;
+  box-shadow: none;
+}
+.splash-title {
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: inherit;
+  text-align: center;
+}
+.splash-title .wordmark {
+  align-items: center;
+}
+.gate-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.brand .wordmark span {
+  font-weight: inherit;
+}
+.brand .wordmark .wm-top {
+  color: #ffffff;
+  font-weight: 800;
+}
+.brand .wordmark .wm-ai,
+.brand .wordmark .wm-bottom {
+  color: transparent;
+}
+.brand .wordmark .wm-bottom {
+  font-weight: 700;
+}

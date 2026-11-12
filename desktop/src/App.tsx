@@ -19,6 +19,7 @@ import { useEvents, usePoll } from "./api/hooks";
 import type { LicenseStatusResponse, StatusResponse } from "./api/types.gen";
 import { ErrorBoundary, useGlobalErrorReports } from "./components/ErrorBoundary";
 import { KillSwitchControl } from "./components/KillSwitchControl";
+import { LogoMark, Wordmark } from "./components/Logo";
 import { Splash } from "./components/Splash";
 import { Badge } from "./components/ui";
 import { UpdateBanner } from "./components/UpdateBanner";
@@ -72,16 +73,6 @@ function currentPage(): string {
   return PAGES.some((p) => p.key === key) ? (key as string) : "dashboard";
 }
 
-function LogoMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 32 32" width="22" height="22" focusable="false">
-        <path d="M7 22l6-7 4 4 8-10" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="25" cy="9" r="2.1" fill="#fff" />
-      </svg>
-    </span>
-  );
-}
 
 export function App() {
   const [page, setPage] = useState(currentPage);
@@ -130,12 +121,8 @@ export function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <LogoMark />
-          <div>
-            AI Trading
-            <br />
-            <span>Intelligence</span>
-          </div>
+          <LogoMark size={40} />
+          <Wordmark />
         </div>
         <nav aria-label="Ana menü">
           {GROUPS.map((group) => (

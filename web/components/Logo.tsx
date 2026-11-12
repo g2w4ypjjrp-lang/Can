@@ -1,20 +1,60 @@
-/** Marka işareti: degrade kare içinde yükselen çizgi. Süs; ekran okuyucudan gizli. */
+/** Marka işareti: neon degrade rozet, yükselen mumlar, trend çizgisi ve hedef düğümü (uygulama
+ * simgesiyle aynı). Süs; ekran okuyucudan gizli. Degrade kimlikleri sabittir: sayfada birden çok
+ * kez kullanılsa da tanımlar aynıdır. */
 export function LogoMark({ className = "h-8 w-8" }: { className?: string }) {
   return (
-    <span aria-hidden="true" className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[28%] bg-brand shadow-glow ${className}`}>
-      <span className="absolute inset-0 bg-gradient-to-b from-white/25 to-transparent" />
-      <svg viewBox="0 0 32 32" className="relative h-full w-full" focusable="false">
-        <path d="M7 22l6-7 4 4 8-10" fill="none" stroke="#ffffff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="25" cy="9" r="2.1" fill="#ffffff" />
-      </svg>
-    </span>
+    <svg
+      viewBox="0 0 64 64"
+      aria-hidden="true"
+      focusable="false"
+      className={`shrink-0 drop-shadow-[0_0_10px_rgba(59,232,255,0.45)] ${className}`}
+    >
+      <defs>
+        <linearGradient id="ati-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#11b8f0" />
+          <stop offset="0.5" stopColor="#6a4bff" />
+          <stop offset="1" stopColor="#e23fc9" />
+        </linearGradient>
+        <linearGradient id="ati-shine" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.38" />
+          <stop offset="0.55" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id="ati-glow" cx="0.78" cy="0.28" r="0.35">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#ati-bg)" />
+      <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#ati-glow)" />
+      <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#ati-shine)" />
+      <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="17.25" fill="none" stroke="#fff" strokeOpacity="0.35" strokeWidth="1.5" />
+      <g fill="#fff" fillOpacity="0.42" stroke="#fff" strokeOpacity="0.42" strokeWidth="1.6" strokeLinecap="round">
+        <line x1="17" y1="34" x2="17" y2="50" />
+        <rect x="14" y="38" width="6" height="9" rx="1.6" stroke="none" />
+        <line x1="27" y1="27" x2="27" y2="46" />
+        <rect x="24" y="30" width="6" height="12" rx="1.6" stroke="none" />
+        <line x1="37" y1="21" x2="37" y2="40" />
+        <rect x="34" y="24" width="6" height="12" rx="1.6" stroke="none" />
+      </g>
+      <path d="M11 45 L21 35.5 L29 39 L47 20.5" fill="none" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="48.5" cy="19" r="7.5" fill="none" stroke="#fff" strokeOpacity="0.45" strokeWidth="1.4" />
+      <circle cx="48.5" cy="19" r="4.2" fill="#fff" />
+      <path d="M48.5 9.2v3.2M48.5 25.6v3.2M38.7 19h3.2M55.1 19h3.2" stroke="#fff" strokeOpacity="0.7" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
   );
 }
 
+/** Şekillendirilmiş isim: degrade "AI", kalın "Trading", geniş aralıklı "INTELLIGENCE". */
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
-    <span className={`text-[15px] font-semibold tracking-tight text-fg ${className}`}>
-      AI Trading <span className="text-accent-text">Intelligence</span>
+    <span className={`inline-flex flex-col leading-none ${className}`}>
+      <span className="text-[16px] font-extrabold tracking-tight text-fg">
+        <span className="bg-gradient-to-r from-[#11b8f0] via-[#7a55ff] to-[#e23fc9] bg-clip-text text-transparent">AI</span> Trading
+      </span>
+      <span lang="en" className="mt-[3px] text-[9.5px] font-bold uppercase tracking-[0.32em] text-accent-text">
+        {" "}
+        Intelligence
+      </span>
     </span>
   );
 }

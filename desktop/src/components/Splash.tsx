@@ -1,5 +1,6 @@
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { LogoMark, Wordmark } from "./Logo";
 
 interface Step {
   label: string;
@@ -36,13 +37,10 @@ export function Splash({ ready, steps, onDone }: { ready: boolean; steps: Step[]
         <div className="splash-logo" aria-hidden="true">
           <span className="ring r1" />
           <span className="ring r2" />
-          <svg viewBox="0 0 32 32" width="54" height="54" focusable="false">
-            <path className="splash-line" d="M6 23l7-8 4.5 4.5L26 9" fill="none" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx="26" cy="9" r="2.3" />
-          </svg>
+          <LogoMark size={104} />
         </div>
         <h1 className="splash-title">
-          AI Trading <span>Intelligence</span>
+          <Wordmark large />
         </h1>
         <p className="splash-sub">Piyasa analizi · risk kontrollü otomatik işlem</p>
         <ul className="splash-steps">

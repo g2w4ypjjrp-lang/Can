@@ -1,6 +1,6 @@
 [package]
 name = "ati-desktop"
-version = "0.14.5"
+version = "0.14.6"
 description = "AI Trading Intelligence — Windows masaüstü kabuğu (işlem motorunu başlatır ve gözetir)"
 edition = "2021"
 rust-version = "1.80"
