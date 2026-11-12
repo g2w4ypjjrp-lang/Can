@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { applyPriceTick } from "../lib/livePrices";
 import { ApiError, type EngineClient, type EngineEvent } from "./client";
 
 const ClientContext = createContext<EngineClient | null>(null);
@@ -120,6 +121,11 @@ export function EventsProvider({ client, children }: { client: EngineClient; chi
   useEffect(
     () =>
       client.events((event) => {
+        // Anlık fiyatlar saniyede 10 kez gelebilir: olay listesine girmez, yalnızca fiyat deposuna.
+        if (event.type === "PriceTick") {
+          applyPriceTick(event.prices);
+          return;
+        }
         setLast((items) => [event, ...items].slice(0, 200));
         const toast = toToast(event);
         if (toast) notify(toast);

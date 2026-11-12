@@ -73,6 +73,8 @@ export interface Listener {
   event(event: EngineEvent): void;
   result(ok: boolean, message: string, command: string | null): void;
   paired(device: StoredDevice): void;
+  /** Açık pozisyonların anlık fiyatı ("<piyasa>:<SEMBOL>" → fiyat). */
+  ticks?(prices: Record<string, number>, ts: number): void;
 }
 
 /** Tek bir motora bağlantı. Kopunca artan beklemeyle yeniden bağlanır. */
@@ -211,6 +213,9 @@ export class RemoteClient {
         return;
       case "event":
         this.listener.event(payload as unknown as EngineEvent);
+        return;
+      case "ticks":
+        this.listener.ticks?.((payload.prices ?? {}) as Record<string, number>, Number(payload.ts_ms ?? Date.now()));
         return;
       case "result": {
         const reason = String(payload.reason ?? "");

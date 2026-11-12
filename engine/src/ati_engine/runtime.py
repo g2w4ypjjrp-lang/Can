@@ -62,10 +62,14 @@ class EngineRuntime:
     crash: CrashReporter | None = None
 
     def mark_price(self, market: Market, symbol: str) -> float | None:
-        """Güncel piyasa fiyatı (piyasa verisi akışından): Futures'ta işaret fiyatı."""
+        """Ekranda gösterilen güncel fiyat: Binance'in işlem akışındaki son işlem fiyatı (her
+        işlemde anında gelir); yoksa Futures işaret fiyatı (saniyede bir), yoksa 24 saatlik özet."""
         data = self.market_data.get(market)
         if data is None:
             return None
+        last = data.state.trades.get(symbol)
+        if last is not None and last > 0:
+            return last
         mark = data.state.marks.get(symbol)
         if mark is not None and mark.mark_price > 0:
             return mark.mark_price

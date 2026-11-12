@@ -395,6 +395,21 @@ class RemoteService:
             for device_id in await self._paired_online():
                 await self.push_snapshot(device_id)
 
+    async def send_ticks(self, prices: dict[str, float]) -> None:
+        """Açık pozisyonların anlık fiyatı (``"<piyasa>:<SEMBOL>"`` → fiyat); bağlı cihazlara."""
+        for device_id in await self._paired_online():
+            await self._send_to(
+                device_id,
+                {
+                    "v": 1,
+                    "type": "ticks",
+                    "engine_id": self.identity.engine_id,
+                    "device_id": device_id,
+                    "ts_ms": self._clock(),
+                    "prices": prices,
+                },
+            )
+
     async def notify(
         self, kind: str, title: str, body: str, *, push: bool = False, urgent: bool = False
     ) -> None:

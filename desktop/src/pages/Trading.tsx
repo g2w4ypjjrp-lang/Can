@@ -11,6 +11,7 @@ import { Badge, Card, Confirm, DataTable, ErrorBox, Field } from "../components/
 import { MARKET_LABELS, num, price, toNumber, tone } from "../lib/format";
 import { BotSettingsCard } from "./BotSettings";
 import { LivePnl } from "../components/LivePnl";
+import { useLivePositions } from "../lib/livePrices";
 import { TradeHistory } from "../components/TradeHistory";
 
 interface ExecutionStatus {
@@ -34,7 +35,8 @@ const PURPOSE_LABELS: Record<string, string> = {
 export function Trading() {
   const status = usePoll((c) => c.get<ExecutionStatus>("/v1/execution/status"), 3000);
   const engine = usePoll((c) => c.get<StatusResponse>("/v1/status"), 3000);
-  const positions = usePoll((c) => c.get<ExecutionPositionInfo[]>("/v1/execution/positions"), 2000);
+  const positions = usePoll((c) => c.get<ExecutionPositionInfo[]>("/v1/execution/positions"), 1000);
+  const livePositions = useLivePositions(positions.data);
   const orders = usePoll((c) => c.get<ExecutionOrderInfo[]>("/v1/execution/orders"), 2000);
   const [closing, setClosing] = useState<ExecutionPositionInfo | null>(null);
   const [closeAll, setCloseAll] = useState(false);
@@ -92,7 +94,7 @@ export function Trading() {
             <ErrorBox error={positions.error ?? close.error ?? closeEverything.error} />
             <DataTable
               testId="positions"
-              rows={positions.data}
+              rows={livePositions}
               rowKey={(r) => `${r.market}-${r.symbol}`}
               empty="Açık pozisyon yok"
               columns={[

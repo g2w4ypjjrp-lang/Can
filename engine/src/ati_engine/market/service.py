@@ -66,6 +66,8 @@ class MarketState:
     def __init__(self) -> None:
         self.tickers: dict[str, Ticker24h] = {}
         self.marks: dict[str, MarkPrice] = {}
+        # Son işlem fiyatı (aggTrade akışı; her işlemde anında güncellenir).
+        self.trades: dict[str, float] = {}
         self.counts: dict[str, int] = {}
         self.started = time.monotonic()
 
@@ -316,6 +318,8 @@ class MarketDataService:
         self._discovered = False
         self.discovered = asyncio.Event()  # ilk keşif tamamlandığında kurulur
         self._focus: list[str] = list(self._cfg.focus_symbols)
+        # Açık pozisyonların anlık fiyat yayını (LivePrices.note); her işlem fiyatında çağrılır.
+        self.on_trade_price: Callable[[Market, str, float], None] | None = None
         self.last_discovery_error: str | None = None
         self._ready: bool | None = None
         self._ready_detail: str | None = None
@@ -371,6 +375,10 @@ class MarketDataService:
             if isinstance(event, AggTrade):
                 if not self.gaps.accept(event):
                     continue  # bağlantı yenilemesindeki tekrar
+                if not event.recovered and event.price > 0:
+                    self.state.trades[event.symbol] = event.price
+                    if self.on_trade_price is not None:
+                        self.on_trade_price(self.market, event.symbol, event.price)
             elif isinstance(event, TickerBatch):
                 for ticker in event.tickers:
                     self.state.tickers[ticker.symbol] = ticker

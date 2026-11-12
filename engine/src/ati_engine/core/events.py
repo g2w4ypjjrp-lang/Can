@@ -102,6 +102,13 @@ class TradeNotice(SystemEvent, frozen=True, kw_only=True):
     duration_s: int | None = None
 
 
+class PriceTick(SystemEvent, frozen=True, kw_only=True):
+    """Açık pozisyonların anlık fiyatı (Binance işlem akışından, değiştikçe; en çok 0,1 sn'de
+    bir). Anahtar ``"<piyasa>:<SEMBOL>"``. Ekranlar kâr/zararı bununla anında günceller."""
+
+    prices: dict[str, float]
+
+
 # Yerel API ve protokol şeması için bilinen çekirdek sistem olayları
 # (piyasa sistem olayları ``market.events.PUBLIC_MARKET_EVENT_TYPES`` içindedir).
 PUBLIC_EVENT_TYPES: tuple[type[SystemEvent], ...] = (

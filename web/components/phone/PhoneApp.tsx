@@ -10,8 +10,8 @@ import { currentSubscription, disablePush, enablePush, isStandalone, pushSupport
 import { parsePairing, RemoteError } from "@/lib/remote";
 import { deviceStore, type EngineEvent, type Phase, RemoteClient, type StoredDevice } from "@/lib/remoteClient";
 
-/** Bu oturumda tutulan bakiye noktası sayısı (5 sn'de bir → yaklaşık 10 dk). */
-const SERIES_MAX = 120;
+/** Bu oturumda tutulan bakiye noktası sayısı (2 sn'de bir → yaklaşık 10 dk). */
+const SERIES_MAX = 300;
 
 const STEPS = [
   { icon: MonitorSmartphone, text: "Bilgisayarda uygulamayı açın → Telefon ekranı → \"Telefondan kontrol\"ü açın." },
@@ -43,6 +43,7 @@ export function PhoneApp() {
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [series, setSeries] = useState<number[]>([]);
+  const [live, setLive] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [standalone, setStandalone] = useState(false);
@@ -81,6 +82,7 @@ export function PhoneApp() {
         setTimeout(() => setToast(null), 5000);
       },
       paired: (d: StoredDevice) => setDevice(d),
+      ticks: (prices: Record<string, number>) => setLive((current) => ({ ...current, ...prices })),
     }),
     [],
   );
@@ -313,6 +315,7 @@ export function PhoneApp() {
         onPushEnable={() => void pushOn()}
         onPushDisable={() => void pushOff()}
         onPushTest={() => void send("push_test")}
+        live={live}
       />
     </div>
   );

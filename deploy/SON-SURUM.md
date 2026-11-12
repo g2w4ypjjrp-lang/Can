@@ -8,6 +8,9 @@ sunucumuz içeriği okuyamaz. İşlem bildirimleri (telefon, kilit ekranı, Tele
 yazar: stop ve hedef fiyatı, puan ve gerekçe, kaldıraç; kapanışta giriş→çıkış, net kâr/zarar ve yüzdesi,
 kapanış nedeni (stop / hedef / iz süren stop / elle) ve süre.
 
+**Anlık fiyat**: açık pozisyonların fiyatı ve kâr/zararı Binance'teki her yeni işlem fiyatıyla
+beklemeden güncellenir (bilgisayarda ve telefonda; en çok saniyede 10 kez). Binance'e ek istek yapılmaz.
+
 Bot için **kalite filtreleri** (Bot ayarları → Kalite filtreleri): hedefi stop uzaklığının 1,5 katından
 yakın olan işlemlere girilmez (kazanç/risk oranı düşük). İsteğe bağlı hacim filtresi varsayılan
 kapalıdır: en çok hareket eden yeni coinler de işlenir; istenirse en düşük 24 saatlik hacim yazılır. Bunlar zararı

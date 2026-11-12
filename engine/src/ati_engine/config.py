@@ -214,8 +214,8 @@ class RemoteSettings(BaseModel):
     # QR kodu bu sayfanın adresidir; eşleştirme bilgisi adresin # kısmındadır (sunucuya
     # gönderilmez). Telefonun kamerası açar; iPhone uygulaması da aynı kodu okur.
     phone_web_url: str = "https://canarslan.net.tr/telefon"
-    # Telefona özet sıklığı: açık pozisyonların kâr/zararı canlı görünsün diye 5 sn.
-    snapshot_interval_s: float = Field(default=5.0, ge=2, le=600)
+    # Telefona özet sıklığı: açık pozisyonların kâr/zararı canlı görünsün diye 2 sn.
+    snapshot_interval_s: float = Field(default=2.0, ge=1, le=600)
     max_clock_skew_s: float = Field(default=120.0, ge=10, le=600)
     pairing_ttl_s: float = Field(default=300.0, ge=30, le=3600)
     # Yalnızca testler: telefon bildirimlerinin http ile gönderilebileceği yerel adresler (gerçek

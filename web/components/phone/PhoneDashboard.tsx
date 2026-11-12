@@ -84,10 +84,15 @@ export interface PushView {
   busy: boolean;
 }
 
-/** Bakiye: cüzdanlar (bakiye + açık kâr/zarar) varsa onların toplamı, yoksa özsermaye. */
-export function totalBalance(snap: Snap | null): number | null {
+/** Bakiye: cüzdanlar (bakiye + açık kâr/zarar) varsa onların toplamı, yoksa özsermaye. Futures
+ * cüzdanının açık kâr/zararı anlık fiyattan biliniyorsa o kullanılır. */
+export function totalBalance(snap: Snap | null, liveFuturesPnl: number | null = null): number | null {
   const wallets = snap?.risk?.wallets;
-  if (wallets && wallets.length > 0) return wallets.reduce((sum, w) => sum + Number(w.balance) + Number(w.unrealized_pnl), 0);
+  if (wallets && wallets.length > 0)
+    return wallets.reduce(
+      (sum, w) => sum + Number(w.balance) + (w.market === "usdm_futures" && liveFuturesPnl !== null ? liveFuturesPnl : Number(w.unrealized_pnl)),
+      0,
+    );
   const equity = Number(snap?.risk?.equity);
   return snap?.risk && Number.isFinite(equity) ? equity : null;
 }
@@ -360,6 +365,8 @@ export interface DashboardProps {
   onKill: () => void;
   onForget: () => void;
   push: PushView;
+  /** Anlık fiyatlar: "<piyasa>:<SEMBOL>" → fiyat. */
+  live?: Record<string, number>;
   onPushEnable: () => void;
   onPushDisable: () => void;
   onPushTest: () => void;
@@ -439,7 +446,28 @@ function PushCard({ push, online, onEnable, onDisable, onTest }: { push: PushVie
   );
 }
 
-export function PhoneDashboard({ snap, snapAt, events, phase, detail, series, now, busy, toast, onRefresh, onPause, onKill, onForget, push, onPushEnable, onPushDisable, onPushTest }: DashboardProps) {
+type Position = NonNullable<Snap["positions"]>[number];
+
+/** Anlık fiyat (Binance işlem akışı, motor 0,1 sn'de bir gönderir) ile fiyat ve kâr/zarar. */
+export function withLivePrices(positions: Position[] | undefined, live: Record<string, number>): Position[] | undefined {
+  return positions?.map((p) => {
+    const price = live[`${p.market}:${p.symbol}`];
+    const qty = Number(p.quantity);
+    const entry = Number(p.entry_price);
+    if (!price || !qty || !(entry > 0)) return p;
+    return {
+      ...p,
+      mark_price: String(price),
+      unrealized_pnl: String((price - entry) * qty),
+      pnl_pct: (price / entry - 1) * 100 * (qty > 0 ? 1 : -1),
+    };
+  });
+}
+
+export function PhoneDashboard({ snap: raw, snapAt, events, phase, detail, series, now, busy, toast, onRefresh, onPause, onKill, onForget, push, onPushEnable, onPushDisable, onPushTest, live: livePrices = {} }: DashboardProps) {
+  const snap = raw ? { ...raw, positions: withLivePrices(raw.positions, livePrices) } : raw;
+  const futuresOpen = (snap?.positions ?? []).filter((p) => p.market === "usdm_futures" && p.unrealized_pnl != null);
+  const liveFuturesPnl = futuresOpen.length ? futuresOpen.reduce((sum, p) => sum + Number(p.unrealized_pnl), 0) : null;
   const [confirmKill, setConfirmKill] = useState(false);
   const [spin, setSpin] = useState(false);
   const active = useActiveSection();
@@ -450,7 +478,7 @@ export function PhoneDashboard({ snap, snapAt, events, phase, detail, series, no
   const live = engine?.trading_mode === "live";
   const online = phase === "online";
   const [stateText, stateDot] = STATE[engine?.state ?? ""] ?? ["Bekleniyor", "bg-muted"];
-  const total = totalBalance(snap);
+  const total = totalBalance(snap, liveFuturesPnl);
   const openPnl = snap?.positions?.some((p) => p.unrealized_pnl != null)
     ? snap.positions.reduce((sum, p) => sum + Number(p.unrealized_pnl ?? 0), 0)
     : null;

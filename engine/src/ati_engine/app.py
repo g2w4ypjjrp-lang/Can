@@ -54,6 +54,7 @@ from ati_engine.history.sync import RestSource
 from ati_engine.licensing.manager import LicenseManager
 from ati_engine.market.discovery import SymbolRegistry, UniverseFilter
 from ati_engine.market.events import AggTrade
+from ati_engine.market.live_prices import LivePrices
 from ati_engine.market.orderbook import OrderBook, SyncState
 from ati_engine.market.service import DEFAULT_WEIGHT_LIMIT, MarketDataService
 from ati_engine.ml.registry import ModelRegistry
@@ -205,6 +206,7 @@ class Engine:
                 await self._load_autotrade_settings(runtime)
             await self._start_license(runtime)
             await self._start_remote(runtime)
+            self._start_live_prices(runtime)
             await self._start_telegram(runtime)
             await self._start_crash_reports(runtime)
 
@@ -631,6 +633,18 @@ class Engine:
         finally:
             self._lock.release()
             logger.info("Motor durdu")
+
+    @staticmethod
+    def _start_live_prices(runtime: EngineRuntime) -> None:
+        """Açık pozisyonların fiyatı Binance işlem akışından ekranlara anında gider."""
+        if not runtime.market_data:
+            return
+        live = LivePrices(runtime)
+        for service in runtime.market_data.values():
+            service.on_trade_price = live.note
+        runtime.supervisor.spawn(
+            "live-prices", live.run, RestartPolicy(max_restarts=20, window_s=600)
+        )
 
     @staticmethod
     def _start_market_data(runtime: EngineRuntime) -> None:

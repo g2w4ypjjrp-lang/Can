@@ -6,6 +6,7 @@ import type { ExecutionPositionInfo, OpportunitySummary, StatusResponse } from "
 import { BotPanel } from "../components/BotPanel";
 import { GettingStarted } from "../components/GettingStarted";
 import { LivePnl } from "../components/LivePnl";
+import { useLivePositions } from "../lib/livePrices";
 import { Badge, Card, Confirm, DataTable, Disclaimer, ErrorBox } from "../components/ui";
 import { duration, MARKET_LABELS, MODE_LABELS, num, pct, price, STATE_LABELS } from "../lib/format";
 import { useNavigate } from "../lib/nav";
@@ -56,6 +57,7 @@ const RELEASE_DAY_PHRASE = "KILIDI KALDIR";
 
 function BalanceHero({
   wallets,
+  liveFuturesPnl,
   live,
   halted,
   haltReason,
@@ -65,6 +67,7 @@ function BalanceHero({
   onReleased,
 }: {
   wallets: WalletInfo[] | null;
+  liveFuturesPnl?: number | null;
   live: boolean;
   halted: boolean;
   haltReason?: string | null;
@@ -75,8 +78,10 @@ function BalanceHero({
 }) {
   const [ask, setAsk] = useState(false);
   const release = useAction((c) => c.post("/v1/risk/release-day", { confirmation: RELEASE_DAY_PHRASE }));
-  const total = (wallets ?? []).reduce((sum, w) => sum + Number(w.balance) + Number(w.unrealized_pnl), 0);
-  const unrealized = (wallets ?? []).reduce((sum, w) => sum + Number(w.unrealized_pnl), 0);
+  const open = (w: WalletInfo) =>
+    w.market === "usdm_futures" && liveFuturesPnl !== null && liveFuturesPnl !== undefined ? liveFuturesPnl : Number(w.unrealized_pnl);
+  const total = (wallets ?? []).reduce((sum, w) => sum + Number(w.balance) + open(w), 0);
+  const unrealized = (wallets ?? []).reduce((sum, w) => sum + open(w), 0);
   return (
     <section className={`balance-hero ${live ? "live" : ""}`} data-testid="balance-hero" aria-labelledby="bakiye-baslik">
       <div className="balance-main">
@@ -164,13 +169,16 @@ export function Dashboard() {
   const navigate = useNavigate();
   const status = usePoll((c) => c.get<StatusResponse>("/v1/status"), 2000);
   const risk = usePoll((c) => c.get<Record<string, unknown>>("/v1/risk/status"), 5000);
-  const positions = usePoll((c) => c.get<ExecutionPositionInfo[]>("/v1/execution/positions"), 2000);
+  const positions = usePoll((c) => c.get<ExecutionPositionInfo[]>("/v1/execution/positions"), 1000);
   const opportunities = usePoll((c) => c.get<OpportunitySummary[]>("/v1/opportunities", { limit: 6, min_score: 50 }), 15000);
 
   const s = status.data;
   const account = (risk.data?.account ?? null) as Record<string, unknown> | null;
   const live = s?.trading_mode === "live";
-  const open = (positions.data ?? []).filter((p) => Number(p.quantity) !== 0);
+  const open = (useLivePositions(positions.data) ?? []).filter((p) => Number(p.quantity) !== 0);
+  // Futures cüzdanının açık kâr/zararı da anlık fiyatla (Binance'in hesap özeti birkaç sn'de gelir).
+  const futuresOpen = open.filter((p) => p.market === "usdm_futures" && p.unrealized_pnl != null);
+  const liveFuturesPnl = futuresOpen.length ? futuresOpen.reduce((sum, p) => sum + Number(p.unrealized_pnl), 0) : null;
   const openPnl = open.some((p) => p.unrealized_pnl != null)
     ? open.reduce((sum, p) => sum + Number(p.unrealized_pnl ?? 0), 0)
     : null;
@@ -181,6 +189,7 @@ export function Dashboard() {
       <GettingStarted mode={s?.trading_mode} />
       <BalanceHero
         wallets={(account?.wallets as WalletInfo[] | undefined) ?? null}
+        liveFuturesPnl={liveFuturesPnl}
         live={live}
         halted={Boolean(account?.halted)}
         haltReason={account?.halt_reason as string | null | undefined}
