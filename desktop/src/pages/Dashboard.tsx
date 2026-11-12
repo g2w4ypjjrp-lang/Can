@@ -9,6 +9,7 @@ import { LivePnl } from "../components/LivePnl";
 import { Badge, Card, Confirm, DataTable, Disclaimer, ErrorBox } from "../components/ui";
 import { duration, MARKET_LABELS, MODE_LABELS, num, pct, price, STATE_LABELS } from "../lib/format";
 import { useNavigate } from "../lib/nav";
+import { TradeHistory } from "../components/TradeHistory";
 
 export function stateTone(state?: string): "ok" | "warn" | "bad" | "neutral" {
   if (state === "running") return "ok";
@@ -257,6 +258,8 @@ export function Dashboard() {
           />
         </Card>
       </div>
+
+      <TradeHistory compact limit={50} onMore={() => navigate("trading")} />
 
       <details className="card system-details" open={s ? s.engine_state !== "running" : false}>
         <summary>

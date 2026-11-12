@@ -131,6 +131,7 @@ from ati_engine.execution.auto import (
 from ati_engine.execution.auto import ENABLED_KEY as AUTOTRADE_ENABLED_KEY
 from ati_engine.execution.auto import SETTINGS_KEY as AUTOTRADE_SETTINGS_KEY
 from ati_engine.execution.engine import TakeProfit, TradeIntent
+from ati_engine.execution.history import closed_trades, summarize
 from ati_engine.execution.pnl import with_pnl
 from ati_engine.execution.service import ExecutionService, ExecutionUnavailable
 from ati_engine.execution.venue import ExecutionBlocked
@@ -1247,6 +1248,20 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
     async def execution_positions(_: Auth) -> list[ExecutionPositionInfo]:
         rows = with_pnl(execution_or_404().positions(), runtime.mark_price)
         return [ExecutionPositionInfo.model_validate(p) for p in rows]
+
+    @app.get("/v1/execution/history")
+    async def execution_history(
+        _: Auth,
+        environment: Literal["testnet", "live"] | None = None,
+        limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+    ) -> dict[str, Any]:
+        """Kapanmış işlemler (net kâr/zarar, %, süre, bot/elle) ve özet. Varsayılan: işlem
+        moduna göre gerçek hesap ya da Demo."""
+        if environment is None:
+            live = runtime.trading_mode.mode is TradingMode.LIVE
+            environment = "live" if live else "testnet"
+        trades = await closed_trades(runtime.db, environment, limit=limit)
+        return {"environment": environment, "trades": trades, "summary": summarize(trades)}
 
     @app.get("/v1/execution/orders", response_model=list[ExecutionOrderInfo])
     async def execution_orders(_: Auth, open_only: bool = True) -> list[ExecutionOrderInfo]:

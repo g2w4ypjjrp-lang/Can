@@ -2336,3 +2336,34 @@ table thead th {
     transition: none;
   }
 }
+
+/* İşlem geçmişi özeti */
+.history-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.history-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(16, 24, 56, 0.4);
+  border: 1px solid var(--glass-line);
+}
+.history-stats span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.history-stats b {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.history-stats .up {
+  color: var(--up);
+}
+.history-stats .down {
+  color: var(--down);
+}

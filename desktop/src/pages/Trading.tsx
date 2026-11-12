@@ -11,6 +11,7 @@ import { Badge, Card, Confirm, DataTable, ErrorBox, Field } from "../components/
 import { MARKET_LABELS, num, price, toNumber, tone } from "../lib/format";
 import { BotSettingsCard } from "./BotSettings";
 import { LivePnl } from "../components/LivePnl";
+import { TradeHistory } from "../components/TradeHistory";
 
 interface ExecutionStatus {
   trading_mode: string;
@@ -146,6 +147,8 @@ export function Trading() {
         </div>
         <TradeForm enabled={canTrade} live={liveMode} markets={markets} onDone={refreshAll} />
       </div>
+
+      <TradeHistory />
 
       <BotSettingsCard />
 

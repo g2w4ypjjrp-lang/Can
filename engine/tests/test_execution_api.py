@@ -132,6 +132,19 @@ async def test_testnet_trading_through_local_api(
     assert "BTCUSDT" not in exchange.futures_positions
     assert not [a for a in exchange.algo_orders.values() if a["algoStatus"] == "NEW"]
 
+    # Geçmiş işlemler: kapanan pozisyon net kâr/zarar, %, giriş/çıkış ve özetle görünür.
+    history = (await client.get("/v1/execution/history")).json()
+    assert history["environment"] == "testnet"
+    (trade,) = history["trades"]
+    assert trade["symbol"] == "BTCUSDT" and trade["side"] == "long" and trade["source"] == "manual"
+    assert trade["exit_price"] is not None and trade["quantity"] == "2"
+    net = float(trade["net_pnl"])
+    assert net == float(trade["realized_pnl"]) - float(trade["fees"]) - float(trade["funding"])
+    assert trade["pnl_pct"] is not None
+    summary = history["summary"]
+    assert summary["count"] == 1 and float(summary["net_total"]) == net
+    assert summary["wins"] + summary["losses"] <= 1
+
     risk = (await client.get("/v1/risk/status")).json()
     names = {c["name"] for c in risk["conditions"]}
     assert {

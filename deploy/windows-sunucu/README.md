@@ -209,8 +209,8 @@ powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 surum-hazirla
 Çıkan değerleri (sürüm, adres, SHA-256, boyut, **güncelleme imzası**) yönetim paneli → Sürümler →
 Yeni sürüm formuna girip doğrulama kodunuzla yayınlayın. Elle yapmak isterseniz: Windows kurulum
 dosyasını `C:\ATI\indir\` klasörüne **sürüm numaralı, değişmeyen bir adla**
-koyun (ör. `AI-Trading-Intelligence_0.14.4_x64-setup.exe`). Adresi
-`https://indir.canarslan.net.tr/AI-Trading-Intelligence_0.14.4_x64-setup.exe` olur. Sonra yönetim
+koyun (ör. `AI-Trading-Intelligence_0.14.5_x64-setup.exe`). Adresi
+`https://indir.canarslan.net.tr/AI-Trading-Intelligence_0.14.5_x64-setup.exe` olur. Sonra yönetim
 paneli → **Sürümler**'de bu adres, SHA-256 ve boyutla taslak ekleyip doğrulama kodunuzla
 yayınlayın. SHA-256'yı sunucuda şöyle alabilirsiniz:
 `(Get-FileHash C:\ATI\indir\<dosya> -Algorithm SHA256).Hash.ToLower()`.

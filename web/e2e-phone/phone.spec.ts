@@ -28,7 +28,7 @@ test("telefonun kamerasıyla okunan QR: tarayıcı eşleşir, her şeyi görür,
   await expect(page.getByTestId("phone-engine-state")).not.toHaveText("Bekleniyor");
   await expect(page.getByTestId("phone-mode")).toHaveText(/Sanal|Demo para|GERÇEK PARA/);
   await expect(page.getByTestId("phone-bot-state")).toHaveText(/Çalışıyor|Durdu/);
-  for (const id of ["phone-positions", "phone-opportunities", "phone-events", "phone-bot"]) {
+  for (const id of ["phone-positions", "phone-history", "phone-opportunities", "phone-events", "phone-bot"]) {
     await expect(page.getByTestId(id)).toBeVisible();
   }
 

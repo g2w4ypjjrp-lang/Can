@@ -80,9 +80,9 @@ Turuncu buluta (Cloudflare vekili) geçmek istenirse önce bu ayarın değişmes
    (DNS kaydını Cloudflare kendisi ekler).
 3. Kurulum dosyası hazır olunca (GitHub Actions → Masaüstü → Run workflow ile elle; iş özetinde sürüm,
    boyut ve SHA-256 yazar) dosyayı **sürüm numaralı, değişmeyen bir adla** yükleyin:
-   `AI-Trading-Intelligence_0.14.4_x64-setup.exe`. Aynı ada başka dosya yüklemeyin.
+   `AI-Trading-Intelligence_0.14.5_x64-setup.exe`. Aynı ada başka dosya yüklemeyin.
 4. Yönetim paneli → **Sürümler** → adres
-   `https://indir.canarslan.net.tr/AI-Trading-Intelligence_0.14.4_x64-setup.exe`, SHA-256 ve
+   `https://indir.canarslan.net.tr/AI-Trading-Intelligence_0.14.5_x64-setup.exe`, SHA-256 ve
    boyutla taslak ekleyin, kontrol edin, doğrulama kodunuzla yayınlayın.
 
 ## 6. İlk yönetici hesabı (siz)

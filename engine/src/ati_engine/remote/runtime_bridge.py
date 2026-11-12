@@ -163,6 +163,19 @@ async def build_snapshot(runtime: EngineRuntime) -> dict[str, Any]:
             ]
     except Exception as exc:
         logger.debug("Özet: yürütme bölümü atlandı", extra={"error": repr(exc)})
+    try:
+        from ati_engine.core.models import TradingMode
+        from ati_engine.execution.history import closed_trades, summarize
+
+        mode = "live" if runtime.trading_mode.mode is TradingMode.LIVE else "testnet"
+        trades = await closed_trades(runtime.db, mode, limit=100)
+        keys = ("symbol", "market", "side", "net_pnl", "pnl_pct", "closed_at", "source")
+        data["history"] = {
+            "summary": summarize(trades),
+            "trades": [{k: t[k] for k in keys} for t in trades[:15]],
+        }
+    except Exception as exc:
+        logger.debug("Özet: geçmiş bölümü atlandı", extra={"error": repr(exc)})
     if runtime.autotrader is not None:
         trader = runtime.autotrader
         data["autotrade"] = {

@@ -162,6 +162,10 @@ test("test ağında işlem: risk kapısı stopsuz işlemi reddeder, korumalı i�
   await expect(page.getByTestId("pnl-BTCUSDT")).toContainText("USDT", { timeout: 10_000 });
   await page.getByTestId("close-BTCUSDT").click();
   await page.getByRole("dialog").getByRole("button", { name: "Piyasa fiyatından kapat" }).click();
+  // Kapanan işlem geçmişte net kâr/zararıyla görünür.
+  const history = page.getByTestId("history");
+  await expect(history.getByTestId("history-rows")).toContainText("BTCUSDT", { timeout: 15_000 });
+  await expect(history.getByTestId("history-summary")).toContainText("Toplam net");
   await expect(page.getByText("Açık pozisyon yok")).toBeVisible();
   await expect(page.getByText("Açık emir yok")).toBeVisible();
 });

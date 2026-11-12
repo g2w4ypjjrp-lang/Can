@@ -3,11 +3,12 @@ import { usePoll } from "../api/hooks";
 import type { ExecutionOrderInfo, PaperAccountInfo, PaperPositionInfo, PaperTradeInfo } from "../api/types.gen";
 import { Badge, Card, DataTable, Disclaimer, ErrorBox, Stat, Tabs } from "../components/ui";
 import { MARKET_LABELS, num, pct, price, time, tone, usd } from "../lib/format";
+import { TradeHistory } from "../components/TradeHistory";
 
-type View = "paper" | "positions" | "trades" | "testnet";
+type View = "account" | "paper" | "positions" | "trades" | "testnet";
 
 export function Performance() {
-  const [view, setView] = useState<View>("paper");
+  const [view, setView] = useState<View>("account");
   const board = usePoll((c) => c.get<PaperAccountInfo[]>("/v1/paper/leaderboard"), 15000);
   const positions = usePoll((c) => c.get<PaperPositionInfo[]>("/v1/paper/positions"), 5000);
   const trades = usePoll((c) => c.get<PaperTradeInfo[]>("/v1/paper/trades", { limit: 500 }), 15000);
@@ -28,12 +29,14 @@ export function Performance() {
         value={view}
         onChange={setView}
         options={[
+          { key: "account", label: "Hesap işlemleri (K/Z)" },
           { key: "paper", label: "Strateji yarışması" },
           { key: "positions", label: "Açık sanal pozisyonlar" },
           { key: "trades", label: "İşlem geçmişi" },
           { key: "testnet", label: "Demo Trading emirleri" },
         ]}
       />
+      {view === "account" && <TradeHistory limit={1000} />}
       {view === "paper" && (
         <Card title="Strateji başına sanal hesaplar">
           <ErrorBox error={board.error} what="Sanal işlem yarışması" />

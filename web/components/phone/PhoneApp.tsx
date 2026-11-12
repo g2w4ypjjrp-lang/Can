@@ -55,6 +55,10 @@ type Snap = {
   };
   opportunities?: { market: string; symbol: string; direction: string; score: number; reward_risk: number | null }[];
   whales?: { ts_ms: number; symbol: string; message: string }[];
+  history?: {
+    summary: { count: number; wins: number; win_rate: number | null; net_total: string; today_net: string };
+    trades: { symbol: string; market: string; side: string; net_pnl: string; pnl_pct: number | null; closed_at: number; source: string }[];
+  };
   license?: { valid: boolean; plan_name?: string | null };
 };
 
@@ -481,6 +485,48 @@ export function PhoneApp() {
           </ul>
         ) : (
           <Empty>Açık pozisyon yok</Empty>
+        )}
+      </Panel>
+
+      {/* İşlem geçmişi */}
+      <Panel title="İşlem geçmişi" icon={<Activity size={17} />} testId="phone-history">
+        {snap?.history && snap.history.summary.count > 0 ? (
+          <>
+            <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+              {[
+                ["Bugün", snap.history.summary.today_net],
+                ["Toplam", snap.history.summary.net_total],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl bg-surface-2 p-2">
+                  <span className="block text-[11px] text-muted">{label}</span>
+                  <b className={`text-sm ${Number(value) > 0 ? "text-up" : Number(value) < 0 ? "text-down" : "text-fg"}`}>
+                    {Number(value) > 0 ? "+" : ""}
+                    {money(value)}
+                  </b>
+                </div>
+              ))}
+              <div className="rounded-2xl bg-surface-2 p-2">
+                <span className="block text-[11px] text-muted">Başarı</span>
+                <b className="text-sm text-fg">%{snap.history.summary.win_rate ?? 0}</b>
+              </div>
+            </div>
+            <ul className="space-y-2">
+              {snap.history.trades.map((t, i) => (
+                <li key={`${t.closed_at}-${t.symbol}-${i}`} className="flex items-center justify-between rounded-2xl bg-surface-2 px-3 py-2">
+                  <span>
+                    <b className="text-fg">{t.symbol}</b>{" "}
+                    <span className={`text-xs font-semibold ${t.side === "long" ? "text-up" : "text-down"}`}>{t.side === "long" ? "Long" : "Short"}</span>
+                    <span className="block text-[11px] text-muted">
+                      {clock(t.closed_at)} · {t.source === "bot" ? "Bot" : "Elle"}
+                    </span>
+                  </span>
+                  <PnlText value={t.net_pnl} pct={t.pnl_pct} />
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <Empty>Henüz kapanmış işlem yok</Empty>
         )}
       </Panel>
 
