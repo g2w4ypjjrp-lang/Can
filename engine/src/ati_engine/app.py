@@ -23,6 +23,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from ati_engine import __version__
 from ati_engine.analysis.service import AnalysisService
@@ -62,12 +63,14 @@ from ati_engine.observability.logging import configure_logging
 from ati_engine.observability.loop_monitor import LoopLagMonitor
 from ati_engine.paper.competition import PaperCompetition
 from ati_engine.remote.crypto import EngineIdentity, KeyAgreement, b64, unb64
+from ati_engine.remote.push import PushNotifier
 from ati_engine.remote.runtime_bridge import (
     build_executors,
     build_snapshot,
     subscribe_notifications,
 )
 from ati_engine.remote.service import REMOTE_ENABLED_KEY, RemoteService
+from ati_engine.remote.webpush import VapidKey
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.safety.kill_switch import KillSwitch
@@ -355,6 +358,20 @@ class Engine:
             await runtime.vault.put("remote.kx_key", b64(kx.private_raw()))
         else:
             kx = KeyAgreement.from_private_raw(unb64(stored_kx.get_secret_value()))
+        # Telefon bildirimleri (Web Push) gönderen anahtarı, aynı kasada.
+        stored_push = await runtime.vault.get("remote.push_key")
+        if stored_push is None:
+            vapid = VapidKey.generate()
+            await runtime.vault.put("remote.push_key", b64(vapid.private_raw()))
+        else:
+            vapid = VapidKey.from_private_raw(unb64(stored_push.get_secret_value()))
+        web = urlsplit(cfg.phone_web_url)
+        push = PushNotifier(
+            runtime.db,
+            vapid,
+            subject=f"{web.scheme}://{web.netloc}",
+            test_hosts=tuple(cfg.push_test_hosts),
+        )
         service = RemoteService(
             db=runtime.db,
             identity=identity,
@@ -366,6 +383,7 @@ class Engine:
             max_skew_s=cfg.max_clock_skew_s,
             pairing_ttl_s=cfg.pairing_ttl_s,
             companion_limit=runtime.license.companion_limit if runtime.license else None,
+            push=push,
         )
         runtime.remote = service
         subscribe_notifications(runtime, service)

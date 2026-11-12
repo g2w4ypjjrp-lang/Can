@@ -1019,6 +1019,11 @@
   color: #0b1640;
   box-shadow: 0 6px 18px -8px rgba(59, 232, 255, 0.8);
 }
+.phone-neon .ph-tab-cta {
+  background: linear-gradient(90deg, #3be8ff, #b98aff);
+  color: #0b1640;
+  box-shadow: 0 10px 26px -12px rgba(59, 232, 255, 0.9);
+}
 .phone-neon .ph-card {
   position: relative;
   border-radius: 1.5rem;

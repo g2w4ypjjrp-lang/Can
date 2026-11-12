@@ -29,6 +29,7 @@ from ati_engine.core.events import (
     KillSwitchReleased,
     TradeNotice,
 )
+from ati_engine.notify.trade_text import trade_details
 from ati_engine.security.vault import SecretVault
 from ati_engine.storage.settings_store import SettingsStore
 
@@ -89,10 +90,13 @@ def format_trade(n: TradeNotice) -> str:
     side = "Uzun (long)" if n.side == "long" else "Kısa (short)"
     mode = MODES.get(n.mode, n.mode)
     market = "Futures" if n.market == "usdm_futures" else "Spot"
+    # Ayrıntılar (stop, hedef, puan, kapanış nedeni, süre) varsa alt satırlara eklenir.
+    extra = "".join(f"\n{line}" for line in trade_details(n)[1:])
     if n.action == "opened":
-        return f"📈 {n.symbol} {side} açıldı\n{mode} · {market} · {n.quantity} @ {n.price}"
-    pnl = f"\nNet kâr/zarar: {n.net_pnl} USDT" if n.net_pnl is not None else ""
-    return f"📉 {n.symbol} {side} kapandı\n{mode} · {market} · {n.quantity} @ {n.price}{pnl}"
+        return f"📈 {n.symbol} {side} açıldı\n{mode} · {market} · {n.quantity} @ {n.price}{extra}"
+    pct = f" (%{n.pnl_pct:+.2f})" if n.pnl_pct is not None else ""
+    pnl = f"\nNet kâr/zarar: {n.net_pnl} USDT{pct}" if n.net_pnl is not None else ""
+    return f"📉 {n.symbol} {side} kapandı\n{mode} · {market} · {n.quantity} @ {n.price}{pnl}{extra}"
 
 
 class TelegramNotifier:

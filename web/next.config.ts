@@ -17,7 +17,21 @@ const config: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // Telefon sayfası: ana ekrandaki uygulamada QR'ı kamerayla okutmak için yalnızca bu sayfada
+      // kamera izni (kendi sitesi). Servis çalışanı her açılışta güncel alınır.
+      {
+        source: "/telefon",
+        headers: [
+          {
+            key: "Permissions-Policy",
+            value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
+          },
+        ],
+      },
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache" }] },
+    ];
   },
 };
 

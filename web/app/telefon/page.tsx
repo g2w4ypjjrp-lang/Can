@@ -8,12 +8,17 @@ export const metadata: Metadata = {
   title: "Telefondan izleme",
   description: "Bilgisayarınızdaki AI Trading Intelligence motorunu telefondan izleyin; acil durdurun.",
   robots: { index: false, follow: false },
+  // Ana ekrana eklenince uygulama gibi açılır (iPhone'da bildirim için gerekli; iOS 16.4+).
+  manifest: "/telefon.webmanifest",
+  appleWebApp: { capable: true, title: "AI Trading", statusBarStyle: "black-translucent" },
+  icons: { apple: "/telefon-apple-180.png" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#19244f",
 };
 
 export default function TelefonPage() {

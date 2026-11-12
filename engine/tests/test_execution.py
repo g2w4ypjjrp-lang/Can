@@ -506,3 +506,32 @@ async def test_settle_returns_when_background_task_already_finished(db: Database
     await asyncio.wait_for(engine.settle(), timeout=5)
     assert engine._background == set()
     await engine.stop()
+
+
+async def test_trade_notices_carry_stop_target_score_and_close_details(db: Database) -> None:
+    """Bildirimler (telefon, Telegram) için: açılışta stop/hedef/puan/gerekçe, kapanışta giriş
+    fiyatı, yüzde kâr/zarar, kapanış nedeni ve süre."""
+    engine, venue = await make_engine(db)
+    notices: list[Any] = []
+
+    async def record(notice: Any) -> None:
+        notices.append(notice)
+
+    engine.on_trade = record
+    await venue.on_price("ETHUSDT", D(100))
+    await engine.open(
+        futures_intent(
+            symbol="ETHUSDT", direction=-1, stop_loss=D(105), take_profits=(),
+            opportunity_score=81.5, reason="Düşüş kırılımı",
+        )
+    )  # fmt: skip
+    await tick(engine, venue, "ETHUSDT", "106")
+    opened, closed = notices
+    assert opened.action == "opened" and opened.side == "short"
+    assert opened.stop_loss == "105" and opened.take_profit is None
+    assert opened.score == 81.5 and opened.reason == "Düşüş kırılımı"
+    assert closed.action == "closed" and closed.entry_price == "100"
+    assert closed.close_reason == "zarar durdur (stop)"
+    assert closed.pnl_pct is not None and closed.pnl_pct < -5.9  # -12 / (100 x 2)
+    assert closed.duration_s is not None and closed.duration_s >= 0
+    await engine.stop()

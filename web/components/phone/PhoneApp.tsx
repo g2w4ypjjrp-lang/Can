@@ -1,10 +1,12 @@
 "use client";
 
-import { Lock, MonitorSmartphone, QrCode, ScanLine, ShieldCheck } from "lucide-react";
+import { Camera, Lock, MonitorSmartphone, QrCode, ScanLine, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { LogoMark } from "@/components/Logo";
-import { PhoneDashboard, totalBalance, type Snap } from "@/components/phone/PhoneDashboard";
+import { PhoneDashboard, totalBalance, type PushView, type Snap } from "@/components/phone/PhoneDashboard";
+import { QrScanner } from "@/components/phone/QrScanner";
+import { currentSubscription, disablePush, enablePush, isStandalone, pushSupport, subscriptionArgs, type PushSupport } from "@/lib/push";
 import { parsePairing, RemoteError } from "@/lib/remote";
 import { deviceStore, type EngineEvent, type Phase, RemoteClient, type StoredDevice } from "@/lib/remoteClient";
 
@@ -16,6 +18,20 @@ const STEPS = [
   { icon: QrCode, text: "\"QR kodu göster\"e basın." },
   { icon: ScanLine, text: "Telefonun kamerasıyla QR'ı okutun; bu sayfa açılır ve birkaç saniyede eşleşir." },
 ];
+// Ana ekrana eklenmiş uygulamada telefonun kamera uygulaması QR'ı Safari'de açar; okutma uygulama
+// içinden yapılır.
+const STANDALONE_STEPS = [
+  STEPS[0]!,
+  STEPS[1]!,
+  { icon: ScanLine, text: "Aşağıdaki \"QR kodu okut\" düğmesine basıp bilgisayardaki QR'ı okutun." },
+];
+
+function deviceName(): string {
+  const home = isStandalone() ? "ana ekran" : "tarayıcı";
+  if (/iPhone|iPad/.test(navigator.userAgent)) return `iPhone (${home})`;
+  if (/Android/.test(navigator.userAgent)) return `Android (${home})`;
+  return `Telefon (${home})`;
+}
 
 export function PhoneApp() {
   const [device, setDevice] = useState<StoredDevice | null | undefined>(undefined);
@@ -28,6 +44,12 @@ export function PhoneApp() {
   const [error, setError] = useState<string | null>(null);
   const [series, setSeries] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [standalone, setStandalone] = useState(false);
+  const [support, setSupport] = useState<PushSupport | "loading">("loading");
+  const [browserPush, setBrowserPush] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const resynced = useRef(false);
   const client = useRef<RemoteClient | null>(null);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -63,6 +85,35 @@ export function PhoneApp() {
     [],
   );
 
+  const pairWith = useCallback(
+    async (hash: string, isCancelled: () => boolean = () => false): Promise<boolean> => {
+      try {
+        const code = await parsePairing(hash);
+        const c = await RemoteClient.pair(code, deviceName(), listener());
+        if (isCancelled()) return true;
+        client.current?.stop();
+        client.current = c;
+        setError(null);
+        setDevice(null);
+        c.start();
+        return true;
+      } catch (e) {
+        setError(e instanceof RemoteError ? e.message : "QR kodu açılamadı");
+        return false;
+      }
+    },
+    [listener],
+  );
+
+  // Bildirim desteği ve bu tarayıcıdaki abonelik (yalnızca tarayıcıda bilinir).
+  useEffect(() => {
+    setStandalone(isStandalone());
+    setSupport(pushSupport());
+    currentSubscription()
+      .then((sub) => setBrowserPush(sub !== null))
+      .catch(() => setBrowserPush(false));
+  }, []);
+
   // Açılış: adreste yeni QR varsa eşleş; yoksa kayıtlı eşleşmeyle bağlan.
   useEffect(() => {
     let cancelled = false;
@@ -71,19 +122,7 @@ export function PhoneApp() {
       if (hash.includes("p=")) {
         // Gizli eşleştirme değeri tarayıcı geçmişinde kalmasın.
         history.replaceState(null, "", window.location.pathname);
-        try {
-          const code = await parsePairing(hash);
-          const name = /iPhone|iPad/.test(navigator.userAgent) ? "iPhone (tarayıcı)" : /Android/.test(navigator.userAgent) ? "Android (tarayıcı)" : "Telefon (tarayıcı)";
-          const c = await RemoteClient.pair(code, name, listener());
-          if (cancelled) return;
-          client.current?.stop();
-          client.current = c;
-          setDevice(null);
-          c.start();
-          return;
-        } catch (e) {
-          setError(e instanceof RemoteError ? e.message : "QR kodu açılamadı");
-        }
+        if (await pairWith(hash, () => cancelled)) return;
       }
       const stored = await deviceStore.load().catch(() => undefined);
       if (cancelled) return;
@@ -98,9 +137,20 @@ export function PhoneApp() {
       cancelled = true;
       client.current?.stop();
     };
-  }, [listener]);
+  }, [listener, pairWith]);
 
-  async function send(command: string) {
+  // Telefondaki abonelik var ama motor bilmiyorsa (yeniden kurulum, servis yeniledi) yeniden bildirilir.
+  const enginePush = snap?.push;
+  useEffect(() => {
+    if (!enginePush || enginePush.subscribed || !browserPush || resynced.current || phase !== "online") return;
+    resynced.current = true;
+    (async () => {
+      const sub = await currentSubscription();
+      if (sub) await client.current?.command("push_subscribe", { ...subscriptionArgs(sub) });
+    })().catch(() => undefined);
+  }, [enginePush, browserPush, phase]);
+
+  async function send(command: string, args: Record<string, unknown> = {}) {
     setBusy(true);
     if (pending.current) clearTimeout(pending.current);
     // Motor, eşleştirmesi kaldırılmış cihaza yanıt vermez; sonsuza dek beklenmez.
@@ -109,7 +159,7 @@ export function PhoneApp() {
       setToast({ ok: false, text: "Bilgisayardan yanıt gelmedi. Eşleştirme masaüstünden kaldırılmış olabilir." });
     }, 10_000);
     try {
-      await client.current?.command(command);
+      await client.current?.command(command, args);
     } catch (e) {
       if (pending.current) clearTimeout(pending.current);
       setBusy(false);
@@ -117,7 +167,35 @@ export function PhoneApp() {
     }
   }
 
+  async function pushOn() {
+    if (!enginePush) return;
+    setPushBusy(true);
+    try {
+      const args = await enablePush(enginePush.vapid_key);
+      setBrowserPush(true);
+      await send("push_subscribe", { ...args });
+    } catch (e) {
+      setToast({ ok: false, text: e instanceof Error ? e.message : "Bildirimler açılamadı" });
+      setSupport(pushSupport());
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function pushOff() {
+    setPushBusy(true);
+    try {
+      await disablePush();
+      setBrowserPush(false);
+      await send("push_unsubscribe");
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
   async function forget() {
+    await disablePush().catch(() => undefined);
+    setBrowserPush(false);
     client.current?.stop();
     client.current = null;
     await deviceStore.clear();
@@ -160,7 +238,7 @@ export function PhoneApp() {
             </p>
           )}
           <ol className="space-y-3 text-sm text-fg">
-            {STEPS.map(({ icon: Icon, text }, i) => (
+            {(standalone ? STANDALONE_STEPS : STEPS).map(({ icon: Icon, text }, i) => (
               <li key={text} className="ph-card ph-rise flex items-center gap-3 p-3.5" style={{ animationDelay: `${(i + 1) * 80}ms` }}>
                 <span className="ph-icon relative" aria-hidden="true">
                   <Icon size={18} />
@@ -172,6 +250,14 @@ export function PhoneApp() {
               </li>
             ))}
           </ol>
+          <button
+            type="button"
+            onClick={() => setScanning(true)}
+            className="ph-tab-cta flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold"
+            data-testid="phone-scan"
+          >
+            <Camera size={18} aria-hidden="true" /> QR kodu okut
+          </button>
           <div className="ph-card flex items-start gap-3 p-3.5 text-xs text-muted">
             <ShieldCheck size={18} className="mt-0.5 shrink-0 text-up" aria-hidden="true" />
             <p>
@@ -180,11 +266,33 @@ export function PhoneApp() {
             </p>
           </div>
         </main>
+        {scanning && (
+          <QrScanner
+            onClose={() => setScanning(false)}
+            onCode={(text) => {
+              setScanning(false);
+              let hash = text;
+              try {
+                hash = new URL(text).hash || text;
+              } catch {
+                /* adres değilse olduğu gibi denenir */
+              }
+              void pairWith(hash);
+            }}
+          />
+        )}
       </div>
     );
   }
 
-    // --- Panel ---------------------------------------------------------------------------------
+  const push: PushView = {
+    support,
+    engineReady: Boolean(enginePush),
+    on: browserPush && Boolean(enginePush?.subscribed),
+    busy: pushBusy || busy,
+  };
+
+  // --- Panel ---------------------------------------------------------------------------------
   return (
     <div className="phone-neon">
       <PhoneDashboard
@@ -201,6 +309,10 @@ export function PhoneApp() {
         onPause={() => void send("pause_autotrade")}
         onKill={() => void send("engage_kill_switch")}
         onForget={() => void forget()}
+        push={push}
+        onPushEnable={() => void pushOn()}
+        onPushDisable={() => void pushOff()}
+        onPushTest={() => void send("push_test")}
       />
     </div>
   );

@@ -1,4 +1,12 @@
-# En son sürümü yükleme (0.14.6)
+# En son sürümü yükleme (0.14.7)
+
+0.14.7'de yeni: **telefon kilitliyken bildirim (uygulama indirmeden)**. Telefon sayfasında
+"Bildirimleri aç" → işlem açılış/kapanışları, acil durdurma ve önemli uyarılar kilit ekranına gelir.
+iPhone'da önce Safari → Paylaş → **Ana Ekrana Ekle** (iOS 16.4+), ana ekrandaki simgeden açıp QR'ı
+uygulamanın içindeki **QR kodu okut** düğmesiyle okutun. Bildirimler bilgisayarda şifrelenir; Apple ve
+sunucumuz içeriği okuyamaz. İşlem bildirimleri (telefon, kilit ekranı, Telegram) artık **her ayrıntıyı**
+yazar: stop ve hedef fiyatı, puan ve gerekçe, kaldıraç; kapanışta giriş→çıkış, net kâr/zarar ve yüzdesi,
+kapanış nedeni (stop / hedef / iz süren stop / elle) ve süre.
 
 Site güncellemesi (yalnızca sunucu; uygulamayı yeniden derlemek gerekmez): yönetim paneli →
 **Paketler ve fiyatlar** → **Genel indirim kampanyası**: bütün ücretli paketlere yüzde indirim (%1–90,
@@ -91,7 +99,7 @@ harcama sınırı tanımlanabilir).
 1. GitHub → depo → **Actions** → **Masaüstü** → **Run workflow** → dal:
    `claude/laughing-hawking-wmt8mo` → **Run workflow**. Yaklaşık 25 dakika sürer.
 2. Yeşil olunca çalıştırmanın altındaki **Artifacts** → `ati-windows-installer-unsigned` ZIP'ini
-   indirip açın: `AI Trading Intelligence_0.14.6_x64-setup.exe`.
+   indirip açın: `AI Trading Intelligence_0.14.7_x64-setup.exe`.
 3. Dosyayı VDS'ye kopyalayıp hazırlayın (indirme klasörüne koyar, SHA-256'yı ve varsa güncelleme
    imzasını yazar):
 
@@ -99,7 +107,7 @@ harcama sınırı tanımlanabilir).
    powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 surum-hazirla -Dosya "<setup.exe yolu>"
    ```
 
-4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.14.6), adres, SHA-256, boyut ve
+4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.14.7), adres, SHA-256, boyut ve
    imzayı girin → doğrulama kodunuzla **Yayınla**. Artık canarslan.net.tr/indir sayfasında görünür.
 
 ## C. Bilgisayarınızda kurulum / güncelleme

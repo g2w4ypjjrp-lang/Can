@@ -80,7 +80,8 @@ async def main(args: argparse.Namespace) -> int:
             # Hata raporları testte açılsa da gerçek sunucuya gitmez.
             notify=NotifySettings(crash_report_url="http://127.0.0.1:9/v1/crash-reports"),
             # Telefondan kontrol: "aç" denince yerel (gerçek) aktarma servisine bağlanır.
-            remote=RemoteSettings(public_relay_url=args.relay)
+            # Telefon bildirimleri testte yerel sahte bildirim servisine (http://127.0.0.1) gider.
+            remote=RemoteSettings(public_relay_url=args.relay, push_test_hosts=["127.0.0.1"])
             if args.relay
             else RemoteSettings(public_relay_url="ws://127.0.0.1:9"),
         )

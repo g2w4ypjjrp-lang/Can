@@ -13,6 +13,8 @@ export interface RemoteDevice {
   last_seen: number | null;
   revoked: boolean;
   online: boolean;
+  /** Kilit ekranı bildirimleri (Web Push) bu telefonda açık mı. */
+  push?: boolean;
 }
 
 export interface RemoteStatus {
@@ -298,6 +300,16 @@ export function Phone() {
             <li className="yes">
               <CheckCircle2 aria-hidden="true" />
               <span>
+                Kilit ekranına bildirim (uygulama indirmeden)
+                <small>
+                  Telefondaki sayfada "Bildirimleri aç". iPhone'da önce Safari → Paylaş → Ana Ekrana Ekle; simgeden açıp QR'ı
+                  uygulamanın içinden okutun. Bu bilgisayar açıkken gelir.
+                </small>
+              </span>
+            </li>
+            <li className="yes">
+              <CheckCircle2 aria-hidden="true" />
+              <span>
                 Acil durdurma ve botu durdurma
                 <small>Her zaman, tek dokunuşla</small>
               </span>
@@ -345,7 +357,19 @@ export function Phone() {
             {
               key: "p",
               label: "Anahtar",
-              render: (d) => (d.protection === "secure_enclave" ? <Badge tone="ok">Secure Enclave</Badge> : <Badge tone="warn">Yazılım</Badge>),
+              render: (d) =>
+                d.protection === "secure_enclave" ? (
+                  <Badge tone="ok">Secure Enclave</Badge>
+                ) : d.protection === "browser" ? (
+                  <Badge tone="info">Tarayıcı</Badge>
+                ) : (
+                  <Badge tone="warn">Yazılım</Badge>
+                ),
+            },
+            {
+              key: "b",
+              label: "Bildirim",
+              render: (d) => (d.push ? <Badge tone="ok">Açık</Badge> : <Badge>Kapalı</Badge>),
             },
             {
               key: "o",

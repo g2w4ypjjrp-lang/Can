@@ -110,6 +110,9 @@ sayı geriye gitmez.
 | `engage_kill_switch` | signing | Acil durdurma (her zaman tek dokunuş) |
 | `pause_autotrade` | signing | Otomatik işlemi durdurur |
 | `request_snapshot` | signing | Güncel durum ister |
+| `push_subscribe` | signing | `{endpoint, p256dh, auth}`: bu cihaz için kilit ekranı bildirimlerini açar |
+| `push_unsubscribe` | signing | Bu cihazın bildirimlerini kapatır |
+| `push_test` | signing | Bu cihaza deneme bildirimi gönderir |
 | `resume_autotrade` | guarded | Otomatik işlemi başlatır |
 | `release_kill_switch` | guarded | Acil durdurmayı kaldırır |
 | `close_position` | guarded | `{market, symbol}` pozisyonunu kapatır |
@@ -130,6 +133,27 @@ türleri:
 
 Bildirim içerikleri yalnızca özettir. API anahtarı, emir kimliği veya hesap bakiyesi
 ayrıntısı içermez.
+
+### Kilit ekranı bildirimleri (Web Push)
+
+Telefon tarayıcısı (iPhone'da ana ekrana eklenmiş web uygulaması, iOS 16.4+; Android'de Chrome)
+sayfa kapalıyken de bildirim alabilir. Uygulama indirmek gerekmez.
+
+1. `snapshot.data.push = {vapid_key, subscribed}`: motorun gönderen anahtarı (P-256, base64url)
+   ve bu cihazın abonelik durumu.
+2. Tarayıcı `pushManager.subscribe({applicationServerKey: vapid_key})` ile abone olur ve
+   `push_subscribe` komutuyla `{endpoint, p256dh, auth}` gönderir (uçtan uca şifreli kanal).
+3. Motor bildirimi **kendisi** şifreler (RFC 8291, `aes128gcm`) ve doğrudan bildirim servisine
+   gönderir (VAPID, RFC 8292; `sub` = sitenin adresi, JWT en çok 50 dakika). Apple/Google ve
+   aktarma servisi içeriği okuyamaz.
+4. `endpoint` yalnızca bilinen bildirim servislerinden biri olabilir (`push.apple.com`,
+   `fcm.googleapis.com`, `push.services.mozilla.com`, `notify.windows.com`); motor başka adrese
+   istek atmaz.
+5. Gönderilenler: işlem açılış/kapanışı (stop, hedef, puan, % kâr/zarar, kapanış nedeni, süre),
+   acil durdurma, motorun güvenli moda geçmesi/durması, uyarı ve kritik risk olayları. Cihaz başına
+   dakikada en çok 20. Servis 404/410 dönerse abonelik silinir; cihazın eşleştirmesi kaldırılınca da.
+
+Bildirim gövdesi (şifre çözülünce): `{"title", "body", "kind", "ts"}`.
 
 ## Aktarma servisi
 

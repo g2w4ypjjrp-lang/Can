@@ -40,6 +40,10 @@ ALLOWED_COMMANDS: dict[str, KeyKind] = {
     "engage_kill_switch": "signing",
     "pause_autotrade": "signing",
     "request_snapshot": "signing",
+    # Telefon bildirimleri (Web Push) aboneliği: yalnızca bu cihazın kendi bildirim ayarı.
+    "push_subscribe": "signing",
+    "push_unsubscribe": "signing",
+    "push_test": "signing",
     "resume_autotrade": "guarded",
     "release_kill_switch": "guarded",
     "close_position": "guarded",
@@ -144,6 +148,8 @@ class DeviceRegistry:
             "UPDATE remote_devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
             (now, device_id),
         )
+        # Eşleştirmesi kaldırılan telefona bildirim de gitmez.
+        await self.db.execute("DELETE FROM remote_push WHERE device_id = ?", (device_id,))
         return changed > 0
 
     async def advance_seq(self, device_id: str, seq: int, now: int) -> bool:

@@ -212,6 +212,9 @@ class RemoteSettings(BaseModel):
     snapshot_interval_s: float = Field(default=5.0, ge=2, le=600)
     max_clock_skew_s: float = Field(default=120.0, ge=10, le=600)
     pairing_ttl_s: float = Field(default=300.0, ge=30, le=3600)
+    # Yalnızca testler: telefon bildirimlerinin http ile gönderilebileceği yerel adresler (gerçek
+    # kullanımda boş; bildirimler yalnızca Apple/Google/Mozilla/Microsoft servislerine gider).
+    push_test_hosts: list[str] = Field(default_factory=list)
 
     @field_validator("relay_url")
     @classmethod

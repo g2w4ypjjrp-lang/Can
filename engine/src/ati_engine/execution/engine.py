@@ -55,6 +55,14 @@ from ati_engine.storage.database import Database
 logger = logging.getLogger(__name__)
 
 PROTECTIVE = frozenset({"stop_loss", "take_profit", "trailing_stop"})
+# Bildirimlerde kapanış nedeni (emrin amacına göre).
+CLOSE_REASONS = {
+    "stop_loss": "zarar durdur (stop)",
+    "take_profit": "kâr al hedefi",
+    "trailing_stop": "iz süren stop",
+    "exit": "kapatma emri",
+    "emergency_close": "acil kapatma",
+}
 
 
 @dataclass(frozen=True)
@@ -612,23 +620,43 @@ class TradingEngine:
         if self.on_trade is None:
             return
         notice: TradeNotice | None = None
+        managed = self.managed.get(record.symbol)
+        intent = managed.intent if managed is not None else None
         if change.closed is not None:
             closed = change.closed
+            net = closed.realized_pnl - closed.fees
+            # Yüzde: net kâr/zarar ÷ giriş tutarı (ilk giriş miktarıyla; kısmi kâr almalar dâhil).
+            size = intent.quantity if intent is not None else abs(fill.qty)
+            notional = closed.entry_price * abs(size)
+            pct = float(net / notional * 100) if notional > 0 else None
+            duration = (
+                (fill.ts - closed.opened_at) // 1000 if fill.ts and closed.opened_at else None
+            )
             notice = TradeNotice(
                 market=self.market.value, mode=self.mode.value, symbol=record.symbol,
                 action="closed", side="long" if closed.direction >= 0 else "short",
                 quantity=format_decimal(abs(fill.qty)), price=format_decimal(fill.price),
-                net_pnl=format_decimal(closed.realized_pnl - closed.fees),
+                net_pnl=format_decimal(net), entry_price=format_decimal(closed.entry_price),
+                pnl_pct=round(pct, 2) if pct is not None else None,
+                close_reason=CLOSE_REASONS.get(record.purpose, record.purpose),
+                duration_s=max(0, int(duration)) if duration is not None else None,
             )  # fmt: skip
         elif (
             record.purpose == "entry"
             and change.position is not None
             and abs(change.position.quantity) == abs(fill.qty)
         ):
+            first_tp = intent.take_profits[0].price if intent and intent.take_profits else None
             notice = TradeNotice(
                 market=self.market.value, mode=self.mode.value, symbol=record.symbol,
                 action="opened", side="long" if change.position.quantity > 0 else "short",
                 quantity=format_decimal(abs(fill.qty)), price=format_decimal(fill.price),
+                stop_loss=format_decimal(intent.stop_loss) if intent and intent.stop_loss else None,
+                take_profit=format_decimal(first_tp) if first_tp is not None else None,
+                score=round(intent.opportunity_score, 1)
+                if intent and intent.opportunity_score is not None else None,
+                reason=intent.reason[:160] if intent and intent.reason else None,
+                leverage=intent.leverage if intent and intent.leverage else None,
             )  # fmt: skip
         if notice is not None:
             try:

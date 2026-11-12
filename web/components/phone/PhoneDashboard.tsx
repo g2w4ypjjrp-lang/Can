@@ -5,6 +5,9 @@
 import {
   Activity,
   AlertOctagon,
+  Bell,
+  BellOff,
+  BellRing,
   Bot,
   CheckCircle2,
   Clock,
@@ -15,7 +18,9 @@ import {
   Radio,
   RefreshCw,
   ShieldAlert,
+  Share,
   Sparkles,
+  SquarePlus,
   Trophy,
   Unplug,
   Waves,
@@ -25,6 +30,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { LogoMark } from "@/components/Logo";
+import type { PushSupport } from "@/lib/push";
 import type { EngineEvent, Phase } from "@/lib/remoteClient";
 
 export type Snap = {
@@ -65,7 +71,18 @@ export type Snap = {
     trades: { symbol: string; market: string; side: string; net_pnl: string; pnl_pct: number | null; closed_at: number; source: string }[];
   };
   license?: { valid: boolean; plan_name?: string | null };
+  // Telefon bildirimleri: motorun gönderen anahtarı ve bu cihazın abonelik durumu.
+  push?: { vapid_key: string; subscribed: boolean };
 };
+
+/** Telefon bildirimlerinin (kilit ekranı) durumu. */
+export interface PushView {
+  support: PushSupport | "loading";
+  /** Bilgisayardaki uygulama bildirim gönderebiliyor mu (0.14.7+). */
+  engineReady: boolean;
+  on: boolean;
+  busy: boolean;
+}
 
 /** Bakiye: cüzdanlar (bakiye + açık kâr/zarar) varsa onların toplamı, yoksa özsermaye. */
 export function totalBalance(snap: Snap | null): number | null {
@@ -342,9 +359,87 @@ export interface DashboardProps {
   onPause: () => void;
   onKill: () => void;
   onForget: () => void;
+  push: PushView;
+  onPushEnable: () => void;
+  onPushDisable: () => void;
+  onPushTest: () => void;
 }
 
-export function PhoneDashboard({ snap, snapAt, events, phase, detail, series, now, busy, toast, onRefresh, onPause, onKill, onForget }: DashboardProps) {
+/** Kilit ekranına bildirim: açma/kapama, deneme; iPhone'da ana ekrana ekleme adımları. */
+function PushCard({ push, online, onEnable, onDisable, onTest }: { push: PushView; online: boolean; onEnable: () => void; onDisable: () => void; onTest: () => void }) {
+  const body = (() => {
+    if (push.support === "loading") return <Skeleton className="h-10 w-full" />;
+    if (push.support === "ios_home_screen")
+      return (
+        <div className="space-y-2.5 text-sm text-fg" data-testid="phone-push-ios">
+          <p className="text-muted">iPhone'da kilit ekranına bildirim için bu sayfayı ana ekrana ekleyin (iOS 16.4 ve üstü; uygulama indirmeden):</p>
+          <ol className="space-y-2">
+            {[
+              [<Share key="i" size={15} />, "Safari'nin alt çubuğundaki Paylaş düğmesine dokunun."],
+              [<SquarePlus key="i" size={15} />, "\"Ana Ekrana Ekle\" → \"Ekle\"."],
+              [<LogoMark key="i" className="h-4 w-4" />, "Ana ekrandaki \"AI Trading\" simgesinden açın; bilgisayardaki QR'ı uygulamanın içinden okutun."],
+              [<Bell key="i" size={15} />, "\"Bildirimleri aç\" düğmesine basıp izin verin."],
+            ].map(([icon, text], i) => (
+              <li key={i} className="flex items-start gap-2.5 rounded-2xl bg-surface-2 px-3 py-2">
+                <span className="mt-0.5 shrink-0 text-accent-text" aria-hidden="true">
+                  {icon}
+                </span>
+                <span>{text}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      );
+    if (push.support === "unsupported")
+      return <p className="text-sm text-muted">Bu tarayıcı bildirimleri desteklemiyor. iPhone'da Safari (ana ekrana ekleyerek), Android'de Chrome kullanın.</p>;
+    if (push.support === "denied")
+      return <p className="text-sm text-warn-fg">Bildirim izni kapalı. Telefon Ayarları → Bildirimler bölümünden bu uygulamaya izin verip sayfayı yeniden açın.</p>;
+    if (!push.engineReady)
+      return <p className="text-sm text-muted">Bilgisayardaki uygulamayı güncelleyin (0.14.7 ve üstü); bildirimleri o gönderir.</p>;
+    if (push.on)
+      return (
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            İşlem açılış/kapanışları (stop, hedef, kâr/zarar ayrıntısıyla), acil durdurma ve önemli uyarılar telefon kilitliyken de gelir.
+            Bilgisayardaki uygulama açık olmalıdır.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-glass-border bg-white/5 py-3 text-sm font-semibold text-fg disabled:opacity-50" onClick={onTest} disabled={push.busy || !online} data-testid="phone-push-test">
+              <BellRing size={16} aria-hidden="true" /> Deneme bildirimi
+            </button>
+            <button type="button" className="flex items-center justify-center gap-2 rounded-2xl border border-glass-border px-4 py-3 text-sm font-semibold text-muted disabled:opacity-50" onClick={onDisable} disabled={push.busy || !online} data-testid="phone-push-disable">
+              <BellOff size={16} aria-hidden="true" /> Kapat
+            </button>
+          </div>
+        </div>
+      );
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted">Sayfa kapalıyken ve telefon kilitliyken de işlem açılış/kapanış bildirimleri alın.</p>
+        <button type="button" className="ph-tab-cta flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold disabled:opacity-50" onClick={onEnable} disabled={push.busy || !online} data-testid="phone-push-enable">
+          <Bell size={17} aria-hidden="true" /> Bildirimleri aç
+        </button>
+      </div>
+    );
+  })();
+  return (
+    <Card
+      id="bildirim-ayari"
+      title="Telefon bildirimleri"
+      icon={<Bell size={17} />}
+      testId="phone-push"
+      action={
+        <span className={`ph-state ${push.on ? "on" : ""}`} data-testid="phone-push-state">
+          {push.on ? "Açık" : "Kapalı"}
+        </span>
+      }
+    >
+      {body}
+    </Card>
+  );
+}
+
+export function PhoneDashboard({ snap, snapAt, events, phase, detail, series, now, busy, toast, onRefresh, onPause, onKill, onForget, push, onPushEnable, onPushDisable, onPushTest }: DashboardProps) {
   const [confirmKill, setConfirmKill] = useState(false);
   const [spin, setSpin] = useState(false);
   const active = useActiveSection();
@@ -492,6 +587,9 @@ export function PhoneDashboard({ snap, snapAt, events, phase, detail, series, no
             </p>
           )}
         </section>
+
+        {/* Kilit ekranı bildirimleri (açıksa sayfanın sonunda, kapalıysa burada) */}
+        {!push.on && <PushCard push={push} online={online} onEnable={onPushEnable} onDisable={onPushDisable} onTest={onPushTest} />}
 
         {/* Bot */}
         <Card
@@ -727,7 +825,7 @@ export function PhoneDashboard({ snap, snapAt, events, phase, detail, series, no
                     <b className="text-fg">{e.title}</b>
                     <span className="shrink-0 text-xs text-muted">{clock(e.ts_ms)}</span>
                   </span>
-                  <span className="text-muted">{e.body}</span>
+                  <span className="block whitespace-pre-line text-muted">{e.body}</span>
                 </li>
               ))}
             </ul>
@@ -747,6 +845,8 @@ export function PhoneDashboard({ snap, snapAt, events, phase, detail, series, no
             </ul>
           </Card>
         )}
+
+        {push.on && <PushCard push={push} online={online} onEnable={onPushEnable} onDisable={onPushDisable} onTest={onPushTest} />}
 
         <section className="space-y-2 px-1 text-xs text-muted">
           <p className="flex items-start gap-2">

@@ -17,6 +17,7 @@ from ati_engine.core.events import (
     KillSwitchReleased,
     TradeNotice,
 )
+from ati_engine.notify.trade_text import trade_body, trade_title
 from ati_engine.paper.competition import PaperTradeEvent
 from ati_engine.remote.protocol import Device
 from ati_engine.remote.service import Executor
@@ -230,7 +231,8 @@ def subscribe_notifications(runtime: EngineRuntime, service: RemoteService) -> N
     """Önemli olayları telefona özet bildirim olarak iletir (hassas veri içermez)."""
 
     async def on_alert(event: Alert) -> None:
-        await service.notify("alert", event.title, event.message)
+        important = event.severity.value in ("warning", "critical")
+        await service.notify("alert", event.title, event.message, push=important)
 
     async def on_whale(event: WhaleAlert) -> None:
         await service.notify("whale", f"Balina: {event.symbol}", event.message)
@@ -245,14 +247,9 @@ def subscribe_notifications(runtime: EngineRuntime, service: RemoteService) -> N
         await service.notify("paper", "Sanal işlem", body)
 
     async def on_trade(event: TradeNotice) -> None:
-        money = "GERÇEK" if event.mode == "live" else "Demo"
-        side = "Long" if event.side == "long" else "Short"
-        if event.action == "closed":
-            pnl = f", net {float(event.net_pnl):+.2f} USDT" if event.net_pnl else ""
-            body = f"{event.symbol} {side} kapandı{pnl} ({money})"
-        else:
-            body = f"{event.symbol} {side} açıldı, fiyat {event.price} ({money})"
-        await service.notify("trade", "İşlem", body)
+        # Ayrıntılı metin (stop, hedef, puan, % kâr/zarar, kapanış nedeni, süre); telefon
+        # kilitliyken de bildirim olarak gider.
+        await service.notify("trade", trade_title(event), trade_body(event), push=True, urgent=True)
 
     states = {
         "running": "Çalışıyor",
@@ -264,13 +261,17 @@ def subscribe_notifications(runtime: EngineRuntime, service: RemoteService) -> N
 
     async def on_state(event: EngineStateChanged) -> None:
         label = states.get(event.current.value, event.current.value)
-        await service.notify("state", f"Motor: {label}", event.reason)
+        # İşlem açılamayan durumlar telefona bildirim olarak da gider.
+        serious = event.current.value in ("safe_mode", "halted")
+        await service.notify("state", f"Motor: {label}", event.reason, push=serious)
 
     async def on_kill(event: KillSwitchEngaged) -> None:
-        await service.notify("kill_switch", "Acil durdurma devrede", event.reason)
+        await service.notify(
+            "kill_switch", "🛑 Acil durdurma devrede", event.reason, push=True, urgent=True
+        )
 
     async def on_release(event: KillSwitchReleased) -> None:
-        await service.notify("kill_switch", "Acil durdurma kaldırıldı", event.actor)
+        await service.notify("kill_switch", "Acil durdurma kaldırıldı", event.actor, push=True)
 
     bus = runtime.bus
     bus.subscribe(Alert, on_alert, name="remote-alerts")

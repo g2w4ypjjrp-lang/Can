@@ -89,6 +89,17 @@ class TradeNotice(SystemEvent, frozen=True, kw_only=True):
     quantity: str
     price: str
     net_pnl: str | None = None
+    # Ayrıntılar (varsa): açılışta stop/hedef/puan/gerekçe, kapanışta giriş fiyatı, yüzde
+    # kâr/zarar, kapanış nedeni ve süre. Bildirimlerde gösterilir.
+    stop_loss: str | None = None
+    take_profit: str | None = None
+    score: float | None = None
+    reason: str | None = None
+    leverage: int | None = None
+    entry_price: str | None = None
+    pnl_pct: float | None = None
+    close_reason: str | None = None
+    duration_s: int | None = None
 
 
 # Yerel API ve protokol şeması için bilinen çekirdek sistem olayları

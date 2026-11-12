@@ -42,6 +42,8 @@ from ati_engine.remote.protocol import (
     PairingError,
     PairingManager,
 )
+from ati_engine.remote.push import PushNotifier
+from ati_engine.remote.webpush import PushError
 from ati_engine.storage.database import Database
 
 logger = logging.getLogger(__name__)
@@ -82,12 +84,15 @@ class RemoteService:
         pairing_ttl_s: float = 300.0,
         clock: Callable[[], int] | None = None,
         companion_limit: Callable[[], int | None] | None = None,
+        push: PushNotifier | None = None,
     ) -> None:
         self.db = db
         self.identity = identity
         self.kx = kx
         self.relay_url = relay_url
-        self.executors = executors
+        # Telefon bildirimleri (Web Push): telefon kilitliyken de ulaşır (bkz. webpush.py).
+        self.push = push
+        self.executors = {**executors, **self._push_executors()} if push else executors
         self.snapshot_builder = snapshot
         self.snapshot_interval_s = snapshot_interval_s
         self._clock = clock or (lambda: int(time.time() * 1000))
@@ -147,6 +152,8 @@ class RemoteService:
             return
         self._stop = asyncio.Event()
         self._task = asyncio.create_task(self.run(), name="remote-relay")
+        if self.push is not None:
+            self.push.start()
 
     async def disable(self) -> None:
         """Telefondan kontrolü kapatır: bağlantı kesilir, bekleyen eşleştirme kodu geçersizleşir.
@@ -157,6 +164,8 @@ class RemoteService:
 
     async def stop(self) -> None:
         self._stop.set()
+        if self.push is not None:
+            await self.push.stop()
         if self._ws is not None:
             with contextlib.suppress(Exception):
                 await self._ws.close()
@@ -359,6 +368,15 @@ class RemoteService:
         except Exception as exc:
             logger.warning("Özet oluşturulamadı", extra={"error": repr(exc)})
             return
+        if self.push is not None:
+            # Telefonun bildirim aboneliği için motorun gönderen anahtarı ve bu cihazın durumu.
+            data = {
+                **data,
+                "push": {
+                    "vapid_key": self.push.public_key,
+                    "subscribed": await self.push.store.has(device_id),
+                },
+            }
         payload = {
             "v": 1,
             "type": "snapshot",
@@ -377,10 +395,23 @@ class RemoteService:
             for device_id in await self._paired_online():
                 await self.push_snapshot(device_id)
 
-    async def notify(self, kind: str, title: str, body: str) -> None:
-        """Özet bildirim (hassas veri içermez); bağlı eşleştirilmiş cihazlara tek tek gider."""
-        event = {"ts_ms": self._clock(), "kind": kind, "title": title[:80], "body": body[:200]}
+    async def notify(
+        self, kind: str, title: str, body: str, *, push: bool = False, urgent: bool = False
+    ) -> None:
+        """Özet bildirim (API anahtarı, emir kimliği içermez); bağlı eşleştirilmiş cihazlara tek
+        tek gider. ``push``: telefon bildirimi açık cihazlara, sayfa kapalıyken de ulaşır."""
+        event = {"ts_ms": self._clock(), "kind": kind, "title": title[:120], "body": body[:400]}
         self.recent_events.appendleft(event)
+        if push and self.push is not None and self.enabled:
+            self.push.enqueue(
+                {
+                    "title": event["title"],
+                    "body": event["body"],
+                    "kind": kind,
+                    "ts": event["ts_ms"],
+                },
+                urgency="high" if urgent else "normal",
+            )
         for device_id in await self._paired_online():
             await self._send_to(
                 device_id,
@@ -393,16 +424,63 @@ class RemoteService:
                 },
             )
 
+    # --- Telefon bildirimleri ---------------------------------------------------------------------
+
+    def _push_executors(self) -> dict[str, Executor]:
+        async def subscribe(args: dict[str, Any], device: Device) -> str:
+            if self.push is None:  # pragma: no cover - yalnızca push varken kaydedilir
+                raise RuntimeError("Bildirimler kullanılamıyor")
+            try:
+                sub = self.push.parse(args)
+            except PushError as exc:
+                raise RuntimeError(str(exc)) from None
+            await self.push.store.save(device.id, sub, self._clock())
+            return "Bildirimler açıldı: telefon kilitliyken de işlem bildirimleri gelir"
+
+        async def unsubscribe(args: dict[str, Any], device: Device) -> str:
+            if self.push is None:  # pragma: no cover - yalnızca push varken kaydedilir
+                raise RuntimeError("Bildirimler kullanılamıyor")
+            await self.push.store.remove(device.id)
+            return "Bildirimler kapatıldı"
+
+        async def test(args: dict[str, Any], device: Device) -> str:
+            if self.push is None:  # pragma: no cover - yalnızca push varken kaydedilir
+                raise RuntimeError("Bildirimler kullanılamıyor")
+            for device_id, sub in await self.push.store.active():
+                if device_id == device.id:
+                    ok, reason = await self.push.deliver(
+                        device_id,
+                        sub,
+                        {
+                            "title": "🔔 Deneme bildirimi",
+                            "body": "Bildirimler çalışıyor. İşlem açılıp kapandığında "
+                            "burada görünür.",
+                            "kind": "test",
+                            "ts": self._clock(),
+                        },
+                        urgency="high",
+                    )
+                    if not ok:
+                        raise RuntimeError(reason)
+                    return "Deneme bildirimi gönderildi"
+            raise RuntimeError("Bu telefonda bildirimler kapalı")
+
+        return {"push_subscribe": subscribe, "push_unsubscribe": unsubscribe, "push_test": test}
+
     # --- Masaüstü API'si ------------------------------------------------------------------------
 
     async def status(self) -> dict[str, Any]:
         devices = await self.registry.all()
+        pushed = await self.push.store.subscribed_devices() if self.push is not None else set()
         return {
             "enabled": self.enabled,
             "relay_url": self.relay_url,
             "connected": self.connected,
             "engine_id": self.identity.engine_id,
-            "devices": [d.public_dict() | {"online": d.id in self.online} for d in devices],
+            "devices": [
+                d.public_dict() | {"online": d.id in self.online, "push": d.id in pushed}
+                for d in devices
+            ],
             "pairing_active": self.pairing.active,
             "stats": dict(self.stats),
         }
