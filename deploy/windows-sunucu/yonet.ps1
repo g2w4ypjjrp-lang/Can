@@ -32,12 +32,14 @@ $Surekli = @("API", "Aktarma", "Web", "Caddy", "Eposta")
 $NpmCmd = "C:\Program Files\nodejs\npm.cmd"
 $GuncellemeAnahtari = "$Kok\ayarlar\guncelleme.key"
 
-# Tauri imzalayıcısı (sürüm sabit). CI=true: parolasız anahtar, soru sorulmaz.
+# Tauri imzalayıcısı (sürüm sabit). CI=true: parolasız anahtar, soru sorulmaz. Aracın bilgi
+# satırları hata kanalına yazılır; Windows PowerShell bunları kırmızı "hata" gibi göstermesin diye
+# düz metne çevrilir (gerçek hata çıkış koduyla anlaşılır).
 function Tauri-Imzalayici([string[]]$Argumanlar) {
     $env:CI = "true"
     $eski = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    & $NpmCmd exec --yes --package=@tauri-apps/cli@2.12.4 -- tauri signer @Argumanlar 2>&1 | Out-Host
+    & $NpmCmd exec --yes --package=@tauri-apps/cli@2.12.4 -- tauri signer @Argumanlar 2>&1 | ForEach-Object { "$_" } | Out-Host
     $kod = $LASTEXITCODE
     $ErrorActionPreference = $eski
     if ($kod -ne 0) { throw "İmzalayıcı hata verdi (çıkış kodu $kod)" }
@@ -246,7 +248,8 @@ switch ($Komut) {
         } else {
             Copy-Item $Dosya $hedef
         }
-        Tauri-Imzalayici @("sign", "-f", $GuncellemeAnahtari, $hedef)
+        # Anahtar parolasız oluşturuldu (generate --ci); boş parola verilmezse araç gizli parola sorup bekler.
+        Tauri-Imzalayici @("sign", "-f", $GuncellemeAnahtari, "--password=", $hedef)
         $imza = (Get-Content "$hedef.sig" -Raw).Trim()
         Write-Host ""
         Write-Host "Yönetim paneli -> Sürümler -> Yeni sürüm formuna girin:" -ForegroundColor Green
