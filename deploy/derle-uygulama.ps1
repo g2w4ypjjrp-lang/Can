@@ -125,14 +125,29 @@ Bilgi (& uv --version)
 # ---------------------------------------------------------------------------------------------
 Adim "İşlem motoru paketleniyor (PyInstaller, 5-10 dakika)"
 $paketliMotor = Join-Path $Kok "engine\build\dist\ati-engine\ati-engine.exe"
-if ((Test-Path $paketliMotor) -and -not $Temiz) {
-    Bilgi "Önceki çalıştırmada paketlenmiş motor kullanılıyor (baştan derlemek için -Temiz)."
+# Motor kaynağının özeti: yeni ZIP eski klasörün üzerine açıldıysa eski motor kullanılmaz.
+function Kaynak-Ozeti {
+    $dosyalar = @(Get-ChildItem (Join-Path $Kok "engine\src") -Recurse -File |
+        Where-Object { $_.FullName -notmatch '\\__pycache__\\|\.egg-info\\' } | Sort-Object FullName)
+    $dosyalar += Get-Item (Join-Path $Kok "engine\uv.lock")
+    $metin = ($dosyalar | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash }) -join ""
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $bayt = $sha.ComputeHash([System.Text.Encoding]::ASCII.GetBytes($metin))
+    return ([System.BitConverter]::ToString($bayt) -replace "-", "")
+}
+$damga = Join-Path $Kok "engine\build\dist\kaynak-ozeti.txt"
+$ozetSimdi = Kaynak-Ozeti
+$ozetEski = if (Test-Path $damga) { (Get-Content $damga -Raw).Trim() } else { "" }
+if ((Test-Path $paketliMotor) -and -not $Temiz -and $ozetEski -eq $ozetSimdi) {
+    Bilgi "Motor kaynağı değişmemiş; önceki paket kullanılıyor (baştan derlemek için -Temiz)."
 } else {
+    if ((Test-Path $paketliMotor) -and $ozetEski -ne $ozetSimdi) { Bilgi "Motor kaynağı değişmiş; yeniden paketleniyor." }
     Push-Location (Join-Path $Kok "engine")
     try {
         Calistir "Motor bağımlılıkları" { & uv sync --locked --group packaging --python 3.13 }
         Calistir "Motor paketleme" { & uv run --group packaging pyinstaller packaging/ati-engine.spec --noconfirm --distpath build/dist --workpath build/work }
     } finally { Pop-Location }
+    Set-Content -Path $damga -Value $ozetSimdi -Encoding ASCII
 }
 Calistir "Paketlenmiş motor denetimi" { & $paketliMotor version }
 $kaynak = Join-Path $Kok "desktop\src-tauri\resources\engine"
