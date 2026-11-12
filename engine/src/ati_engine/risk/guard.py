@@ -104,6 +104,10 @@ class RiskGuard:
         self.bus = bus
         self.close_all = close_all
         self._clock = clock or (lambda: int(time.time() * 1000))
+        # Günlük kilit tek bir okumaya dayanmaz: cüzdanlar arası aktarım ya da Binance'in anlık
+        # boş yanıtı özsermayeyi bir anlığına düşük gösterebilir. Sınır art arda iki okumada
+        # aşılırsa gün kilitlenir; özsermaye 0 okunursa (gün başı > 0) okuma şüphelidir.
+        self._loss_strikes = 0
         self._down_since: dict[Market, int] = {}
         self._alerted: set[str] = set()
         self._registered: set[str] = set()
@@ -153,7 +157,12 @@ class RiskGuard:
         if snapshot is not None:
             report.daily_loss_pct = round(float(snapshot.daily_loss_pct), 4)
             halted = snapshot.halted_at is not None
-            if not halted and snapshot.daily_loss_pct >= self.limits.max_daily_loss_pct:
+            over = snapshot.daily_loss_pct >= self.limits.max_daily_loss_pct
+            suspicious = snapshot.equity <= 0 < snapshot.day_start_equity
+            self._loss_strikes = self._loss_strikes + 1 if over and not suspicious else 0
+            if suspicious:
+                report.errors.append("özsermaye 0 okundu; okuma yok sayıldı")
+            if not halted and over and self._loss_strikes >= 2:
                 reason = (
                     f"Günlük zarar %{snapshot.daily_loss_pct:.2f} "
                     f"(sınır %{self.limits.max_daily_loss_pct}); gün sonuna kadar yeni işlem yok"

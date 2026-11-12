@@ -177,6 +177,9 @@ class AutoTradeSettings(BaseModel):
     trailing_runner: bool = True
     # Art arda bu kadar zararlı pozisyondan sonra yeni giriş durur (0 = kapalı).
     max_consecutive_losses: int = Field(default=3, ge=0, le=10)
+    # Küçük hesap: risk payıyla çıkan miktar Binance'in en küçük emrinin altındaysa en küçük
+    # emir açılır; yalnızca o emrin riski risk sınırının (max_risk_per_trade_pct) içindeyse.
+    small_account_min_order: bool = True
     loss_pause_minutes: int = Field(default=240, ge=15, le=2880)
 
 

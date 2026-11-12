@@ -320,3 +320,28 @@ async def test_partial_close_is_summed_until_position_closes(
     svc.markets[Market.USDM_FUTURES].engine.positions.positions.pop("BTCUSDT", None)
     await auto.on_trade_notice(notice("closed", "-0.5"))
     assert auto.results == {"wins": 1, "losses": 0} and auto.loss_streak == 0
+
+
+async def test_small_account_uses_exchange_minimum_within_risk_limit(
+    service: tuple[ExecutionService, list[TradingMode]], exchange: FakeExchange
+) -> None:
+    """20 USDT'lik hesap: risk payıyla çıkan miktar borsanın en küçük emrinin (5 USDT) altında.
+    Ayar açıkken en küçük emir açılır, ama yalnızca riski risk sınırının (%0,5) içindeyse."""
+    svc, mode = service
+    exchange.futures_wallet = D(20)
+    await svc.monitor.refresh()
+    # Stop %2: en küçük emrin riski %0,5'i aşar → açılmaz (bakiye çok küçük).
+    wide = trader(svc, mode, symbol_cooldown_s=0)
+    await wide.on_opportunity(signal())
+    assert wide.skipped["bakiye_küçük"] == 1 and wide.stats["opened"] == 0
+    # Ayar kapalıyken eski davranış: miktar küçük.
+    off = trader(svc, mode, small_account_min_order=False)
+    await off.on_opportunity(signal(stop_price=74_250.0))
+    assert off.skipped["miktar_küçük"] == 1 and off.stats["opened"] == 0
+    # Stop %1: en küçük emir (5,25 USDT) riski ~%0,3 → açılır.
+    tight = trader(svc, mode)
+    await tight.on_opportunity(signal(stop_price=74_250.0, target_price=76_500.0))
+    assert tight.stats["opened"] == 1, tight.status()
+    qty = exchange.futures_positions["BTCUSDT"][0]
+    assert qty * 100 >= D(5)  # test ağı fiyatı 100: en küçük tutarın üstünde
+    assert qty * 100 <= D(6)

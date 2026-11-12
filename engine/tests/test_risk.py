@@ -495,6 +495,8 @@ async def test_guard_halts_day_on_daily_loss_and_stays_latched(
     assert coordinator.state.state is EngineState.RUNNING
     s.venue.wallet["USDT"] = D(9_790)  # %2,1 kayıp
     report = await guard.check()
+    assert not report.halted  # tek okuma yetmez (anlık hatalı okuma kilitlemesin)
+    report = await guard.check()
     assert report.halted and "day_halted" in report.actions
     assert coordinator.state.state is EngineState.SAFE_MODE
     assert closed == ["günlük zarar sınırı"]
@@ -590,4 +592,36 @@ async def test_guard_alerts_and_closes_near_liquidation(
     assert "BTCUSDT" not in s.engine.positions.positions
     rules = [r[0] for r in await db.fetchall("SELECT rule FROM risk_events ORDER BY id")]
     assert rules == ["guard.liquidation_near", "guard.emergency_close"]
+    await s.engine.stop()
+
+
+async def test_transient_low_or_zero_reading_does_not_latch_the_day(
+    db: Database, coordinator: SafetyCoordinator, bus: EventBus
+) -> None:
+    """Cüzdanlar arası aktarım ya da boş yanıt özsermayeyi bir anlığına düşük gösterir: tek okuma
+    ya da 0 okuma günü kilitlemez. Hatalı kilit, zarar sınırın altındaysa kaldırılabilir."""
+    s = await setup(db)
+    guard, _ = make_guard(s, coordinator, db, bus)
+    await coordinator.boot_complete()
+    await guard.check()
+    s.venue.wallet["USDT"] = D(0)  # boş yanıt
+    report = await guard.check()
+    assert not report.halted and any("0 okundu" in e for e in report.errors)
+    report = await guard.check()
+    assert not report.halted  # 0 okumalar art arda gelse de kilitlemez
+    s.venue.wallet["USDT"] = D(9_500)  # tek düşük okuma
+    assert not (await guard.check()).halted
+    s.venue.wallet["USDT"] = D(10_000)  # toparlandı: sayaç sıfırlanır
+    assert not (await guard.check()).halted
+    s.venue.wallet["USDT"] = D(9_500)
+    assert not (await guard.check()).halted
+    assert coordinator.state.state is EngineState.RUNNING
+
+    # Eski bir hatalı kilit: zarar şu an %0 ise kaldırılabilir; gün başı güncel değere çekilir.
+    s.venue.wallet["USDT"] = D(10_000)
+    await s.monitor.halt_day("eski hatalı okuma")
+    assert (await s.monitor.refresh()).halted_at is not None
+    assert await s.monitor.release_day()
+    snapshot = await s.monitor.refresh()
+    assert snapshot.halted_at is None and snapshot.day_start_equity == D(10_000)
     await s.engine.stop()

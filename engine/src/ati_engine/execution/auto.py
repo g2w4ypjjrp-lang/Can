@@ -26,7 +26,7 @@ import logging
 import time
 from collections import Counter, deque
 from collections.abc import Callable
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_DOWN, ROUND_UP, Decimal
 from typing import Any
 
 from ati_engine.config import AutoTradeSettings, RiskLimits
@@ -37,7 +37,7 @@ from ati_engine.execution.engine import TakeProfit, TradeIntent
 from ati_engine.execution.service import ExecutionService
 from ati_engine.execution.venue import ExecutionBlocked
 from ati_engine.history.archive import INTERVAL_MS
-from ati_engine.risk.gate import DEFAULT_FEES, size_for_risk
+from ati_engine.risk.gate import DEFAULT_FEES, size_for_risk, trade_risk
 from ati_engine.scoring.live import OpportunityScored
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,7 @@ EDITABLE = (
     "trailing_runner",
     "max_consecutive_losses",
     "loss_pause_minutes",
+    "small_account_min_order",
 )
 
 
@@ -305,8 +306,11 @@ class AutoTrader:
             step=info.step_size,
         )
         if qty < info.min_qty or qty * price < info.min_notional:
-            self._skip("miktar_küçük")
-            return None
+            bumped = self._min_order(event.market, info, price, stop, equity)
+            if bumped is None:
+                self._skip("miktar_küçük")
+                return None
+            qty = bumped
         one_r = price * (1 + direction * stop_pct)
         take_profits: tuple[TakeProfit, ...]
         trailing: Decimal | None = None
@@ -372,6 +376,29 @@ class AutoTrader:
     def next_decision_ms(self) -> int:
         step = INTERVAL_MS.get(self.interval, 3_600_000)
         return (self._clock() // step + 1) * step
+
+    def _min_order(
+        self, market: Market, info: Any, price: Decimal, stop: Decimal, equity: Decimal
+    ) -> Decimal | None:
+        """Küçük hesap: risk payıyla hesaplanan miktar borsanın en küçük emrinin altındaysa en
+        küçük emir kullanılır; ancak o emrin riski risk sınırını (işlem başına en çok %X) aşmıyorsa.
+        Kapatma emirleri (reduce-only) en küçük tutar kuralından muaftır."""
+        if not self.cfg.small_account_min_order or equity <= 0 or price <= 0:
+            return None
+        step = info.step_size if info.step_size > 0 else Decimal("0.001")
+        need = max(info.min_qty, info.min_notional * Decimal("1.05") / price)
+        qty: Decimal = (need / step).to_integral_value(rounding=ROUND_UP) * step
+        risk = trade_risk(
+            quantity=qty,
+            entry=price,
+            stop=stop,
+            fee_rate=self.service.gate.fees.get(market, DEFAULT_FEES[market]),
+            slippage_pct=self.limits.slippage_allowance_pct,
+        )
+        if risk / equity * 100 > self.limits.max_risk_per_trade_pct:
+            self._skip("bakiye_küçük")
+            return None
+        return qty
 
     def status(self) -> dict[str, Any]:
         return {

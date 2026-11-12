@@ -13,6 +13,7 @@ interface BotSettings {
   max_entries_per_hour: number;
   symbol_cooldown_s: number;
   trailing_runner: boolean;
+  small_account_min_order?: boolean;
   max_consecutive_losses: number;
   loss_pause_minutes: number;
 }
@@ -36,6 +37,7 @@ type Form = {
   cooldown_min: string;
   markets: string[];
   trailing: boolean;
+  smallAccount: boolean;
   losses: string;
   pause_min: string;
 };
@@ -49,6 +51,7 @@ function toForm(s: BotSettings): Form {
     cooldown_min: String(Math.round(s.symbol_cooldown_s / 60)),
     markets: s.markets,
     trailing: s.trailing_runner,
+    smallAccount: s.small_account_min_order ?? true,
     losses: String(s.max_consecutive_losses),
     pause_min: String(s.loss_pause_minutes),
   };
@@ -90,6 +93,7 @@ export function BotSettingsCard() {
       symbol_cooldown_s: Number(form.cooldown_min) * 60,
       markets: form.markets,
       trailing_runner: form.trailing,
+      small_account_min_order: form.smallAccount,
       max_consecutive_losses: Number(form.losses),
       loss_pause_minutes: Number(form.pause_min),
     });
@@ -175,6 +179,22 @@ export function BotSettingsCard() {
             <small className="muted" style={{ display: "block" }}>
               Pozisyonun yarısı 1R'de alınır, zarar durdur girişe çekilir; kalan yarı sabit hedef yerine fiyatı izleyen stopla
               taşınır. Kapalıysa ikinci yarı sabit hedefte kapanır.
+            </small>
+          </span>
+        </label>
+        <label className="row" style={{ gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={form.smallAccount}
+            onChange={(e) => setForm({ ...form, smallAccount: e.target.checked })}
+            data-testid="bot-small-account"
+          />
+          <span>
+            Küçük hesapta Binance'in en küçük emrini kullan
+            <small className="muted" style={{ display: "block" }}>
+              Bakiye küçükse risk payıyla çıkan miktar borsanın en küçük emrinin (çoğu coinde 5 USDT) altında kalır. Açıksa
+              en küçük emir açılır, ama yalnızca riski risk sınırının (işlem başına en çok %{s.limits.max_risk_per_trade_pct})
+              içindeyse.
             </small>
           </span>
         </label>

@@ -74,6 +74,7 @@ export const SKIP_LABELS: Record<string, string> = {
   hazırlık_hatası: "Emir hazırlanamadı",
   fiyat_yok: "Güncel fiyat alınamadı",
   miktar_küçük: "Miktar borsa alt sınırının altında",
+  bakiye_küçük: "Bakiye bu işlem için küçük (en küçük emrin riski sınırı aşıyor)",
 };
 
 const RESULT_LABELS: Record<string, string> = {

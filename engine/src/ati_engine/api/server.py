@@ -78,6 +78,7 @@ from ati_engine.api.schemas import (
     PositioningInfo,
     PredictionResponse,
     ReadinessInfo,
+    ReleaseDayRequest,
     RemoteToggle,
     RiskEventInfo,
     ScannerStatsInfo,
@@ -193,6 +194,10 @@ def _first_error(exc: Exception) -> str:
             message = str(errors[0].get("msg", ""))
             return message.removeprefix("Value error, ")
     return str(exc)
+
+
+# Hatalı okumayla oluşmuş günlük kilidi kaldırma onay ifadesi.
+RELEASE_DAY_PHRASE = "KILIDI KALDIR"
 
 
 def create_app(runtime: EngineRuntime) -> FastAPI:
@@ -1240,6 +1245,37 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
                 for c in runtime.safety.conditions()
             ],
         }
+
+    @app.post("/v1/risk/release-day")
+    async def risk_release_day(body: ReleaseDayRequest, _: Auth) -> dict[str, Any]:
+        """Günlük kilidi kaldırır. Yalnızca güncel günlük zarar sınırın altındayken (ör. aktarım
+        ya da anlık hatalı okumayla oluşmuş kilit) ve onay ifadesiyle; denetim kaydına yazılır."""
+        if body.confirmation.strip().upper() != RELEASE_DAY_PHRASE:
+            raise HTTPException(status_code=422, detail=f"Onay için '{RELEASE_DAY_PHRASE}' yazın")
+        service = execution_or_404()
+        snapshot = await service.monitor.refresh()
+        if snapshot.halted_at is None:
+            raise HTTPException(status_code=409, detail="Gün kilitli değil")
+        limit = service.settings.risk.max_daily_loss_pct
+        if snapshot.daily_loss_pct >= limit:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Günlük zarar %{snapshot.daily_loss_pct:.2f}, sınır %{limit}: kilit "
+                "kaldırılamaz; yeni UTC gününde (03:00) kendiliğinden açılır",
+            )
+        await service.monitor.release_day()
+        if service.guard is not None:
+            await service.guard.check()
+        await runtime.audit.record(
+            actor=LOCAL_ACTOR,
+            action="risk.day_released",
+            details={
+                "mode": service.mode.value,
+                "reason": snapshot.halt_reason,
+                "daily_loss_pct": float(snapshot.daily_loss_pct),
+            },
+        )
+        return {"released": True}
 
     @app.get("/v1/risk/events", response_model=list[RiskEventInfo])
     async def risk_events(

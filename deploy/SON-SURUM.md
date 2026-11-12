@@ -1,4 +1,9 @@
-# En son sürümü yükleme (0.14.1)
+# En son sürümü yükleme (0.14.2)
+
+0.14.2'de yeni: günlük kilit artık tek bir anlık hatalı okumayla (aktarım, boş yanıt) oluşmaz
+(art arda iki okuma gerekir); hatalı kilit, zarar sınırın altındaysa ana sayfadan **Kilidi kaldır**
+ile açılır. **Küçük hesap**: risk payıyla çıkan miktar Binance'in en küçük emrinin altındaysa risk
+sınırı içinde en küçük emir açılır (Bot ayarlarından kapatılabilir).
 
 0.14.1'de yeni: **neon tema** (bir ton aydınlık lacivert zemin, camgöbeği/eflatun vurgular) ve
 ana sayfanın en üstünde **Binance bakiyesi** (toplam USDT, açık pozisyonların kâr/zararı, piyasa
@@ -55,7 +60,7 @@ harcama sınırı tanımlanabilir).
 1. GitHub → depo → **Actions** → **Masaüstü** → **Run workflow** → dal:
    `claude/laughing-hawking-wmt8mo` → **Run workflow**. Yaklaşık 25 dakika sürer.
 2. Yeşil olunca çalıştırmanın altındaki **Artifacts** → `ati-windows-installer-unsigned` ZIP'ini
-   indirip açın: `AI Trading Intelligence_0.14.1_x64-setup.exe`.
+   indirip açın: `AI Trading Intelligence_0.14.2_x64-setup.exe`.
 3. Dosyayı VDS'ye kopyalayıp hazırlayın (indirme klasörüne koyar, SHA-256'yı ve varsa güncelleme
    imzasını yazar):
 
@@ -63,7 +68,7 @@ harcama sınırı tanımlanabilir).
    powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 surum-hazirla -Dosya "<setup.exe yolu>"
    ```
 
-4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.14.1), adres, SHA-256, boyut ve
+4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.14.2), adres, SHA-256, boyut ve
    imzayı girin → doğrulama kodunuzla **Yayınla**. Artık canarslan.net.tr/indir sayfasında görünür.
 
 ## C. Bilgisayarınızda kurulum / güncelleme

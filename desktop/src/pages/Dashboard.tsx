@@ -1,10 +1,11 @@
 import { Briefcase, Gauge, RefreshCw, Wallet } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
+import { useAction } from "../api/hooks";
 import { usePoll } from "../api/hooks";
 import type { ExecutionPositionInfo, OpportunitySummary, StatusResponse } from "../api/types.gen";
 import { BotPanel } from "../components/BotPanel";
 import { GettingStarted } from "../components/GettingStarted";
-import { Badge, Card, DataTable, Disclaimer, ErrorBox } from "../components/ui";
+import { Badge, Card, Confirm, DataTable, Disclaimer, ErrorBox } from "../components/ui";
 import { duration, MARKET_LABELS, MODE_LABELS, num, pct, price, STATE_LABELS } from "../lib/format";
 import { useNavigate } from "../lib/nav";
 
@@ -49,7 +50,27 @@ const usdt = (v: number) => v.toLocaleString("tr-TR", { minimumFractionDigits: 2
 
 /** Binance cüzdanı: toplam (bakiye + açık pozisyonların gerçekleşmemiş kâr/zararı), piyasa başına
  * bakiye ve kullanılabilir tutar. Anahtar yoksa nereden ekleneceği yazılır. */
-function BalanceHero({ wallets, live, halted, age, onKeys }: { wallets: WalletInfo[] | null; live: boolean; halted: boolean; age?: number; onKeys: () => void }) {
+const RELEASE_DAY_PHRASE = "KILIDI KALDIR";
+
+function BalanceHero({
+  wallets,
+  live,
+  halted,
+  haltReason,
+  age,
+  onKeys,
+  onReleased,
+}: {
+  wallets: WalletInfo[] | null;
+  live: boolean;
+  halted: boolean;
+  haltReason?: string | null;
+  age?: number;
+  onKeys: () => void;
+  onReleased: () => Promise<unknown>;
+}) {
+  const [ask, setAsk] = useState(false);
+  const release = useAction((c) => c.post("/v1/risk/release-day", { confirmation: RELEASE_DAY_PHRASE }));
   const total = (wallets ?? []).reduce((sum, w) => sum + Number(w.balance) + Number(w.unrealized_pnl), 0);
   const unrealized = (wallets ?? []).reduce((sum, w) => sum + Number(w.unrealized_pnl), 0);
   return (
@@ -65,7 +86,7 @@ function BalanceHero({ wallets, live, halted, age, onKeys }: { wallets: WalletIn
             </span>
             <span className={`balance-sub ${unrealized > 0 ? "up" : unrealized < 0 ? "down" : ""}`}>
               Açık pozisyonlarda {unrealized >= 0 ? "+" : ""}
-              {usdt(unrealized)} USDT{halted ? " · günlük zarar sınırı doldu, bugün yeni işlem yok" : ""}
+              {usdt(unrealized)} USDT
               {age !== undefined ? <span className="muted"> · {Math.round(age)} sn önce</span> : null}
             </span>
           </>
@@ -94,6 +115,33 @@ function BalanceHero({ wallets, live, halted, age, onKeys }: { wallets: WalletIn
           ))}
         </ul>
       )}
+      {halted && (
+        <div className="balance-halt" role="status" data-testid="balance-halt">
+          <span>
+            <b>Bugün yeni işlem kilitli.</b> {haltReason ?? "Günlük zarar sınırı"}. Kilit UTC gün başında (03:00) kendiliğinden
+            açılır. Zarar şu an sınırın altındaysa (ör. aktarım ya da anlık hatalı okuma) kaldırabilirsiniz.
+          </span>
+          <button type="button" onClick={() => setAsk(true)} data-testid="release-day">
+            Kilidi kaldır
+          </button>
+          <ErrorBox error={release.error} />
+        </div>
+      )}
+      <Confirm
+        open={ask}
+        title="Günlük kilidi kaldır"
+        phrase={RELEASE_DAY_PHRASE}
+        confirmLabel="Kaldır"
+        onCancel={() => setAsk(false)}
+        onConfirm={async () => {
+          setAsk(false);
+          await release.execute();
+          await onReleased();
+        }}
+      >
+        Yalnızca güncel günlük zarar sınırın altındaysa kaldırılır; gün başı bakiye şimdiki bakiyeye çekilir ve risk sınırları
+        aynen geçerli kalır. Kayda geçer.
+      </Confirm>
       <RefreshCw size={14} className="balance-live-dot" aria-hidden="true" />
     </section>
   );
@@ -120,6 +168,11 @@ export function Dashboard() {
         wallets={(account?.wallets as WalletInfo[] | undefined) ?? null}
         live={live}
         halted={Boolean(account?.halted)}
+        haltReason={account?.halt_reason as string | null | undefined}
+        onReleased={async () => {
+          await risk.refresh();
+          await status.refresh();
+        }}
         age={account?.ts_age_s as number | undefined}
         onKeys={() => navigate("settings")}
       />

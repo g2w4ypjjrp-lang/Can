@@ -229,6 +229,19 @@ class AccountMonitor:
             raise RuntimeError("risk_daily satırı okunamadı")
         return Decimal(str(row[0])), row[1], row[2]
 
+    async def release_day(self) -> bool:
+        """Günün kilidini kaldırır; yalnızca güncel günlük zarar sınırın altındayken çağrılır
+        (ör. anlık hatalı okumayla oluşmuş kilit). Gün başı özsermaye güncel değere çekilir."""
+        snapshot = await self.refresh()
+        changed = await self.db.execute(
+            "UPDATE risk_daily SET halted_at = NULL, halt_reason = NULL, start_equity = ? "
+            "WHERE mode = ? AND day = ? AND halted_at IS NOT NULL",
+            (format_decimal(snapshot.equity), self.mode.value, snapshot.day),
+        )
+        if changed:
+            self.last = None
+        return changed > 0
+
     async def halt_day(self, reason: str) -> bool:
         """Günü kilitler (günlük zarar sınırı). Zaten kilitliyse ``False``."""
         snapshot = self.last or await self.refresh()

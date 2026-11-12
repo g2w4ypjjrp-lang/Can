@@ -140,6 +140,11 @@ async def test_testnet_trading_through_local_api(
         "exchange.usdm_futures.reconciled",
     } <= names
     assert risk["engine_state"] == "running" and risk["limits"]["max_leverage"] == 3
+    # Günlük kilit yokken kaldırma reddedilir; onay ifadesi zorunludur.
+    wrong = await client.post("/v1/risk/release-day", json={"confirmation": "evet"})
+    assert wrong.status_code == 422 and "KILIDI KALDIR" in wrong.json()["detail"]
+    not_halted = await client.post("/v1/risk/release-day", json={"confirmation": "KILIDI KALDIR"})
+    assert not_halted.status_code == 409 and "kilitli değil" in not_halted.json()["detail"]
     # Ana ekrandaki Binance bakiyesi: piyasa başına USDT cüzdanı.
     (wallet,) = risk["account"]["wallets"]
     assert wallet["market"] == "usdm_futures" and wallet["asset"] == "USDT"

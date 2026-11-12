@@ -20,6 +20,7 @@ import os
 import secrets
 import signal
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -692,6 +693,7 @@ class Engine:
     async def _heartbeat(self, runtime: EngineRuntime) -> None:
         interval = runtime.settings.heartbeat_interval_s
         warned = False
+        last_warned = -1e9
         while True:
             await asyncio.sleep(interval)
             lag = runtime.loop_monitor.last_ms
@@ -704,7 +706,9 @@ class Engine:
                 )
             )
             too_slow = lag > runtime.settings.loop_lag_warning_ms
-            if too_slow and not warned:
+            now = time.monotonic()
+            if too_slow and not warned and now - last_warned > 600:
+                last_warned = now
                 await runtime.bus.publish(
                     Alert(
                         severity=Severity.WARNING,

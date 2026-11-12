@@ -902,6 +902,12 @@ class AutoTradeRequest(BaseModel):
     enabled: bool
 
 
+class ReleaseDayRequest(BaseModel):
+    """Hatalı okumayla oluşmuş günlük kilidi kaldırma onayı."""
+
+    confirmation: str
+
+
 class DecisionIntervalRequest(BaseModel):
     """Botun karar aralığı (fırsat puanının mum aralığı). Motor yeniden başlayınca uygulanır."""
 
@@ -920,6 +926,7 @@ class AutoTradeSettingsUpdate(BaseModel):
     trailing_runner: bool | None = None
     max_consecutive_losses: int | None = Field(default=None, ge=0, le=10)
     loss_pause_minutes: int | None = Field(default=None, ge=15, le=2880)
+    small_account_min_order: bool | None = None
 
 
 # --- Lisans (Aşama 15) ---------------------------------------------------------------------------
