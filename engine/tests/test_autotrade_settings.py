@@ -137,3 +137,22 @@ async def test_bot_on_off_survives_restart(engine_at: Callable[..., Any]) -> Non
         ] is False
     async with engine_at() as http:
         assert (await http.get("/v1/autotrade")).json()["enabled"] is False
+
+
+async def test_unexpected_error_reaches_the_ui_with_its_reason(
+    engine_at: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beklenmeyen hata CORS başlıklı JSON yanıta çevrilir: arayüz 'Motora ulaşılamadı' yerine
+    gerçek nedeni gösterir."""
+    from ati_engine.execution.auto import AutoTrader
+
+    def boom(self: AutoTrader) -> dict[str, Any]:
+        raise RuntimeError("deneme hatası")
+
+    origin = LocalApiSettings().allowed_origins[0]
+    async with engine_at() as http:
+        monkeypatch.setattr(AutoTrader, "status", boom)
+        response = await http.get("/v1/autotrade", headers={"Origin": origin})
+        assert response.status_code == 500
+        assert "deneme hatası" in response.json()["detail"]
+        assert response.headers.get("access-control-allow-origin") == origin

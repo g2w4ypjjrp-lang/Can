@@ -188,3 +188,22 @@ async def test_live_key_and_live_mode_refused(client: httpx.AsyncClient) -> None
     assert unknown.status_code == 409  # mod PAPER
     missing = await client.post("/v1/execution/connect?market=spot")
     assert missing.status_code == 409 and "anahtarı kayıtlı değil" in missing.json()["detail"]
+
+
+async def test_key_verification_has_an_upper_time_limit(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Binance yanıt vermezse arayüz 'Doğrulanıyor'da kalmaz: süre dolunca anahtar kaydedilmez
+    ve ne yapılacağı yazılır."""
+    import ati_engine.api.server as server
+
+    monkeypatch.setattr(server, "KEY_VERIFY_TIMEOUT_S", 0.001)
+    response = await client.post(
+        "/v1/execution/testnet-key",
+        json={"market": "usdm_futures", "api_key": API_KEY, "secret": SECRET},
+    )
+    body = response.json()
+    assert response.status_code == 200 and body["verified"] is False and body["stored"] is False
+    assert "yanıt vermedi" in body["message"] and "api.binance.com" in body["message"]
+    status = (await client.get("/v1/execution/status")).json()
+    assert status["markets"]["usdm_futures"]["key_stored"] is False

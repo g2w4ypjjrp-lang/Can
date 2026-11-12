@@ -12,6 +12,8 @@ async function open(page: Page, nav?: string) {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`/${HASH}`);
   await expect(page.getByTestId("top-state")).toBeVisible();
+  // Açılış ekranı motor yanıt verince kendiliğinden kapanır.
+  await expect(page.getByTestId("splash")).toHaveCount(0, { timeout: 10_000 });
   if (nav) await go(page, nav);
 }
 
@@ -26,6 +28,16 @@ test.describe.configure({ mode: "serial" });
 
 test.afterAll(() => {
   expect(errors, "arayüzde yakalanmamış hata olmamalı").toEqual([]);
+});
+
+test("açılış ekranı gösterilir, motor hazır olunca kapanır", async ({ page }) => {
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(`/${HASH}`);
+  const splash = page.getByTestId("splash");
+  await expect(splash).toBeVisible();
+  await expect(splash).toContainText("İşlem motoru başlatılıyor");
+  await expect(splash).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByTestId("top-state")).toBeVisible();
 });
 
 test("genel bakış motor durumunu ve hazırlık koşullarını gösterir", async ({ page }) => {

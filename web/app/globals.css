@@ -878,3 +878,79 @@
 .stop-brand-1 { stop-color: var(--brand-1); }
 .stop-brand-2 { stop-color: var(--accent-2); }
 .stop-brand-3 { stop-color: var(--accent-3); }
+
+/* Telefon izleme sayfası: sitenin temasından bağımsız neon lacivert görünüm (masaüstü uygulamasıyla
+   aynı renkler). Tailwind renk değişkenleri bu kapsayıcıda yeniden tanımlanır. */
+.phone-neon {
+  --bg: #19244f;
+  --surface: #213062;
+  --surface-2: rgba(16, 24, 56, 0.45);
+  --surface-3: rgba(255, 255, 255, 0.1);
+  --fg: #f3f6ff;
+  --muted: #b7c1e8;
+  --border: rgba(130, 210, 255, 0.24);
+  --glass: rgba(37, 52, 110, 0.84);
+  --glass-border: rgba(130, 210, 255, 0.26);
+  --accent: #3be8ff;
+  --accent-text: #3be8ff;
+  --up: #3dffa8;
+  --down: #ff5c8a;
+  --warn-bg: rgba(255, 207, 92, 0.14);
+  --warn-border: rgba(255, 207, 92, 0.5);
+  --warn-fg: #ffe6a8;
+  --success-bg: rgba(61, 255, 168, 0.14);
+  --success-fg: #9dffd0;
+  --danger-bg: rgba(255, 92, 138, 0.16);
+  --danger-border: rgba(255, 92, 138, 0.5);
+  --danger-fg: #ffc2d3;
+  --brand-1: #19c6f0;
+  --brand-2: #9b6bff;
+  --color-bg: #19244f;
+  --color-surface: #213062;
+  --color-surface-2: rgba(16, 24, 56, 0.45);
+  --color-surface-3: rgba(255, 255, 255, 0.08);
+  --color-fg: #f3f6ff;
+  --color-muted: #b7c1e8;
+  --color-border: rgba(130, 210, 255, 0.24);
+  --color-glass: rgba(37, 52, 110, 0.84);
+  --color-glass-border: rgba(130, 210, 255, 0.26);
+  --color-accent: #3be8ff;
+  --color-accent-text: #3be8ff;
+  --color-up: #3dffa8;
+  --color-down: #ff5c8a;
+  --color-warn-bg: rgba(255, 207, 92, 0.14);
+  --color-warn-border: rgba(255, 207, 92, 0.5);
+  --color-warn-fg: #ffe6a8;
+  --color-success-bg: rgba(61, 255, 168, 0.14);
+  --color-success-fg: #9dffd0;
+  --color-danger-bg: rgba(255, 92, 138, 0.16);
+  --color-danger-border: rgba(255, 92, 138, 0.5);
+  --color-danger-fg: #ffc2d3;
+  --color-brand-1: #19c6f0;
+  --color-brand-2: #9b6bff;
+  color: #f3f6ff;
+  min-height: 100dvh;
+  background:
+    radial-gradient(600px 360px at 100% -10%, rgba(59, 232, 255, 0.22), transparent 62%),
+    radial-gradient(560px 360px at 0% 110%, rgba(255, 79, 216, 0.16), transparent 60%),
+    linear-gradient(180deg, #1d2a5c 0%, #172250 100%);
+  background-attachment: fixed;
+}
+.phone-neon .neon-balance {
+  border: 1px solid rgba(59, 232, 255, 0.45);
+  background:
+    radial-gradient(360px 160px at 0% 0%, rgba(59, 232, 255, 0.24), transparent 70%),
+    radial-gradient(360px 160px at 100% 100%, rgba(255, 79, 216, 0.2), transparent 70%),
+    linear-gradient(135deg, rgba(31, 46, 104, 0.95), rgba(36, 30, 92, 0.95));
+  box-shadow: 0 0 34px -14px rgba(59, 232, 255, 0.75);
+}
+.phone-neon .neon-balance.live {
+  border-color: rgba(255, 92, 138, 0.6);
+  box-shadow: 0 0 34px -14px rgba(255, 92, 138, 0.75);
+}
+.phone-neon .neon-value {
+  background: linear-gradient(90deg, #ffffff, #9ff3ff 60%, #ffc2f3);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

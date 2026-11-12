@@ -14,11 +14,12 @@ import {
   Trophy,
   Waves,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useEvents, usePoll } from "./api/hooks";
 import type { LicenseStatusResponse, StatusResponse } from "./api/types.gen";
 import { ErrorBoundary, useGlobalErrorReports } from "./components/ErrorBoundary";
 import { KillSwitchControl } from "./components/KillSwitchControl";
+import { Splash } from "./components/Splash";
 import { Badge } from "./components/ui";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { MODE_LABELS, STATE_LABELS } from "./lib/format";
@@ -90,6 +91,8 @@ export function App() {
   const license = usePoll((c) => c.get<LicenseStatusResponse>("/v1/license"), 10_000);
   const { connected, toasts, dismiss } = useEvents();
   useGlobalErrorReports();
+  const [splashDone, setSplashDone] = useState(false);
+  const finishSplash = useCallback(() => setSplashDone(true), []);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -101,10 +104,29 @@ export function App() {
   const phone = phoneSummary(remote.data);
   const active = PAGES.find((p) => p.key === page) ?? PAGES[0]!;
   // Lisans zorunluyken (kurulum paketinde her zaman) geçerli lisans yoksa yalnızca lisans ekranı.
+  const marketsReady = (s?.readiness ?? []).filter((c) => c.name.startsWith("market_data."));
+  const splash = splashDone ? null : (
+    <Splash
+      ready={Boolean((s && license.data) || status.error)}
+      steps={[
+        { label: "İşlem motoru başlatılıyor", done: Boolean(s) },
+        { label: "Lisans denetleniyor", done: Boolean(license.data) },
+        { label: "Binance piyasa verisi", done: marketsReady.length > 0 && marketsReady.every((c) => c.ready) },
+      ]}
+      onDone={finishSplash}
+    />
+  );
   if (license.data?.enforced && !license.data.valid) {
-    return <LicenseGate status={license.data} onChange={license.refresh} />;
+    return (
+      <>
+        {splash}
+        <LicenseGate status={license.data} onChange={license.refresh} />
+      </>
+    );
   }
   return (
+    <>
+    {splash}
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
@@ -215,6 +237,7 @@ export function App() {
         ))}
       </div>
     </div>
+    </>
   );
 }
 

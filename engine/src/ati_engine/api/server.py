@@ -16,6 +16,7 @@ import contextlib
 import hmac
 import itertools
 import json
+import logging
 import socket
 import time
 import uuid
@@ -196,6 +197,10 @@ def _first_error(exc: Exception) -> str:
     return str(exc)
 
 
+# Anahtar doğrulamasının üst süresi ve bağlantı için yanıtta beklenen süre.
+KEY_VERIFY_TIMEOUT_S = 45.0
+KEY_CONNECT_WAIT_S = 20.0
+
 # Hatalı okumayla oluşmuş günlük kilidi kaldırma onay ifadesi.
 RELEASE_DAY_PHRASE = "KILIDI KALDIR"
 
@@ -209,6 +214,24 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         openapi_url=None,
     )
     app.state.runtime = runtime
+
+    # En içteki katman: beklenmeyen hata JSON yanıta çevrilir. Aksi halde 500 yanıtı CORS
+    # başlığı olmadan döner ve arayüz gerçek nedeni değil "Motora ulaşılamadı" gösterir.
+    @app.middleware("http")
+    async def errors_as_json(request: Request, call_next: Any) -> Any:
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            logging.getLogger(__name__).exception(
+                "API isteği beklenmeyen hatayla bitti", extra={"path": request.url.path}
+            )
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "detail": f"Motor işlemi tamamlayamadı ({type(exc).__name__}): {str(exc)[:200]}"
+                },
+            )
+
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
     app.add_middleware(
         CORSMiddleware,
@@ -1097,21 +1120,49 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         return await service_for(environment).status()
 
     async def store_key(service: ExecutionService, body: TestnetKeyRequest) -> TestnetKeyResponse:
+        # Doğrulama birkaç Binance isteğidir (her biri en çok 10 sn); ağ ya da Binance yavaşsa
+        # arayüz "Doğrulanıyor"da sonsuza dek beklemesin.
         try:
-            check, stored = await service.store_key(
-                body.market,
-                body.api_key.get_secret_value(),
-                body.secret.get_secret_value(),
-                actor=LOCAL_ACTOR,
+            check, stored = await asyncio.wait_for(
+                service.store_key(
+                    body.market,
+                    body.api_key.get_secret_value(),
+                    body.secret.get_secret_value(),
+                    actor=LOCAL_ACTOR,
+                ),
+                timeout=KEY_VERIFY_TIMEOUT_S,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except TimeoutError:
+            return TestnetKeyResponse(
+                verified=False,
+                stored=False,
+                message=(
+                    f"Binance {KEY_VERIFY_TIMEOUT_S:.0f} sn içinde yanıt vermedi; anahtar "
+                    "kaydedilmedi. İnternet bağlantınızı ve Windows saatinin otomatik olduğunu "
+                    "kontrol edin; VPN, güvenlik duvarı ya da antivirüs api.binance.com ve "
+                    "fapi.binance.com adreslerini engelliyor olabilir. Sonra tekrar deneyin."
+                ),
+                key_hint=None,
+                can_trade=False,
+            )
         message = check.message
         if stored is not None:
-            try:
-                await service.connect(body.market)
-            except ExecutionUnavailable as exc:
-                message = f"{message}; bağlantı kurulamadı: {exc}"
+            # Bağlantı (borsa bilgisi, mutabakat) uzun sürerse arka planda tamamlanır.
+            task = asyncio.create_task(service.connect(body.market))
+            task.add_done_callback(
+                lambda t: t.cancelled() or t.exception()  # sonuç durum ekranında görünür
+            )
+            done, _ = await asyncio.wait({task}, timeout=KEY_CONNECT_WAIT_S)
+            if task in done:
+                failure = task.exception()
+                if isinstance(failure, ExecutionUnavailable):
+                    message = f"{message}; bağlantı kurulamadı: {failure}"
+                elif failure is not None:
+                    message = f"{message}; bağlantı kurulamadı: {type(failure).__name__}"
+            else:
+                message = f"{message}; borsa bağlantısı arka planda kuruluyor"
         return TestnetKeyResponse(
             verified=check.ok,
             stored=stored is not None,
@@ -1232,13 +1283,17 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
     @app.get("/v1/risk/status")
     async def risk_status(_: Auth) -> dict[str, Any]:
         service = execution_or_404()
+        account_error: str | None = None
         if service.markets:
             # Ana ekrandaki Binance bakiyesi güncel olsun (15 sn'den eskiyse yenilenir).
-            with contextlib.suppress(Exception):
+            try:
                 await service.monitor.snapshot(max_age_s=15)
+            except Exception as exc:
+                account_error = f"{type(exc).__name__}: {str(exc)[:200]}"
         status_ = await service.status()
         return {
             **status_["risk"],
+            "account_error": account_error,
             "engine_state": runtime.safety.state.state.value,
             "conditions": [
                 {"name": c.name, "ready": c.ready, "detail": c.detail}
@@ -1253,7 +1308,15 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         if body.confirmation.strip().upper() != RELEASE_DAY_PHRASE:
             raise HTTPException(status_code=422, detail=f"Onay için '{RELEASE_DAY_PHRASE}' yazın")
         service = execution_or_404()
-        snapshot = await service.monitor.refresh()
+        try:
+            snapshot = await service.monitor.refresh()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Binance hesabı okunamadı ({type(exc).__name__}: {str(exc)[:160]}). "
+                "İnternet bağlantınızı ve Windows saatinin otomatik olduğunu kontrol edip "
+                "tekrar deneyin.",
+            ) from exc
         if snapshot.halted_at is None:
             raise HTTPException(status_code=409, detail="Gün kilitli değil")
         limit = service.settings.risk.max_daily_loss_pct
@@ -1265,7 +1328,8 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             )
         await service.monitor.release_day()
         if service.guard is not None:
-            await service.guard.check()
+            with contextlib.suppress(Exception):  # durum bir sonraki denetimde güncellenir
+                await service.guard.check()
         await runtime.audit.record(
             actor=LOCAL_ACTOR,
             action="risk.day_released",

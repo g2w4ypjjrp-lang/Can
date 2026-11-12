@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useAction, usePoll } from "../api/hooks";
 import type { AuditEntry, Market, TestnetKeyResponse } from "../api/types.gen";
 import { ModeSwitch } from "../components/ModeSwitch";
@@ -89,6 +89,16 @@ function KeyForm({
   const save = useAction((c) => c.post<TestnetKeyResponse>(path, { market, api_key: apiKey, secret }));
   const remove = useAction((c) => c.post(`${path}/delete`, undefined, { market }));
   const testId = `${live ? "live-key" : "key"}-${market}`;
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!save.pending) {
+      setElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    const id = window.setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, [save.pending]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -149,8 +159,14 @@ function KeyForm({
           <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} required minLength={16} data-testid={`${testId}-secret`} />
         </Field>
         <button className="primary" type="submit" disabled={save.pending} data-testid={`${testId}-save`}>
-          {save.pending ? "Doğrulanıyor…" : "Doğrula ve kaydet"}
+          {save.pending ? `Binance'te doğrulanıyor… ${elapsed} sn` : "Doğrula ve kaydet"}
         </button>
+        {save.pending && elapsed >= 10 && (
+          <p className="muted small" data-testid={`${testId}-wait`}>
+            Binance yanıtı bekleniyor (en çok 45 sn). Uzarsa internet bağlantınızı ve Windows saatinin otomatik olduğunu kontrol
+            edin.
+          </p>
+        )}
       </form>
       <ErrorBox error={save.error ?? remove.error} />
       {result && (

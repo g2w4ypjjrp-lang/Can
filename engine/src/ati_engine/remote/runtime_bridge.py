@@ -137,7 +137,10 @@ async def build_snapshot(runtime: EngineRuntime) -> dict[str, Any]:
                 else {
                     "daily_loss_pct": round(float(account.daily_loss_pct), 3),
                     "halted": account.halted_at is not None,
+                    "halt_reason": account.halt_reason,
                     "equity": str(account.equity),
+                    # Binance cüzdanı (piyasa başına): telefonda "Binance bakiyesi".
+                    "wallets": [w.as_dict() for w in account.wallets],
                 }
             )
             data["positions"] = [

@@ -289,3 +289,43 @@ async def test_time_sync_offset() -> None:
     offset = await client.sync_time("/api/v3/time")
     assert 900 <= offset <= 1000
     assert client.time_offset_ms == offset
+
+
+async def test_signed_request_resyncs_clock_once_on_1021() -> None:
+    """Bilgisayar saati Binance'ten kaymışsa (-1021) saat yeniden eşitlenir ve istek bir kez
+    tekrarlanır; bakiye okunamadığı için hesap 'bayat' kalmaz."""
+    import httpx
+
+    from ati_engine.exchange.rest import BinanceApiError, BinanceRestClient
+
+    calls: list[str] = []
+    server_time = [1_700_000_000_000]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        if request.url.path == "/fapi/v1/time":
+            return httpx.Response(200, json={"serverTime": server_time[0]})
+        stamp = int(request.url.params["timestamp"])
+        if abs(stamp - server_time[0]) > 5_000:
+            return httpx.Response(400, json={"code": -1021, "msg": "Timestamp outside recvWindow"})
+        return httpx.Response(200, json=[{"asset": "USDT", "balance": "20.59"}])
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    rest = BinanceRestClient(
+        "https://fapi.example",
+        budget=WeightBudget(2400),
+        api_key="k" * 64,
+        signer=HmacSigner("s" * 64),
+        client=client,
+    )
+    # Henüz eşitlenmemiş: yeniden deneme yolu yok, hata yükselir.
+    with pytest.raises(BinanceApiError) as caught:
+        await rest.request("GET", "/fapi/v3/balance", weight=5, signed=True)
+    assert caught.value.code == -1021
+    await rest.sync_time("/fapi/v1/time")
+    server_time[0] += 60_000  # bilgisayar saati 1 dk geride kaldı
+    calls.clear()
+    body = await rest.request("GET", "/fapi/v3/balance", weight=5, signed=True)
+    assert body == [{"asset": "USDT", "balance": "20.59"}]
+    assert calls == ["/fapi/v3/balance", "/fapi/v1/time", "/fapi/v3/balance"]
+    await client.aclose()

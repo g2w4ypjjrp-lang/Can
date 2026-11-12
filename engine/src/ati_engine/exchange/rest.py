@@ -66,6 +66,7 @@ class BinanceRestClient:
         self._signer = signer
         self._recv_window_ms = recv_window_ms
         self._time_offset_ms = 0
+        self._time_path: str | None = None  # -1021'de saati yeniden eşitlemek için
         self.requests = 0
         self.errors = 0
 
@@ -86,6 +87,34 @@ class BinanceRestClient:
             await self._client.aclose()
 
     async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        weight: int,
+        priority: Priority = Priority.NORMAL,
+        signed: bool = False,
+        api_key_only: bool = False,
+    ) -> Any:
+        """İstek gönderir. İmzalı istekte -1021 (bilgisayar saati Binance'ten kaymış) alınırsa
+        saat yeniden eşitlenir ve istek bir kez tekrarlanır."""
+        kwargs: dict[str, Any] = {
+            "params": params,
+            "weight": weight,
+            "priority": priority,
+            "signed": signed,
+            "api_key_only": api_key_only,
+        }
+        try:
+            return await self._request_once(method, path, **kwargs)
+        except BinanceApiError as exc:
+            if not signed or exc.code != -1021 or self._time_path is None:
+                raise
+            await self.sync_time(self._time_path)
+            return await self._request_once(method, path, **kwargs)
+
+    async def _request_once(
         self,
         method: str,
         path: str,
@@ -159,6 +188,7 @@ class BinanceRestClient:
 
     async def sync_time(self, path: str) -> int:
         """Sunucu saatiyle farkı ölçer (ağ gecikmesinin yarısı düzeltilerek). Fark ms döner."""
+        self._time_path = path
         start = time.monotonic()
         local_before = self._clock.now_ms()
         body = await self.get(path, weight=1, priority=Priority.HIGH)

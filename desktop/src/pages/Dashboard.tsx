@@ -58,6 +58,7 @@ function BalanceHero({
   halted,
   haltReason,
   age,
+  accountError,
   onKeys,
   onReleased,
 }: {
@@ -66,6 +67,7 @@ function BalanceHero({
   halted: boolean;
   haltReason?: string | null;
   age?: number;
+  accountError?: string | null;
   onKeys: () => void;
   onReleased: () => Promise<unknown>;
 }) {
@@ -114,6 +116,14 @@ function BalanceHero({
             </li>
           ))}
         </ul>
+      )}
+      {accountError && (
+        <div className="balance-halt" role="alert" data-testid="balance-error">
+          <span>
+            <b>Binance hesabı şu an okunamıyor:</b> {accountError}. Gösterilen bakiye son okumadır. İnternet bağlantınızı ve
+            Windows saatinin otomatik olduğunu kontrol edin (Ayarlar → Saat ve dil → Şimdi eşitle).
+          </span>
+        </div>
       )}
       {halted && (
         <div className="balance-halt" role="status" data-testid="balance-halt">
@@ -169,6 +179,7 @@ export function Dashboard() {
         live={live}
         halted={Boolean(account?.halted)}
         haltReason={account?.halt_reason as string | null | undefined}
+        accountError={risk.data?.account_error as string | null | undefined}
         onReleased={async () => {
           await risk.refresh();
           await status.refresh();

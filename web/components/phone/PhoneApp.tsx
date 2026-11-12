@@ -24,7 +24,13 @@ import { deviceStore, type EngineEvent, type Phase, RemoteClient, type StoredDev
 
 type Snap = {
   engine?: { state: string; reason?: string; trading_mode: string; kill_switch: boolean; kill_reason?: string; uptime_s?: number; version?: string };
-  risk?: { daily_loss_pct: number; halted: boolean; equity: string } | null;
+  risk?: {
+    daily_loss_pct: number;
+    halted: boolean;
+    halt_reason?: string | null;
+    equity: string;
+    wallets?: { market: string; asset: string; balance: string; available: string; unrealized_pnl: string }[];
+  } | null;
   positions?: { market: string; symbol: string; quantity: string; entry_price: string; realized_pnl: string; protected: boolean }[];
   autotrade?: {
     enabled: boolean;
@@ -217,6 +223,7 @@ export function PhoneApp() {
   }
   if (!paired && !client.current) {
     return (
+      <div className="phone-neon">
       <main id="icerik" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-5 py-10" data-testid="phone-welcome">
         <div className="flex items-center gap-3">
           <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-1 to-brand-2 text-white">
@@ -249,11 +256,13 @@ export function PhoneApp() {
           Bağlantı uçtan uca şifrelidir; anahtarlar yalnızca bu telefonda durur. Tarayıcıdan işlem açılamaz, para çekilemez.
         </p>
       </main>
+      </div>
     );
   }
 
   // --- Panel ---------------------------------------------------------------------------------
   return (
+    <div className="phone-neon">
     <main id="icerik" className="mx-auto max-w-md space-y-4 px-4 pb-28 pt-4" data-testid="phone-app">
       <header className="sticky top-0 z-10 -mx-4 flex items-center gap-3 bg-bg/80 px-4 py-3 backdrop-blur">
         <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-brand-1 to-brand-2 text-white" aria-hidden="true">
@@ -286,9 +295,34 @@ export function PhoneApp() {
         </p>
       )}
 
+      {/* Binance bakiyesi */}
+      {snap?.risk?.wallets && snap.risk.wallets.length > 0 && (
+        <section className={`neon-balance rounded-3xl p-5 ${live ? "live" : ""}`} data-testid="phone-balance">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#bdf6ff]">Binance bakiyesi{live ? " · gerçek hesap" : ""}</p>
+          <p className="neon-value mt-1 text-4xl font-extrabold tracking-tight">
+            {money(snap.risk.wallets.reduce((sum, w) => sum + Number(w.balance) + Number(w.unrealized_pnl), 0))}{" "}
+            <span className="text-lg">USDT</span>
+          </p>
+          <ul className="mt-3 grid grid-cols-2 gap-2">
+            {snap.risk.wallets.map((w) => (
+              <li key={w.market} className="rounded-2xl border border-glass-border bg-surface-2 px-3 py-2">
+                <span className="block text-[11px] text-muted">{MARKET[w.market] ?? w.market} cüzdanı</span>
+                <b className="block text-fg">{money(w.balance)} {w.asset}</b>
+                <span className="block text-[11px] text-muted">kullanılabilir {money(w.available)}</span>
+              </li>
+            ))}
+          </ul>
+          {snap.risk.halted && (
+            <p className="mt-3 rounded-2xl border border-warn-border bg-warn-bg px-3 py-2 text-xs text-warn-fg">
+              Bugün yeni işlem kilitli{snap.risk.halt_reason ? `: ${snap.risk.halt_reason}` : ""}. Kilidi masaüstünden kaldırabilirsiniz.
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Durum kartı */}
       <section
-        className={`relative overflow-hidden rounded-3xl p-5 text-white shadow-lg ${live ? "bg-gradient-to-br from-rose-600 to-orange-500" : "bg-gradient-to-br from-brand-1 to-brand-2"}`}
+        className={`relative overflow-hidden rounded-3xl p-5 text-white shadow-lg ${live ? "bg-gradient-to-br from-rose-700 to-orange-600" : "bg-gradient-to-br from-[#1366b8] to-[#5a37d6]"}`}
         data-testid="phone-status"
       >
         <div className="flex items-start justify-between gap-3">
@@ -536,5 +570,6 @@ export function PhoneApp() {
         </div>
       )}
     </main>
+    </div>
   );
 }
