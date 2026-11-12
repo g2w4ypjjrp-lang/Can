@@ -75,6 +75,8 @@ export const SKIP_LABELS: Record<string, string> = {
   fiyat_yok: "Güncel fiyat alınamadı",
   miktar_küçük: "Miktar borsa alt sınırının altında",
   bakiye_küçük: "Bakiye bu işlem için küçük (en küçük emrin riski sınırı aşıyor)",
+  kazanç_oranı_düşük: "Hedef, stop uzaklığına göre çok yakın (kazanç/risk oranı düşük)",
+  hacim_düşük: "Coinin işlem hacmi düşük (az işlem gören coin elendi)",
 };
 
 const RESULT_LABELS: Record<string, string> = {

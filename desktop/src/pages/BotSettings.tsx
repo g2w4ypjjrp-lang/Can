@@ -16,6 +16,8 @@ interface BotSettings {
   small_account_min_order?: boolean;
   max_consecutive_losses: number;
   loss_pause_minutes: number;
+  min_reward_risk?: number;
+  min_quote_volume_usdt?: number;
 }
 
 interface AutoTradeStatus {
@@ -40,6 +42,8 @@ type Form = {
   smallAccount: boolean;
   losses: string;
   pause_min: string;
+  rr: string;
+  volume_m: string;
 };
 
 function toForm(s: BotSettings): Form {
@@ -54,6 +58,8 @@ function toForm(s: BotSettings): Form {
     smallAccount: s.small_account_min_order ?? true,
     losses: String(s.max_consecutive_losses),
     pause_min: String(s.loss_pause_minutes),
+    rr: String(s.min_reward_risk ?? 1.5),
+    volume_m: String(Math.round((s.min_quote_volume_usdt ?? 25_000_000) / 1_000_000)),
   };
 }
 
@@ -96,6 +102,8 @@ export function BotSettingsCard() {
       small_account_min_order: form.smallAccount,
       max_consecutive_losses: Number(form.losses),
       loss_pause_minutes: Number(form.pause_min),
+      min_reward_risk: Number(form.rr.replace(",", ".")),
+      min_quote_volume_usdt: Number(form.volume_m) * 1_000_000,
     });
     if (result) {
       setForm(toForm(result.settings));
@@ -165,6 +173,21 @@ export function BotSettingsCard() {
             </div>
             <small>Spot'ta yalnızca alış (long) yapılır.</small>
           </fieldset>
+        </div>
+        <h4>Kalite filtreleri</h4>
+        <div className="grid-2">
+          <Field
+            label="En düşük kazanç/risk oranı"
+            hint="Hedef uzaklığı, zarar durdur uzaklığının en az bu katı olmalı. 1–5; önerilen 1,5 ve üstü. Düşük oranlı işlemlerde kazançlar zararları karşılamaz."
+          >
+            <input type="number" min={1} max={5} step={0.1} value={form.rr} onChange={set("rr")} data-testid="bot-rr" />
+          </Field>
+          <Field
+            label="En düşük 24 saatlik hacim (milyon USDT)"
+            hint="Az işlem gören, yeni listelenmiş coinler elenir (fiyat sıçrar, stop gereksiz tetiklenir). 0 = kapalı; önerilen 25 ve üstü."
+          >
+            <input type="number" min={0} max={10000} step={5} value={form.volume_m} onChange={set("volume_m")} data-testid="bot-volume" />
+          </Field>
         </div>
         <h4>Pozisyon yönetimi</h4>
         <label className="row" style={{ gap: 8 }}>

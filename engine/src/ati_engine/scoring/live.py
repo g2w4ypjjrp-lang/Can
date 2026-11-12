@@ -86,6 +86,8 @@ class OpportunityScored(SystemEvent, frozen=True, kw_only=True):
     reasons: list[str]
     historical_hit_rate: float | None = None
     historical_net_return_pct: float | None = None
+    # Son 24 saatlik işlem hacmi (USDT); otomatik işlemde az işlem gören coinler elenir.
+    quote_volume_24h: float | None = None
 
 
 @dataclass(frozen=True)
@@ -519,6 +521,7 @@ class OpportunityEngine:
                 continue
             self.stats.published += 1
             calibration = opp.calibration or {}
+            inputs = self._inputs.get((market, opp.symbol))
             await self.bus.publish(
                 OpportunityScored(
                     market=market,
@@ -535,6 +538,7 @@ class OpportunityEngine:
                     reasons=top_reasons(opp),
                     historical_hit_rate=calibration.get("hit_rate"),
                     historical_net_return_pct=calibration.get("mean_net_return_pct"),
+                    quote_volume_24h=inputs.quote_volume_24h if inputs is not None else None,
                 )
             )
             rows.append(

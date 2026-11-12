@@ -2437,6 +2437,17 @@
         "price": {
           "type": "number"
         },
+        "quote_volume_24h": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "reasons": {
           "items": {
             "type": "string"

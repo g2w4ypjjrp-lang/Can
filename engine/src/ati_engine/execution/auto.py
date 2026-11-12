@@ -64,6 +64,8 @@ EDITABLE = (
     "max_consecutive_losses",
     "loss_pause_minutes",
     "small_account_min_order",
+    "min_reward_risk",
+    "min_quote_volume_usdt",
 )
 
 
@@ -190,6 +192,12 @@ class AutoTrader:
             return self._skip("spot_short")
         if not event.stop_price or not event.target_price or event.price <= 0:
             return self._skip("seviye_yok")
+        risk = abs(event.price - event.stop_price)
+        if risk <= 0 or abs(event.target_price - event.price) / risk < self.cfg.min_reward_risk:
+            return self._skip("kazanç_oranı_düşük")
+        volume = event.quote_volume_24h
+        if volume is not None and volume < self.cfg.min_quote_volume_usdt:
+            return self._skip("hacim_düşük")
         now = self._clock()
         close_ms = self._close_ms(event)
         if (now - close_ms) / 1000 > self.max_signal_age_s():

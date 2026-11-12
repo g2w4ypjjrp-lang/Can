@@ -136,6 +136,10 @@ async def test_signal_becomes_risk_sized_testnet_trade(
         ({"bar_open_time_ms": int(time.time() * 1000) - 4 * 3_600_000}, "eski_sinyal"),
         ({"market": Market.SPOT}, "piyasa"),
         ({"symbol": "XYZUSDT"}, "test_ağında_yok"),
+        # Hedef, stop uzaklığının 1,5 katından yakın: kazanç zararı karşılamaz.
+        ({"target_price": 76_500.0}, "kazanç_oranı_düşük"),
+        # Az işlem gören (yeni listelenmiş) coin: fiyat sıçrar, stop gereksiz tetiklenir.
+        ({"quote_volume_24h": 3_000_000.0}, "hacim_düşük"),
     ],
 )
 async def test_unsuitable_signals_are_skipped(

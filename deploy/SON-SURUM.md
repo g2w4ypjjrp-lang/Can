@@ -8,6 +8,11 @@ sunucumuz içeriği okuyamaz. İşlem bildirimleri (telefon, kilit ekranı, Tele
 yazar: stop ve hedef fiyatı, puan ve gerekçe, kaldıraç; kapanışta giriş→çıkış, net kâr/zarar ve yüzdesi,
 kapanış nedeni (stop / hedef / iz süren stop / elle) ve süre.
 
+Bot için **kalite filtreleri** (Bot ayarları → Kalite filtreleri): hedefi stop uzaklığının 1,5 katından
+yakın olan işlemlere girilmez (kazanç/risk oranı düşük) ve son 24 saatlik hacmi 25 milyon USDT'nin
+altındaki, az işlem gören/yeni listelenmiş coinler elenir. İkisi de değiştirilebilir. Bunlar zararı
+azaltmaya yönelik önlemlerdir; kazanç garantisi değildir.
+
 Site güncellemesi (yalnızca sunucu; uygulamayı yeniden derlemek gerekmez): yönetim paneli →
 **Paketler ve fiyatlar** → **Genel indirim kampanyası**: bütün ücretli paketlere yüzde indirim (%1–90,
 isteğe bağlı ad ve bitiş tarihi). Sitede eski fiyat üstü çizili ve "%X indirim" rozetiyle görünür;

@@ -351,6 +351,11 @@ test("bot ayarları: risk sınırı aşılamaz, kaydedilir ve varsayılana döne
   await card.getByTestId("bot-trailing").uncheck();
   await card.getByTestId("bot-losses").fill("2");
   await card.getByTestId("bot-pause").fill("120");
+  // Kalite filtreleri: varsayılan kazanç/risk 1,5 ve 25 milyon USDT hacim.
+  await expect(card.getByTestId("bot-rr")).toHaveValue("1.5");
+  await expect(card.getByTestId("bot-volume")).toHaveValue("25");
+  await card.getByTestId("bot-rr").fill("2");
+  await card.getByTestId("bot-volume").fill("50");
   await card.getByTestId("bot-save").click();
   await expect(card.getByTestId("bot-message")).toContainText("Kaydedildi");
   await page.reload();
@@ -360,8 +365,11 @@ test("bot ayarları: risk sınırı aşılamaz, kaydedilir ve varsayılana döne
   await expect(saved.getByTestId("bot-trailing")).not.toBeChecked();
   await expect(saved.getByTestId("bot-losses")).toHaveValue("2");
   await expect(saved.getByTestId("bot-pause")).toHaveValue("120");
+  await expect(saved.getByTestId("bot-rr")).toHaveValue("2");
+  await expect(saved.getByTestId("bot-volume")).toHaveValue("50");
   await page.getByTestId("bot-settings").getByTestId("bot-reset").click();
   await expect(page.getByTestId("bot-settings").getByTestId("bot-min-score")).toHaveValue("70");
+  await expect(page.getByTestId("bot-settings").getByTestId("bot-rr")).toHaveValue("1.5");
 });
 
 

@@ -181,6 +181,11 @@ class AutoTradeSettings(BaseModel):
     # emir açılır; yalnızca o emrin riski risk sınırının (max_risk_per_trade_pct) içindeyse.
     small_account_min_order: bool = True
     loss_pause_minutes: int = Field(default=240, ge=15, le=2880)
+    # Kalite filtreleri: hedef uzaklığı stop uzaklığının en az bu katı olmalı (düşük oranlı
+    # işlemlerde kazanç zararı karşılamaz) ve coinin son 24 saatlik işlem hacmi en az bu kadar
+    # USDT olmalı (yeni/az işlem gören coinlerde fiyat sıçrar, stop gereksiz yere tetiklenir).
+    min_reward_risk: float = Field(default=1.5, ge=1.0, le=5.0)
+    min_quote_volume_usdt: float = Field(default=25_000_000.0, ge=0)
 
 
 PUBLIC_RELAY_URL = "wss://relay.canarslan.net.tr"

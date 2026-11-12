@@ -932,6 +932,8 @@ class AutoTradeSettingsUpdate(BaseModel):
     max_consecutive_losses: int | None = Field(default=None, ge=0, le=10)
     loss_pause_minutes: int | None = Field(default=None, ge=15, le=2880)
     small_account_min_order: bool | None = None
+    min_reward_risk: float | None = Field(default=None, ge=1.0, le=5.0)
+    min_quote_volume_usdt: float | None = Field(default=None, ge=0, le=10_000_000_000)
 
 
 # --- Lisans (Aşama 15) ---------------------------------------------------------------------------

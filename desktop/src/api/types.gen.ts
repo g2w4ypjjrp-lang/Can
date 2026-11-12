@@ -678,6 +678,7 @@ export interface OpportunityScored {
   interval: string;
   market: Market;
   price: number;
+  quote_volume_24h?: number | null;
   reasons: string[];
   reward_risk: number | null;
   score: number;
