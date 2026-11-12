@@ -17,6 +17,7 @@ export function Settings() {
   const execution = usePoll((c) => c.get<ExecutionStatus>("/v1/execution/status", { environment: "testnet" }), 5000);
   const live = usePoll((c) => c.get<ExecutionStatus>("/v1/execution/status", { environment: "live" }), 5000);
   const audit = usePoll((c) => c.get<AuditEntry[]>("/v1/audit", { limit: 30 }), 10000);
+  const liveKeyed = Object.values(live.data?.markets ?? {}).some((m) => m?.key_stored);
   return (
     <div className="page" data-testid="page-settings">
       <LicenseSection />
@@ -30,18 +31,23 @@ export function Settings() {
         </p>
       </Card>
 
-      <h3 className="section-title">Binance Demo Trading anahtarları (demo para)</h3>
-      <div className="grid-2">
-        {(["usdm_futures", "spot"] as Market[]).map((market) => (
-          <KeyForm key={market} environment="testnet" market={market} info={execution.data?.markets[market]} onChange={execution.refresh} />
-        ))}
-      </div>
-      <h3 className="section-title">Binance gerçek hesap anahtarları (gerçek para)</h3>
+      <h3 className="section-title">Binance hesap anahtarları (gerçek para)</h3>
       <div className="grid-2">
         {(["usdm_futures", "spot"] as Market[]).map((market) => (
           <KeyForm key={market} environment="live" market={market} info={live.data?.markets[market]} onChange={live.refresh} />
         ))}
       </div>
+      {/* Gerçek hesap anahtarı varsa deneme (Demo Trading) anahtarları katlanır. */}
+      <details className="card system-details" open={!liveKeyed}>
+        <summary>Deneme hesabı anahtarları (Binance Demo Trading, sahte bakiye)</summary>
+        <div className="card-body">
+          <div className="grid-2">
+            {(["usdm_futures", "spot"] as Market[]).map((market) => (
+              <KeyForm key={market} environment="testnet" market={market} info={execution.data?.markets[market]} onChange={execution.refresh} />
+            ))}
+          </div>
+        </div>
+      </details>
 
       <TelegramSection />
 

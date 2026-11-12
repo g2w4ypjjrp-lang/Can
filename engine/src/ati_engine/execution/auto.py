@@ -50,6 +50,9 @@ SETTINGS_KEY = "autotrade.settings"
 # Karar aralığı (fırsat puanının mum aralığı): kalıcı, motor yeniden başlayınca uygulanır.
 DECISION_INTERVAL_KEY = "scoring.interval"
 DECISION_INTERVALS = ("1m", "5m", "15m", "1h")
+# Bot açık/kapalı (kalıcı). Gerçek para modu açılışta hiçbir zaman geri yüklenmediği için bot,
+# yeniden başlatmadan sonra gerçek hesapta ancak kullanıcı gerçek parayı yeniden onaylayınca girer.
+ENABLED_KEY = "autotrade.enabled"
 EDITABLE = (
     "markets",
     "min_score",

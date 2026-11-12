@@ -126,6 +126,7 @@ from ati_engine.execution.auto import (
     AutoTrader,
     merged_settings,
 )
+from ati_engine.execution.auto import ENABLED_KEY as AUTOTRADE_ENABLED_KEY
 from ati_engine.execution.auto import SETTINGS_KEY as AUTOTRADE_SETTINGS_KEY
 from ati_engine.execution.engine import TakeProfit, TradeIntent
 from ati_engine.execution.service import ExecutionService, ExecutionUnavailable
@@ -1318,7 +1319,10 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             mode is not TradingMode.PAPER,
             "İşlem modu",
             {
-                TradingMode.PAPER: "Sanal modda bot işlem açmaz; Demo para seçin",
+                TradingMode.PAPER: (
+                    "Sanal modda bot işlem açmaz. Uygulama her açılışta güvenlik için Sanal "
+                    "başlar; Gerçek para ya da Demo'yu seçin"
+                ),
                 TradingMode.TESTNET: "Demo para (sahte bakiye)",
                 TradingMode.LIVE: "GERÇEK PARA",
             }[mode],
@@ -1327,7 +1331,9 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         execution = runtime.active_execution()
         info = await execution.status() if execution is not None else {"markets": {}}
         account = "gerçek hesap" if mode is TradingMode.LIVE else "Demo Trading"
-        for market in trader.cfg.markets:
+        # Sanal modda anahtar maddesi gösterilmez (mod maddesi zaten eksik); hangi hesabın
+        # anahtarı gerektiği mod seçilince belli olur.
+        for market in trader.cfg.markets if mode is not TradingMode.PAPER else ():
             entry = info["markets"].get(market.value) or {}
             connected = bool(entry.get("connected"))
             if connected:
@@ -1393,6 +1399,7 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         trader = autotrader_or_404()
         was = trader.enabled
         trader.enabled = body.enabled
+        await SettingsStore(runtime.db).set(AUTOTRADE_ENABLED_KEY, body.enabled)
         await runtime.audit.record(
             actor=LOCAL_ACTOR,
             action="autotrade.toggle",

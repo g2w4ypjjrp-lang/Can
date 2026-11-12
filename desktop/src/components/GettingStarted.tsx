@@ -4,6 +4,7 @@ import type { LicenseStatusResponse } from "../api/types.gen";
 import { useNavigate } from "../lib/nav";
 
 interface ExecutionStatus {
+  environment?: string;
   markets: Record<string, { key_stored: boolean; connected: boolean }>;
 }
 
@@ -23,14 +24,18 @@ interface Step {
 }
 
 /** Kurulumdan sonraki adımlar; hepsi tamamlanınca kart gizlenir. */
-export function GettingStarted() {
+export function GettingStarted({ mode }: { mode?: string }) {
   const navigate = useNavigate();
   const license = usePoll((c) => c.get<LicenseStatusResponse>("/v1/license"), 15_000);
-  const execution = usePoll((c) => c.get<ExecutionStatus>("/v1/execution/status"), 10_000);
+  const live = mode === "live";
+  const execution = usePoll((c) => c.get<ExecutionStatus>("/v1/execution/status", { environment: "testnet" }), 10_000);
+  const liveExecution = usePoll((c) => c.get<ExecutionStatus>("/v1/execution/status", { environment: "live" }), 10_000);
   const remote = usePoll((c) => c.get<RemoteStatus>("/v1/remote/status"), 10_000);
 
   if (!license.data && !execution.data && !remote.data) return null;
-  const keyed = Object.values(execution.data?.markets ?? {}).some((m) => m.key_stored);
+  const keyedIn = (s?: ExecutionStatus) => Object.values(s?.markets ?? {}).some((m) => m.key_stored);
+  // Gerçek hesap ya da deneme hesabı anahtarlarından biri yeterli.
+  const keyed = live ? keyedIn(liveExecution.data) : keyedIn(execution.data) || keyedIn(liveExecution.data);
   const phones = (remote.data?.devices ?? []).filter((d) => !d.revoked).length;
   const steps: Step[] = [
     {
@@ -43,8 +48,8 @@ export function GettingStarted() {
     },
     {
       key: "binance",
-      title: "Binance Demo Trading anahtarı",
-      hint: keyed ? "Bağlandı" : "demo.binance.com → API Management → Create API",
+      title: "Binance anahtarı",
+      hint: keyed ? "Bağlandı" : "binance.com → API Yönetimi (para çekme KAPALI) ya da deneme için demo.binance.com",
       done: keyed,
       page: "settings",
       icon: Sparkles,
@@ -60,7 +65,8 @@ export function GettingStarted() {
     },
   ];
   const required = steps.filter((s) => !s.optional);
-  if (required.every((s) => s.done) && steps.every((s) => s.done)) return null;
+  // Zorunlu adımlar bitince kart kaybolur (telefon isteğe bağlı; Telefon ekranından yapılır).
+  if (required.every((s) => s.done)) return null;
   const doneCount = steps.filter((s) => s.done).length;
 
   return (
@@ -69,7 +75,7 @@ export function GettingStarted() {
         <div>
           <h2 id="baslarken">Başlarken</h2>
           <p className="muted small">
-            {doneCount} / {steps.length} adım tamam. Gerçek parayla işlem kapalıdır; önce Demo Trading'de sahte bakiyeyle deneyin.
+            {doneCount} / {steps.length} adım tamam.
           </p>
         </div>
         <div className="gs-progress" aria-hidden="true">

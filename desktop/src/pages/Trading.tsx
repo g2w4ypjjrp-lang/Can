@@ -72,7 +72,7 @@ export function Trading() {
                 {info.connected ? (info.stream_connected ? "Bağlı" : "Akış bekleniyor") : info.key_stored ? "Bağlı değil" : "Anahtar yok"}
               </Badge>
             </div>
-            <div className="stat-hint">{info.error ?? (info.connected ? `${info.open_positions ?? 0} açık pozisyon` : "Ayarlar → Demo Trading anahtarı")}</div>
+            <div className="stat-hint">{info.error ?? (info.connected ? `${info.open_positions ?? 0} açık pozisyon` : "Ayarlar → Binance anahtarı")}</div>
           </div>
         ))}
       </div>

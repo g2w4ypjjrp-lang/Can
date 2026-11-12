@@ -52,6 +52,10 @@ def build_executors(runtime: EngineRuntime) -> dict[str, Executor]:
         if runtime.autotrader is None:
             raise RuntimeError("Otomatik işlem etkin değil")
         runtime.autotrader.enabled = enabled
+        from ati_engine.execution.auto import ENABLED_KEY
+        from ati_engine.storage.settings_store import SettingsStore
+
+        await SettingsStore(runtime.db).set(ENABLED_KEY, enabled)
         await runtime.audit.record(
             actor=_actor(device), action="autotrade.toggle", details={"enabled": enabled}
         )

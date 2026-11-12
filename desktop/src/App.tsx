@@ -2,6 +2,7 @@ import {
   Activity,
   BarChart3,
   CandlestickChart,
+  ChevronDown,
   FlaskConical,
   Gauge,
   LayoutDashboard,
@@ -17,6 +18,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { useEvents, usePoll } from "./api/hooks";
 import type { LicenseStatusResponse, StatusResponse } from "./api/types.gen";
 import { ErrorBoundary, useGlobalErrorReports } from "./components/ErrorBoundary";
+import { KillSwitchControl } from "./components/KillSwitchControl";
 import { Badge } from "./components/ui";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { MODE_LABELS, STATE_LABELS } from "./lib/format";
@@ -45,19 +47,22 @@ interface PageDef {
 }
 
 export const PAGES: PageDef[] = [
-  { key: "dashboard", label: "Genel bakış", hint: "Motor durumu, acil durdurma, fırsatlar ve uyarılar", group: "Genel", icon: LayoutDashboard, render: () => <Dashboard /> },
-  { key: "markets", label: "Piyasa", hint: "Canlı fiyatlar ve hacim", group: "Genel", icon: Activity, render: () => <Markets /> },
-  { key: "opportunities", label: "Fırsatlar", hint: "Puanlanmış işlem fırsatları ve gerekçeleri", group: "Genel", icon: Sparkles, render: () => <Opportunities /> },
-  { key: "whales", label: "Balina radarı", hint: "Büyük işlemler ve zincir üstü hareketler", group: "Genel", icon: Waves, render: () => <Whales /> },
-  { key: "analysis", label: "Grafik ve AI analiz", hint: "Mum grafikleri, göstergeler ve model tahminleri", group: "Genel", icon: CandlestickChart, render: () => <Analysis /> },
-  { key: "trading", label: "Spot / Futures işlemler", hint: "Emirler, pozisyonlar ve otomatik işlem", group: "İşlem", icon: BarChart3, render: () => <Trading /> },
-  { key: "performance", label: "Kâr/zarar ve geçmiş", hint: "Sonuçlar ve işlem geçmişi", group: "İşlem", icon: Trophy, render: () => <Performance /> },
-  { key: "risk", label: "Risk", hint: "Sınırlar, risk kapısı kararları ve olaylar", group: "İşlem", icon: ShieldAlert, render: () => <Risk /> },
-  { key: "lab", label: "Backtest ve eğitim", hint: "Geçmiş veri indirme, geriye dönük test ve yapay zekâ modeli eğitimi", group: "İşlem", icon: FlaskConical, render: () => <Lab /> },
-  { key: "strategies", label: "Strateji performansı", hint: "Stratejilerin sanal yarışma sonuçları", group: "İşlem", icon: Gauge, render: () => <Strategies /> },
-  { key: "phone", label: "Telefon", hint: "QR kodla iPhone eşleştirme ve telefondan kontrol", group: "Sistem", icon: Smartphone, render: () => <Phone /> },
-  { key: "settings", label: "Ayarlar", hint: "İşlem modu, borsa anahtarları, lisans ve denetim kaydı", group: "Sistem", icon: SettingsIcon, render: () => <Settings /> },
+  { key: "dashboard", label: "Kontrol paneli", hint: "Bot, hesabınız ve açık işlemler", group: "Ana", icon: LayoutDashboard, render: () => <Dashboard /> },
+  { key: "trading", label: "İşlemler", hint: "Pozisyonlar, emirler ve bot ayarları", group: "Ana", icon: BarChart3, render: () => <Trading /> },
+  { key: "opportunities", label: "Fırsatlar", hint: "Botun puanladığı coinler ve gerekçeleri", group: "Ana", icon: Sparkles, render: () => <Opportunities /> },
+  { key: "markets", label: "Piyasa", hint: "Tüm coinlerin canlı fiyatı ve hacmi", group: "Ana", icon: Activity, render: () => <Markets /> },
+  { key: "performance", label: "Kâr/zarar ve geçmiş", hint: "Sonuçlar ve işlem geçmişi", group: "Gelişmiş", icon: Trophy, render: () => <Performance /> },
+  { key: "analysis", label: "Grafik ve AI analiz", hint: "Mum grafikleri, göstergeler ve model tahminleri", group: "Gelişmiş", icon: CandlestickChart, render: () => <Analysis /> },
+  { key: "whales", label: "Balina radarı", hint: "Büyük işlemler ve zincir üstü hareketler", group: "Gelişmiş", icon: Waves, render: () => <Whales /> },
+  { key: "risk", label: "Risk", hint: "Sınırlar, risk kapısı kararları ve olaylar", group: "Gelişmiş", icon: ShieldAlert, render: () => <Risk /> },
+  { key: "strategies", label: "Strateji performansı", hint: "Stratejilerin sanal yarışma sonuçları", group: "Gelişmiş", icon: Gauge, render: () => <Strategies /> },
+  { key: "lab", label: "Backtest ve eğitim", hint: "Geçmiş veri, geriye dönük test ve model eğitimi", group: "Gelişmiş", icon: FlaskConical, render: () => <Lab /> },
+  { key: "phone", label: "Telefon", hint: "QR'ı telefonun kamerasıyla okutun; her yerden izleyin", group: "Sistem", icon: Smartphone, render: () => <Phone /> },
+  { key: "settings", label: "Ayarlar", hint: "İşlem modu, Binance anahtarları, lisans", group: "Sistem", icon: SettingsIcon, render: () => <Settings /> },
 ];
+
+/** Katlanabilir grup (varsayılan kapalı; açık sayfa içindeyse açık). */
+const COLLAPSIBLE = "Gelişmiş";
 
 const GROUPS = [...new Set(PAGES.map((p) => p.group))];
 
@@ -79,6 +84,7 @@ function LogoMark() {
 
 export function App() {
   const [page, setPage] = useState(currentPage);
+  const [advanced, setAdvanced] = useState(() => PAGES.find((p) => p.key === currentPage())?.group === COLLAPSIBLE);
   const status = usePoll((c) => c.get<StatusResponse>("/v1/status"), 3000);
   const remote = usePoll((c) => c.get<RemoteStatus>("/v1/remote/status"), 5000);
   const license = usePoll((c) => c.get<LicenseStatusResponse>("/v1/license"), 10_000);
@@ -112,8 +118,21 @@ export function App() {
         <nav aria-label="Ana menü">
           {GROUPS.map((group) => (
             <div key={group} className="stack" style={{ gap: 2 }}>
-              <div className="nav-group">{group}</div>
-              {PAGES.filter((p) => p.group === group).map((p) => {
+              {group === COLLAPSIBLE ? (
+                <button
+                  type="button"
+                  className="nav-group nav-toggle"
+                  aria-expanded={advanced}
+                  onClick={() => setAdvanced(!advanced)}
+                  data-testid="nav-advanced"
+                >
+                  {group}
+                  <ChevronDown size={14} aria-hidden="true" className={advanced ? "open" : ""} />
+                </button>
+              ) : (
+                <div className="nav-group">{group}</div>
+              )}
+              {PAGES.filter((p) => p.group === group && (group !== COLLAPSIBLE || advanced || p.key === page)).map((p) => {
                 const Icon = p.icon;
                 return (
                   <button
@@ -167,9 +186,9 @@ export function App() {
                 <Badge tone={s.trading_mode === "live" ? "bad" : s.trading_mode === "paper" ? "neutral" : "info"} testId="top-mode">
                   {MODE_LABELS[s.trading_mode]}
                 </Badge>
-                {s.kill_switch.engaged && <Badge tone="bad">ACİL DURDURMA</Badge>}
               </>
             )}
+            {s && <KillSwitchControl engaged={s.kill_switch.engaged} onChange={status.refresh} />}
             <button
               type="button"
               className={`badge ${phone.tone} top-phone`}

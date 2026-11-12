@@ -45,7 +45,7 @@ export function Risk() {
         <Stat
           label="Günlük zarar"
           value={s?.account ? pct(s.account.daily_loss_pct, 2, false) : "—"}
-          hint={s?.account?.halted ? (s.account.halt_reason ?? "Gün kilitli") : s?.account ? `Gün ${s.account.day} (UTC)` : "Demo anahtarı bağlı değil"}
+          hint={s?.account?.halted ? (s.account.halt_reason ?? "Gün kilitli") : s?.account ? `Gün ${s.account.day} (UTC)` : "Binance anahtarı bağlı değil"}
           tone={s?.account?.halted ? "down" : undefined}
           testId="risk-daily"
         />

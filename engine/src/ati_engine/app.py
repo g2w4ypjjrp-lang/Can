@@ -41,6 +41,7 @@ from ati_engine.execution.auto import (
     AutoTrader,
     merged_settings,
 )
+from ati_engine.execution.auto import ENABLED_KEY as AUTOTRADE_ENABLED_KEY
 from ati_engine.execution.auto import SETTINGS_KEY as AUTOTRADE_SETTINGS_KEY
 from ati_engine.execution.fills import FillSimulator
 from ati_engine.execution.service import ExecutionService
@@ -307,6 +308,9 @@ class Engine:
         trader = runtime.autotrader
         if trader is None:
             return
+        enabled = await SettingsStore(runtime.db).get(AUTOTRADE_ENABLED_KEY)
+        if isinstance(enabled, bool):
+            trader.enabled = enabled
         stored = await SettingsStore(runtime.db).get(AUTOTRADE_SETTINGS_KEY)
         if not isinstance(stored, dict):
             return

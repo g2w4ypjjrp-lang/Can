@@ -12,7 +12,14 @@ async function open(page: Page, nav?: string) {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`/${HASH}`);
   await expect(page.getByTestId("top-state")).toBeVisible();
-  if (nav) await page.getByTestId(`nav-${nav}`).click();
+  if (nav) await go(page, nav);
+}
+
+/** Menüde gider; "Gelişmiş" grubu kapalıysa önce açılır. */
+async function go(page: Page, nav: string) {
+  const item = page.getByTestId(`nav-${nav}`);
+  if (!(await item.isVisible())) await page.getByTestId("nav-advanced").click();
+  await item.click();
 }
 
 test.describe.configure({ mode: "serial" });
@@ -58,7 +65,7 @@ test("bütün ekranlar açılır", async ({ page }) => {
     "settings",
     "dashboard",
   ]) {
-    await page.getByTestId(`nav-${key}`).click();
+    await go(page, key);
     await expect(page.getByTestId(`page-${key}`)).toBeVisible();
   }
 });

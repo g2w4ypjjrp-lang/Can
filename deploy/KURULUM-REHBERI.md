@@ -119,8 +119,8 @@ Kurulum dosyasını (EXE) GitHub derler.
 3. **Demo para (önerilen ilk adım):** demo.binance.com → API Management → Create API →
    uygulamada Ayarlar → **Demo Trading anahtarları** → Futures (ve/veya Spot) → Doğrula ve kaydet.
    Ayarlar → İşlem modu → **Demo para**.
-4. **Bot:** Spot / Futures işlemler ekranı → **Bot ayarları** (puan eşiği, risk, kaldıraç, iz süren
-   stop, kayıp molası) → Genel bakış → **Botu başlat**. Bot paneli, işlem açılamıyorsa nedenini
+4. **Bot:** İşlemler ekranı → **Bot ayarları** (puan eşiği, risk, kaldıraç, iz süren
+   stop, kayıp molası) → Kontrol paneli → **Botu başlat**. Bot paneli, işlem açılamıyorsa nedenini
    (ör. işlem modu Sanal, anahtar yok) **Düzelt** düğmesiyle gösterir; kararlar her saat başı
    verilir, sonraki karar saati panelde yazar. Coin listesi açılışta birkaç saniyede, fırsat taraması
    1–3 dakikada (büyük coinler önce) dolar.

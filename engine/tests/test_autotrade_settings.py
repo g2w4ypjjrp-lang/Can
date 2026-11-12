@@ -119,3 +119,21 @@ async def test_decision_interval_is_saved_and_applied_after_restart(
         assert stats["interval"] == "1m"
         audit = (await http.get("/v1/audit?limit=50")).text
         assert "autotrade.interval_changed" in audit
+
+
+async def test_bot_on_off_survives_restart(engine_at: Callable[..., Any]) -> None:
+    """Bot açık bırakıldıysa uygulama yeniden açılınca da açık gelir (işlem modu güvenlik
+    gereği Sanal başladığından gerçek hesapta, gerçek para yeniden onaylanana kadar girmez)."""
+    async with engine_at() as http:
+        assert (await http.get("/v1/autotrade")).json()["enabled"] is False
+        assert (await http.post("/v1/autotrade", json={"enabled": True})).json()["enabled"] is True
+    async with engine_at() as http:
+        status = (await http.get("/v1/autotrade")).json()
+        assert status["enabled"] is True and status["environment"] == "paper"
+        mode = next(c for c in status["checks"] if c["key"] == "mode")
+        assert mode["ok"] is False and "Sanal başlar" in mode["detail"]
+        assert (await http.post("/v1/autotrade", json={"enabled": False})).json()[
+            "enabled"
+        ] is False
+    async with engine_at() as http:
+        assert (await http.get("/v1/autotrade")).json()["enabled"] is False
