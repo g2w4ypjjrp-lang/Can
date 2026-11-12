@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { usePoll } from "../api/hooks";
+import { LivePrice } from "../components/LivePrice";
 import type { Market, OpportunityDetail, OpportunityStatsResponse, OpportunitySummary } from "../api/types.gen";
 import { Badge, Card, DataTable, Disclaimer, ErrorBox, Field, Stat } from "../components/ui";
 import { MARKET_LABELS, num, pct, price, time } from "../lib/format";
@@ -77,7 +78,8 @@ export function Opportunities() {
                 render: (r) => <Badge tone={r.direction === "long" ? "up" : "down"}>{r.direction === "long" ? "Long" : "Short"}</Badge>,
               },
               { key: "score", label: "Puan", align: "right", render: (r) => num(r.score, 0), sort: (r) => r.score },
-              { key: "price", label: "Fiyat", align: "right", render: (r) => price(r.price) },
+              { key: "price", label: "Sinyal fiyatı", align: "right", render: (r) => price(r.price) },
+              { key: "now", label: "Şimdi", align: "right", render: (r) => <LivePrice id={`${r.market}:${r.symbol}`} /> },
               { key: "stop", label: "Stop", align: "right", render: (r) => price(r.stop_price) },
               { key: "target", label: "Hedef", align: "right", render: (r) => price(r.target_price) },
               { key: "rr", label: "Ödül/Risk", align: "right", render: (r) => num(r.reward_risk, 2), sort: (r) => r.reward_risk ?? null },

@@ -130,9 +130,9 @@ türleri:
 - `result`: komut sonucu (`seq`, `ok`, `reason`, `message`)
 - `snapshot`: özet durum (motor, risk, pozisyonlar, fırsatlar, balina uyarıları)
 - `event`: bildirim (balina uyarısı, işlem açıldı/kapandı, acil durdurma, risk olayı)
-- `ticks`: açık pozisyonların anlık fiyatı, `prices = {"<piyasa>:<SEMBOL>": fiyat}`. Binance
-  işlem akışındaki her yeni fiyat, değiştikçe en çok 0,1 sn'de bir gönderilir; telefon kâr/zararı
-  bununla hesaplar.
+- `ticks`: telefonda görünen coinlerin (açık pozisyonlar, bot adayları, en iyi fırsatlar) anlık
+  fiyatı, `prices = {"<piyasa>:<SEMBOL>": fiyat}`. Binance işlem akışındaki her yeni fiyat, değiştikçe
+  en çok 0,1 sn'de bir gönderilir; telefon fiyatı ve kâr/zararı bununla gösterir.
 
 Bildirim içerikleri yalnızca özettir. API anahtarı, emir kimliği veya hesap bakiyesi
 ayrıntısı içermez.

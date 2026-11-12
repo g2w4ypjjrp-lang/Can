@@ -1,6 +1,6 @@
-"""Açık pozisyonların anlık fiyatı: Binance işlem akışındaki her yeni fiyat beklemeden ekranlara
-(masaüstü olay akışı ve telefon) gider; açık pozisyonu olmayan coinler ve değişmeyen fiyat
-gönderilmez."""
+"""Anlık fiyatlar: Binance işlem akışındaki her yeni fiyat beklemeden ekranlara gider. Masaüstüne
+bütün coinler; telefona yalnızca telefonda görünenler (açık pozisyonlar, bot adayları, en iyi
+fırsatlar). Değişmeyen fiyat yeniden gönderilmez."""
 
 from __future__ import annotations
 
@@ -38,43 +38,70 @@ def runtime(positions: dict[Market, list[str]], remote: Remote | None) -> Any:
         for m, s in positions.items()
     }
     execution = SimpleNamespace(markets=markets)
-    return SimpleNamespace(bus=Bus(), remote=remote, active_execution=lambda: execution)
+    trader = SimpleNamespace(
+        candidates=lambda limit=5: [{"market": "usdm_futures", "symbol": "AVAXUSDT"}]
+    )
+    opportunities = SimpleNamespace(
+        top=lambda *a, **k: [SimpleNamespace(market=Market.SPOT, symbol="DOGEUSDT")]
+    )
+    return SimpleNamespace(
+        bus=Bus(),
+        remote=remote,
+        active_execution=lambda: execution,
+        autotrader=trader,
+        opportunities=opportunities,
+    )
 
 
-async def test_open_position_prices_go_to_screens_on_every_change() -> None:
+async def test_every_coin_goes_to_desktop_and_visible_ones_to_phone() -> None:
     remote = Remote()
     rt = runtime({Market.USDM_FUTURES: ["BTCUSDT"]}, remote)
     live = LivePrices(rt)
-    live.refresh_watch()
-    live.note(Market.USDM_FUTURES, "BTCUSDT", 97_250.1)
-    live.note(Market.USDM_FUTURES, "ETHUSDT", 3_400.0)  # açık pozisyon yok
-    live.note(Market.SPOT, "BTCUSDT", 97_249.0)  # o piyasada pozisyon yok
+    live.refresh_phone()
+    live.note(Market.USDM_FUTURES, "BTCUSDT", 97_250.1)  # açık pozisyon
+    live.note(Market.USDM_FUTURES, "AVAXUSDT", 35.12)  # bot adayı
+    live.note(Market.SPOT, "DOGEUSDT", 0.2101)  # en iyi fırsat
+    live.note(Market.USDM_FUTURES, "ETHUSDT", 3_400.0)  # yalnızca coin listesinde
     await live.flush()
-    assert rt.bus.events == [PriceTick(prices={"usdm_futures:BTCUSDT": 97_250.1})]
-    assert remote.sent == [{"usdm_futures:BTCUSDT": 97_250.1}]
+    assert [e.prices for e in rt.bus.events] == [
+        {
+            "usdm_futures:BTCUSDT": 97_250.1,
+            "usdm_futures:AVAXUSDT": 35.12,
+            "spot:DOGEUSDT": 0.2101,
+            "usdm_futures:ETHUSDT": 3_400.0,
+        }
+    ]
+    assert all(isinstance(e, PriceTick) for e in rt.bus.events)
+    assert remote.sent == [
+        {"usdm_futures:BTCUSDT": 97_250.1, "usdm_futures:AVAXUSDT": 35.12, "spot:DOGEUSDT": 0.2101}
+    ]
 
     # Aynı fiyat yeniden gönderilmez; 0,1 artış hemen gider (aradaki fiyatlardan sonuncusu).
-    live.note(Market.USDM_FUTURES, "BTCUSDT", 97_250.1)
+    live.note(Market.USDM_FUTURES, "ETHUSDT", 3_400.0)
     await live.flush()
     assert len(rt.bus.events) == 1
-    live.note(Market.USDM_FUTURES, "BTCUSDT", 97_250.15)
-    live.note(Market.USDM_FUTURES, "BTCUSDT", 97_250.2)
+    live.note(Market.USDM_FUTURES, "ETHUSDT", 3_400.05)
+    live.note(Market.USDM_FUTURES, "ETHUSDT", 3_400.1)
     await live.flush()
-    assert rt.bus.events[-1] == PriceTick(prices={"usdm_futures:BTCUSDT": 97_250.2})
+    assert rt.bus.events[-1].prices == {"usdm_futures:ETHUSDT": 3_400.1}
+    assert len(remote.sent) == 1  # telefonda görünmeyen coin telefona gitmez
 
-    # Pozisyon kapanınca o coinin fiyatı artık gönderilmez.
-    rt.active_execution().markets[Market.USDM_FUTURES].engine.positions.positions.clear()
-    live.refresh_watch()
-    live.note(Market.USDM_FUTURES, "BTCUSDT", 97_300.0)
-    await live.flush()
-    assert len(rt.bus.events) == 2
+    # Yeni bağlanan ekran/telefon ilk durumu alır (sonrakiler yalnızca değiştikçe).
+    assert live.current()["usdm_futures:ETHUSDT"] == 3_400.1
+    assert set(live.phone_current()) == {
+        "usdm_futures:BTCUSDT",
+        "usdm_futures:AVAXUSDT",
+        "spot:DOGEUSDT",
+    }
 
 
 async def test_without_execution_or_phone_nothing_breaks() -> None:
     rt = runtime({}, None)
     rt.active_execution = lambda: None
+    rt.autotrader = None
+    rt.opportunities = None
     live = LivePrices(rt)
-    live.refresh_watch()
+    live.refresh_phone()
     live.note(Market.USDM_FUTURES, "BTCUSDT", 1.0)
     await live.flush()
-    assert rt.bus.events == []
+    assert [e.prices for e in rt.bus.events] == [{"usdm_futures:BTCUSDT": 1.0}]

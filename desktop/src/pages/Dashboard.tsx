@@ -7,6 +7,7 @@ import { BotPanel } from "../components/BotPanel";
 import { GettingStarted } from "../components/GettingStarted";
 import { LivePnl } from "../components/LivePnl";
 import { useLivePositions } from "../lib/livePrices";
+import { LivePrice } from "../components/LivePrice";
 import { Badge, Card, Confirm, DataTable, Disclaimer, ErrorBox } from "../components/ui";
 import { duration, MARKET_LABELS, MODE_LABELS, num, pct, price, STATE_LABELS } from "../lib/format";
 import { useNavigate } from "../lib/nav";
@@ -240,7 +241,7 @@ export function Dashboard() {
                 render: (r) => <Badge tone={Number(r.quantity) > 0 ? "up" : "down"}>{Number(r.quantity) > 0 ? "Long" : "Short"}</Badge>,
               },
               { key: "e", label: "Giriş", align: "right", render: (r) => price(r.entry_price) },
-              { key: "mk", label: "Fiyat", align: "right", render: (r) => (r.mark_price ? price(r.mark_price) : "—") },
+              { key: "mk", label: "Fiyat", align: "right", render: (r) => <LivePrice id={`${r.market}:${r.symbol}`} fallback={r.mark_price} /> },
               {
                 key: "upnl",
                 label: "Anlık K/Z",
@@ -262,6 +263,7 @@ export function Dashboard() {
               { key: "market", label: "Piyasa", render: (r) => MARKET_LABELS[r.market] },
               { key: "dir", label: "Yön", render: (r) => <Badge tone={r.direction === "long" ? "up" : "down"}>{r.direction === "long" ? "Long" : "Short"}</Badge> },
               { key: "score", label: "Puan", align: "right", render: (r) => <b>{num(r.score, 0)}</b> },
+              { key: "now", label: "Fiyat", align: "right", render: (r) => <LivePrice id={`${r.market}:${r.symbol}`} /> },
               { key: "rr", label: "Ödül/Risk", align: "right", render: (r) => num(r.reward_risk, 2) },
             ]}
           />

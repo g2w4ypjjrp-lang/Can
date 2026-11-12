@@ -235,6 +235,22 @@ function PnlText({ value, pct, size = "text-sm" }: { value?: string | number | n
   );
 }
 
+/** Anlık fiyat (Binance işlem akışı): değişimde kısa yeşil/kırmızı. */
+function LiveTick({ value }: { value?: number }) {
+  const prev = useRef<number | undefined>(undefined);
+  const [flash, setFlash] = useState("");
+  useEffect(() => {
+    const before = prev.current;
+    prev.current = value;
+    if (value === undefined || before === undefined || value === before) return;
+    setFlash(value > before ? "text-up" : "text-down");
+    const id = setTimeout(() => setFlash(""), 700);
+    return () => clearTimeout(id);
+  }, [value]);
+  if (value === undefined) return null;
+  return <span className={`block text-[11px] font-semibold tabular-nums transition-colors duration-500 ${flash || "text-fg"}`}>{price(value)}</span>;
+}
+
 function ScoreBar({ score, threshold }: { score: number; threshold: number }) {
   const pass = score >= threshold;
   return (
@@ -680,6 +696,7 @@ export function PhoneDashboard({ snap: raw, snapAt, events, phase, detail, serie
                           <span className="text-[11px] text-muted">
                             {MARKET[c.market] ?? c.market} · {side(c.direction)}
                           </span>
+                          <LiveTick value={livePrices[`${c.market}:${c.symbol}`]} />
                         </span>
                         <ScoreBar score={c.score} threshold={threshold} />
                         <b className={`w-8 text-right tabular-nums ${c.score >= threshold ? "text-up" : "text-muted"}`}>{Math.round(c.score)}</b>
@@ -829,6 +846,7 @@ export function PhoneDashboard({ snap: raw, snapAt, events, phase, detail, serie
                     <span className="text-[11px] text-muted">
                       {MARKET[o.market] ?? o.market} · {side(o.direction)}
                     </span>
+                    <LiveTick value={livePrices[`${o.market}:${o.symbol}`]} />
                   </span>
                   <ScoreBar score={o.score} threshold={threshold} />
                   <span className="w-11 text-right">

@@ -119,7 +119,7 @@ from ati_engine.api.schemas import (
 from ati_engine.backtest.engine import BacktestConfig
 from ati_engine.backtest.service import BacktestJob, BacktestService
 from ati_engine.core.bus import OverflowPolicy
-from ati_engine.core.events import Event, SystemEvent, encode_event
+from ati_engine.core.events import Event, PriceTick, SystemEvent, encode_event
 from ati_engine.core.models import Market, TradingMode
 from ati_engine.execution.auto import (
     DECISION_INTERVAL_KEY,
@@ -1794,6 +1794,9 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             return
 
         await websocket.send_text(WsAuthOk(version=runtime.version).model_dump_json())
+        # Anlık fiyatların ilk durumu: sonraki fiyatlar yalnızca değiştikçe gelir.
+        if runtime.live_prices is not None and (current := runtime.live_prices.current()):
+            await websocket.send_text(encode_event(PriceTick(prices=current)).decode("utf-8"))
 
         async def forward(event: Event) -> None:
             await websocket.send_text(encode_event(event).decode("utf-8"))

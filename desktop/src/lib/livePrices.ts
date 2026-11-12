@@ -27,6 +27,12 @@ export function useLivePrices(): LivePrices {
   return useSyncExternalStore(subscribe, () => prices);
 }
 
+/** Tek coinin anlık fiyatı ("<piyasa>:<SEMBOL>"): yalnızca bu coinin fiyatı değişince yeniden
+ * çizilir (yüzlerce satırlık tablo her fiyatta baştan çizilmez). */
+export function useLivePrice(key: string): number | undefined {
+  return useSyncExternalStore(subscribe, () => prices[key]);
+}
+
 interface PositionLike {
   market: string;
   symbol: string;

@@ -87,6 +87,9 @@ test("piyasa ekranı canlı fiyatları listeler ve arar", async ({ page }) => {
   const table = page.getByTestId("tickers");
   await expect(table).toContainText("BTCUSDT");
   await expect(table).toContainText("SOLUSDT");
+  // Anlık fiyat: Binance işlem akışındaki her yeni fiyat motor → olay akışı → hücre yolunu
+  // beklemeden izler (sayfa yenilenmeden).
+  await expect(table.locator('[data-live="1"]').first()).toBeVisible({ timeout: 15_000 });
   await page.getByTestId("market-search").fill("eth");
   await expect(table).toContainText("ETHUSDT");
   await expect(table).not.toContainText("BTCUSDT");

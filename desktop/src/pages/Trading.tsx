@@ -12,6 +12,7 @@ import { MARKET_LABELS, num, price, toNumber, tone } from "../lib/format";
 import { BotSettingsCard } from "./BotSettings";
 import { LivePnl } from "../components/LivePnl";
 import { useLivePositions } from "../lib/livePrices";
+import { LivePrice } from "../components/LivePrice";
 import { TradeHistory } from "../components/TradeHistory";
 
 interface ExecutionStatus {
@@ -107,7 +108,7 @@ export function Trading() {
                   render: (r) => <span className={tone(r.quantity)}>{num(r.quantity, 4)}</span>,
                 },
                 { key: "e", label: "Giriş", align: "right", render: (r) => price(r.entry_price) },
-                { key: "mk", label: "Güncel fiyat", align: "right", render: (r) => (r.mark_price ? price(r.mark_price) : "—") },
+                { key: "mk", label: "Güncel fiyat", align: "right", render: (r) => <LivePrice id={`${r.market}:${r.symbol}`} fallback={r.mark_price} /> },
                 {
                   key: "upnl",
                   label: "Anlık K/Z",

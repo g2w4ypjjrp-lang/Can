@@ -92,6 +92,8 @@ class RemoteService:
         self.relay_url = relay_url
         # Telefon bildirimleri (Web Push): telefon kilitliyken de ulaşır (bkz. webpush.py).
         self.push = push
+        # Anlık fiyatların ilk durumu (LivePrices.phone_current); telefon bağlanınca gönderilir.
+        self.tick_source: Callable[[], dict[str, float]] | None = None
         self.executors = {**executors, **self._push_executors()} if push else executors
         self.snapshot_builder = snapshot
         self.snapshot_interval_s = snapshot_interval_s
@@ -244,6 +246,18 @@ class RemoteService:
             device = await self.registry.get(device_id)
             if device is not None and device.revoked_at is None:
                 await self.push_snapshot(device_id)
+                if self.tick_source is not None and (ticks := self.tick_source()):
+                    await self._send_to(
+                        device_id,
+                        {
+                            "v": 1,
+                            "type": "ticks",
+                            "engine_id": self.identity.engine_id,
+                            "device_id": device_id,
+                            "ts_ms": self._clock(),
+                            "prices": ticks,
+                        },
+                    )
         elif kind == "device_offline":
             self.online.discard(device_id)
         elif kind == "from_device":

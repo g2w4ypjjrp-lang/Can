@@ -17,6 +17,7 @@ from ati_engine.execution.auto import AutoTrader
 from ati_engine.execution.service import ExecutionService
 from ati_engine.history.service import HistoryService
 from ati_engine.licensing.manager import LicenseManager
+from ati_engine.market.live_prices import LivePrices
 from ati_engine.market.service import MarketDataService
 from ati_engine.notify.telegram import TelegramNotifier
 from ati_engine.observability.crash import CrashReporter
@@ -57,6 +58,7 @@ class EngineRuntime:
     execution_live: ExecutionService | None = None  # gerçek hesap (kullanıcı onayıyla)
     autotrader: AutoTrader | None = None
     remote: RemoteService | None = None
+    live_prices: LivePrices | None = None
     license: LicenseManager | None = None
     telegram: TelegramNotifier | None = None
     crash: CrashReporter | None = None

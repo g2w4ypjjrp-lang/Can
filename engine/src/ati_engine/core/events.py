@@ -103,8 +103,8 @@ class TradeNotice(SystemEvent, frozen=True, kw_only=True):
 
 
 class PriceTick(SystemEvent, frozen=True, kw_only=True):
-    """Açık pozisyonların anlık fiyatı (Binance işlem akışından, değiştikçe; en çok 0,1 sn'de
-    bir). Anahtar ``"<piyasa>:<SEMBOL>"``. Ekranlar kâr/zararı bununla anında günceller."""
+    """Coinlerin anlık fiyatı (Binance işlem akışından, değiştikçe; en çok 0,1 sn'de bir).
+    Anahtar ``"<piyasa>:<SEMBOL>"``. Ekranlar fiyatı ve kâr/zararı bununla anında günceller."""
 
     prices: dict[str, float]
 

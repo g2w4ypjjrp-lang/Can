@@ -2337,6 +2337,27 @@ table thead th {
   }
 }
 
+/* Anlık fiyat hücresi: değişimde kısa renk */
+.live-price {
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 6px;
+  transition: background 0.5s ease, color 0.5s ease;
+}
+.live-price.flash-up {
+  color: var(--up);
+  background: rgba(61, 255, 168, 0.16);
+}
+.live-price.flash-down {
+  color: var(--down);
+  background: rgba(255, 92, 138, 0.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-price {
+    transition: none;
+  }
+}
+
 /* İşlem geçmişi özeti */
 .history-stats {
   display: grid;

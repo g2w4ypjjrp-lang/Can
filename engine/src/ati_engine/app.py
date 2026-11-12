@@ -640,6 +640,9 @@ class Engine:
         if not runtime.market_data:
             return
         live = LivePrices(runtime)
+        runtime.live_prices = live
+        if runtime.remote is not None:
+            runtime.remote.tick_source = live.phone_current
         for service in runtime.market_data.values():
             service.on_trade_price = live.note
         runtime.supervisor.spawn(

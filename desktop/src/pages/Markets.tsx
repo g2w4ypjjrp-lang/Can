@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { usePoll } from "../api/hooks";
 import type { Market, ScannerTopResponse, SignalInfo, StatusResponse, TickersResponse } from "../api/types.gen";
+import { LiveChange, LivePrice } from "../components/LivePrice";
 import { Badge, Card, DataTable, ErrorBox, Tabs } from "../components/ui";
 import { compact, num, pct, price, time, tone } from "../lib/format";
 
@@ -66,12 +67,12 @@ export function Markets() {
             empty="Binance'ten coin listesi alınıyor…"
             columns={[
               { key: "symbol", label: "Sembol", render: (r) => <b>{r.symbol}</b>, sort: (r) => r.symbol },
-              { key: "last", label: "Fiyat", align: "right", render: (r) => price(r.last), sort: (r) => r.last },
+              { key: "last", label: "Fiyat", align: "right", render: (r) => <LivePrice id={`${market}:${r.symbol}`} fallback={r.last} />, sort: (r) => r.last },
               {
                 key: "chg",
                 label: "24 sa",
                 align: "right",
-                render: (r) => <span className={tone(r.change_pct)}>{pct(r.change_pct)}</span>,
+                render: (r) => <LiveChange id={`${market}:${r.symbol}`} last={r.last} change={r.change_pct} />,
                 sort: (r) => r.change_pct,
               },
               { key: "hi", label: "Yüksek", align: "right", render: (r) => price(r.high) },
