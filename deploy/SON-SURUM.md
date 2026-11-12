@@ -1,5 +1,12 @@
 # En son sürümü yükleme (0.14.6)
 
+Site güncellemesi (yalnızca sunucu; uygulamayı yeniden derlemek gerekmez): yönetim paneli →
+**Paketler ve fiyatlar** → **Genel indirim kampanyası**: bütün ücretli paketlere yüzde indirim (%1–90,
+isteğe bağlı ad ve bitiş tarihi). Sitede eski fiyat üstü çizili ve "%X indirim" rozetiyle görünür;
+kupon kampanyalı fiyatın üzerine uygulanır, deneme paketi etkilenmez. Yönetim paneli → **Lisanslar** →
+lisans ayrıntısı → **Lisansı sil** (neden + doğrulama kodu + onay): anahtar kalıcı olarak geçersiz olur,
+listelerden kalkar; denetim kaydı saklanır.
+
 0.14.6'da yeni: **yeni logo** (neon degrade rozet, yükselen mumlar, trend çizgisi, hedef düğümü) ve
 şekillendirilmiş isim (degrade "AI", kalın "Trading", geniş aralıklı "INTELLIGENCE"); uygulama simgesi,
 açılış ekranı, menü, lisans ekranı, site ve telefon sayfasında.

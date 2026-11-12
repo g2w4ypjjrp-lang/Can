@@ -70,6 +70,36 @@ test("yönetici davetle etkinleşir, paket fiyatı sitede görünür", async () 
   await expect(page.getByText("₺1.499,90")).toBeVisible();
 });
 
+test("genel kampanya: yüzde indirim sitede üstü çizili fiyatla görünür, kapatılınca kalkar", async () => {
+  await page.goto("/yonetim/paketler");
+  const form = page.getByTestId("campaign-form");
+  await expect(page.getByTestId("campaign-state")).toHaveText("Kapalı");
+  await form.getByLabel("Kampanya açık (bütün ücretli paketlere uygulanır)").check();
+  await form.getByLabel("İndirim (%)").fill("20");
+  await form.getByLabel("Kampanya adı (sitede görünür, isteğe bağlı)").fill("Kasım indirimi");
+  await expect(form).toContainText("1.000 ₺ olan paket 800 ₺ olur");
+  await noAxeViolations(page);
+  await form.getByRole("button", { name: "Kampanyayı kaydet" }).click();
+  await expect(page.getByTestId("campaign-state")).toHaveText("Yayında · %20");
+
+  await page.goto("/paketler");
+  await expect(page.getByTestId("campaign-banner")).toContainText("Kasım indirimi: bütün paketlerde %20 indirim");
+  await expect(page.getByTestId("price-d30_1dev-list")).toContainText("₺1.499,90");
+  await expect(page.getByTestId("price-d30_1dev")).toContainText("₺1.199,92");
+  await expect(page.getByTestId("price-d30_1dev")).toContainText("%20 indirim");
+  await noAxeViolations(page);
+  await page.goto("/satin-al?paket=d30_1dev");
+  await expect(page.getByTestId("order-total")).toContainText("₺1.199,92");
+
+  await page.goto("/yonetim/paketler");
+  await page.getByTestId("campaign-form").getByLabel("Kampanya açık (bütün ücretli paketlere uygulanır)").uncheck();
+  await page.getByTestId("campaign-form").getByRole("button", { name: "Kampanyayı kaydet" }).click();
+  await expect(page.getByTestId("campaign-state")).toHaveText("Kapalı");
+  await page.goto("/paketler");
+  await expect(page.getByTestId("campaign-banner")).toHaveCount(0);
+  await expect(page.getByTestId("price-d30_1dev-list")).toHaveCount(0);
+});
+
 test("indirim kuponu oluşturulur, listelenir ve kapatılır", async () => {
   await page.goto("/yonetim");
   await page.getByRole("link", { name: "İndirim kuponları" }).click();
@@ -134,7 +164,7 @@ test("lisans üretilir, dondurulur, tam anahtar TOTP ile gösterilir", async () 
   await page.getByLabel("Dondurma nedeni").fill("ödeme incelemesi");
   await page.getByRole("button", { name: "Dondur" }).click();
   await expect(page.getByTestId("license-status")).toHaveText("Donduruldu");
-  await page.getByLabel("Doğrulama kodu (TOTP)").fill(await root.next());
+  await page.getByLabel("Doğrulama kodu (TOTP)", { exact: true }).fill(await root.next());
   await page.getByRole("button", { name: "Tam anahtarı göster" }).click();
   await expect(page.getByTestId("license-key")).toHaveText(key);
   await noAxeViolations(page);
@@ -157,6 +187,35 @@ test("satış havuzundaki lisans müşteriye atanır", async () => {
   await expect(page.getByTestId("license-status")).toHaveText("Etkinleştirilmeyi bekliyor");
   await expect(page.getByTestId("license-pool-note")).toHaveCount(0);
   await noAxeViolations(page);
+});
+
+test("lisans TOTP ve onayla silinir; listeden kalkar", async () => {
+  await sql("INSERT INTO customers (email, password_hash, email_verified_at) VALUES ('silinecek-lisans@example.com', $1, now())", [ARGON2]);
+  await page.goto("/yonetim/lisanslar");
+  await page.getByLabel("Müşteri e-postası (boşsa satış havuzuna)").fill("silinecek-lisans@example.com");
+  await page.getByRole("button", { name: "Üret", exact: true }).click();
+  const key = (await page.getByTestId("issued-key").textContent())!.trim();
+  await page.getByLabel("Lisans ara").fill(key);
+  await page.getByRole("button", { name: "Ara" }).click();
+  await expect(page.getByTestId("license-total")).toHaveText("1 lisans");
+  await page.getByRole("button", { name: /ayrıntı$/ }).first().click();
+  const zone = page.getByTestId("license-delete");
+  await zone.getByText("Lisansı sil").click();
+  await zone.getByLabel("Lisans silme nedeni").fill("hatalı üretim");
+  await zone.getByLabel("Silme için doğrulama kodu (TOTP)").fill(await root.next());
+  await noAxeViolations(page);
+  await zone.getByRole("button", { name: "Kalıcı olarak sil" }).click();
+  await expect(zone.getByRole("button", { name: "Kalıcı olarak sil" })).toBeVisible(); // onay kutusu işaretlenmeden gönderilmez
+  await zone.getByLabel(/silinsin$/).check();
+  await zone.getByRole("button", { name: "Kalıcı olarak sil" }).click();
+  await expect(page.getByRole("status").filter({ hasText: /Lisans #\d+ silindi/ })).toBeVisible();
+  await expect(page.getByTestId("license-delete")).toHaveCount(0);
+  await page.getByRole("button", { name: "Ara" }).click();
+  await expect(page.getByTestId("license-total")).toHaveText("0 lisans");
+  const rows = await sql<{ status: string; deleted: boolean }>(
+    "SELECT l.status::text AS status, l.deleted_at IS NOT NULL AS deleted FROM licenses l JOIN customers c ON c.id = l.customer_id WHERE c.email = 'silinecek-lisans@example.com'",
+  );
+  expect(rows).toEqual([{ status: "cancelled", deleted: true }]);
 });
 
 test("mesajlar, denetim zinciri ve yönetici daveti", async () => {

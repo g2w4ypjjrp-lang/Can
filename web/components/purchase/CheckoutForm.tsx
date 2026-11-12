@@ -15,10 +15,14 @@ interface PlanSummary {
   price_minor: number;
   currency: string;
   is_trial: boolean;
+  list_price_minor?: number | null;
+  campaign_percent?: number | null;
 }
 
 interface Quote {
   code: string;
+  list_price_minor?: number | null;
+  campaign_percent?: number | null;
   subtotal_minor: number;
   discount_minor: number;
   total_minor: number;
@@ -202,6 +206,13 @@ export function CheckoutForm({ plan }: { plan: PlanSummary }) {
           hint="Fatura için; şirket adına alımda vergi numarası."
         />
       </fieldset>
+      {!free && plan.campaign_percent && plan.list_price_minor ? (
+        <p className="rounded-2xl border border-success-border bg-success-bg px-4 py-3 text-sm text-success-fg" data-testid="campaign-applied">
+          Kampanya indirimi (%{plan.campaign_percent}) uygulandı:{" "}
+          <s>{formatPrice(plan.list_price_minor, plan.currency)}</s> yerine <strong>{formatPrice(plan.price_minor, plan.currency)}</strong>.
+          Kupon kodunuz varsa kampanyalı fiyatın üzerine uygulanır.
+        </p>
+      ) : null}
       {free ? null : (
         <fieldset className="space-y-3">
           <legend className="text-base font-semibold text-fg">İndirim kuponu</legend>

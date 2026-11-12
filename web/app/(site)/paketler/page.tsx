@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 
-import { CalendarClock, Check, Infinity as InfinityIcon, Sparkles } from "lucide-react";
+import { BadgePercent, CalendarClock, Check, Infinity as InfinityIcon, Sparkles } from "lucide-react";
 
+import { PriceTag } from "@/components/PriceTag";
 import { RiskNotice } from "@/components/RiskNotice";
 import { Badge, Container, IconTile, LinkButton, Notice, PageHeader } from "@/components/ui";
-import { deviceLabel, durationLabel, formatPrice } from "@/lib/format";
-import { fetchPlans, groupPlans } from "@/lib/plans";
+import { deviceLabel, durationLabel, formatDate, formatPrice } from "@/lib/format";
+import { activeCampaign, fetchPlans, groupPlans } from "@/lib/plans";
 
 export const metadata: Metadata = {
   title: "Paketler",
@@ -18,6 +19,7 @@ export default async function PlansPage() {
   const { plans, reachable } = await fetchPlans();
   const { trial, groups } = groupPlans(plans);
   const onSale = groups.length > 0 || trial !== undefined;
+  const campaign = activeCampaign(plans);
 
   return (
     <>
@@ -29,6 +31,19 @@ export default async function PlansPage() {
       <Container className="py-14">
         {onSale ? (
           <>
+            {campaign ? (
+              <div
+                className="mb-8 flex flex-wrap items-center gap-4 rounded-3xl border border-success-border bg-success-bg px-6 py-4 text-success-fg"
+                role="status"
+                data-testid="campaign-banner"
+              >
+                <BadgePercent aria-hidden="true" className="h-7 w-7 shrink-0" />
+                <p className="text-base">
+                  <strong className="font-semibold">{campaign.label ?? "Kampanya"}:</strong> bütün paketlerde %{campaign.percent} indirim
+                  {campaign.endsAt ? <> · {formatDate(campaign.endsAt)} tarihine kadar</> : null}. İndirimli fiyatlar aşağıda gösterilir.
+                </p>
+              </div>
+            ) : null}
             {trial ? (
               <div className="gradient-border mb-10 flex flex-col justify-between gap-6 rounded-3xl p-7 shadow-lift md:flex-row md:items-center">
                 <div className="flex items-start gap-4">
@@ -69,7 +84,13 @@ export default async function PlansPage() {
                         <li key={plan.code} className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-bg/60 px-4 py-3">
                           <div>
                             <p className="text-sm font-medium text-muted">{deviceLabel(plan.device_limit)}</p>
-                            <p className="tabular text-xl font-semibold tracking-tight text-fg">{formatPrice(plan.price_minor, plan.currency)}</p>
+                            <PriceTag
+                              minor={plan.price_minor}
+                              currency={plan.currency}
+                              listMinor={plan.list_price_minor}
+                              percent={plan.campaign_percent}
+                              testId={`price-${plan.code}`}
+                            />
                           </div>
                           <LinkButton
                             href={`/satin-al?paket=${encodeURIComponent(plan.code)}`}

@@ -84,7 +84,7 @@ async def test_percent_coupon_preview_and_purchase(
     assert preview.status_code == 200, preview.text
     assert preview.json() == {
         "code": "DOST15", "subtotal_minor": 19990, "discount_minor": 2998, "total_minor": 16992,
-        "currency": "TRY",
+        "currency": "TRY", "list_price_minor": None, "campaign_percent": None,
     }  # fmt: skip
     other = await http.post("/v1/coupons/check", json={"plan_code": "d90_1dev", "code": "DOST15"})
     assert other.status_code == 409 and other.json()["detail"]["code"] == "coupon_not_applicable"

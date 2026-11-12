@@ -12,6 +12,24 @@ export interface Plan {
   price_minor: number;
   currency: string;
   features: Record<string, unknown>;
+  // Genel indirim kampanyası (yönetim panelinden): indirimsiz fiyat ve kampanya bilgisi.
+  list_price_minor?: number | null;
+  campaign_percent?: number | null;
+  campaign_label?: string | null;
+  campaign_ends_at?: string | null;
+}
+
+export interface CampaignInfo {
+  percent: number;
+  label: string | null;
+  endsAt: string | null;
+}
+
+/** Satıştaki paketlerden yürürlükteki kampanya (yoksa null). */
+export function activeCampaign(plans: Plan[]): CampaignInfo | null {
+  const plan = plans.find((p) => p.campaign_percent);
+  if (!plan?.campaign_percent) return null;
+  return { percent: plan.campaign_percent, label: plan.campaign_label ?? null, endsAt: plan.campaign_ends_at ?? null };
 }
 
 export interface PlanGroup {

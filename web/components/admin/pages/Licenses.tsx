@@ -42,7 +42,7 @@ function download(name: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
+function Detail({ id, onChanged, onDeleted }: { id: string; onChanged: () => void; onDeleted: (serial: number) => void }) {
   const api = useApi();
   const { me } = useAdmin();
   const detail = useAdminQuery<LicenseDetail>(`/admin/v1/licenses/${id}`);
@@ -79,6 +79,16 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
     const code = new FormData(event.currentTarget).get("code");
     const result = await action.run(() => api.post<{ key: string }>(`/admin/v1/licenses/${id}/reveal`, { code }));
     if (result) setKey(result.key);
+  }
+
+  async function remove(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!d) return;
+    const data = new FormData(event.currentTarget);
+    const ok = await action.run(() =>
+      api.post(`/admin/v1/licenses/${id}/delete`, { reason: String(data.get("reason") ?? "").trim(), code: data.get("code") }),
+    );
+    if (ok) onDeleted(d.serial);
   }
 
   if (!d) return <Feedback error={detail.error} />;
@@ -164,6 +174,31 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
           </form>
         ) : null}
       </div>
+      {can(me, "license.cancel") ? (
+        <details className="rounded-2xl border border-danger-border bg-danger-bg/40 p-4" data-testid="license-delete">
+          <summary className="cursor-pointer text-sm font-semibold text-danger-fg">Lisansı sil</summary>
+          <form onSubmit={(e) => void remove(e)} className="mt-3 space-y-3">
+            <p className="text-sm text-fg">
+              Anahtar kalıcı olarak geçersiz olur: etkin bilgisayarlarda bir sonraki yenilemede kapanır, müşteri panelinden ve bu
+              listeden kalkar. Denetim kaydı saklanır. Geri alınamaz.
+            </p>
+            <label className="block text-sm text-fg">
+              Lisans silme nedeni
+              <input name="reason" required minLength={3} maxLength={300} className={`mt-1 ${inputClass}`} />
+            </label>
+            <div className="flex flex-wrap items-end gap-3">
+              <TotpInput id={`delete-${id}`} label="Silme için doğrulama kodu (TOTP)" />
+              <label className="flex items-center gap-2 text-sm text-fg">
+                <input type="checkbox" name="confirm" required className="h-4 w-4" />
+                Lisans #{d.serial} silinsin
+              </label>
+              <Button type="submit" variant="danger">
+                Kalıcı olarak sil
+              </Button>
+            </div>
+          </form>
+        </details>
+      ) : null}
       <details>
         <summary className="cursor-pointer text-sm font-medium text-fg">Geçmiş ({d.events.length})</summary>
         <ul className="mt-2 space-y-1 text-sm text-muted">
@@ -184,6 +219,7 @@ export function Licenses() {
   const { me } = useAdmin();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  const [deletedNote, setDeletedNote] = useState<string | null>(null);
   const list = useAdminQuery<{ items: LicenseRow[]; total: number }>(
     `/admin/v1/licenses?limit=50${query ? `&q=${encodeURIComponent(query)}` : ""}`,
   );
@@ -319,7 +355,19 @@ export function Licenses() {
           </Table>
         </>
       ) : null}
-      {selected ? <Detail key={selected} id={selected} onChanged={list.reload} /> : null}
+      {deletedNote ? <Feedback error={null} message={deletedNote} /> : null}
+      {selected ? (
+        <Detail
+          key={selected}
+          id={selected}
+          onChanged={list.reload}
+          onDeleted={(serial) => {
+            setSelected(null);
+            setDeletedNote(`Lisans #${serial} silindi`);
+            list.reload();
+          }}
+        />
+      ) : null}
     </AdminPage>
   );
 }

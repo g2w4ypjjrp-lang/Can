@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
+import { PriceTag } from "@/components/PriceTag";
 import { CheckoutForm } from "@/components/purchase/CheckoutForm";
 import { Card, Container, Notice, PageHeader, TextLink } from "@/components/ui";
-import { deviceLabel, durationLabel, firstParam, formatPrice } from "@/lib/format";
+import { deviceLabel, durationLabel, firstParam } from "@/lib/format";
 import { fetchPlans } from "@/lib/plans";
 
 export const metadata: Metadata = {
@@ -31,6 +32,8 @@ export default async function PurchasePage({
                   code: plan.code,
                   name: plan.name,
                   price_minor: plan.price_minor,
+                  list_price_minor: plan.list_price_minor ?? null,
+                  campaign_percent: plan.campaign_percent ?? null,
                   currency: plan.currency,
                   is_trial: plan.is_trial,
                 }}
@@ -51,7 +54,13 @@ export default async function PurchasePage({
                   <dd className="text-fg">{plan.companion_device_limit} cihaz</dd>
                   <dt className="text-muted">Tutar</dt>
                   <dd className="text-lg font-bold text-fg" data-testid="order-total">
-                    {formatPrice(plan.price_minor, plan.currency)}
+                    <PriceTag
+                      minor={plan.price_minor}
+                      currency={plan.currency}
+                      listMinor={plan.list_price_minor}
+                      percent={plan.campaign_percent}
+                      priceClassName="text-lg font-bold text-fg"
+                    />
                   </dd>
                 </dl>
                 <p className="mt-4 text-sm text-muted">

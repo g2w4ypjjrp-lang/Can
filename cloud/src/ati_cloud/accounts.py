@@ -48,6 +48,7 @@ from ati_cloud.admin.security import (
     verify_totp,
 )
 from ati_cloud.config import CloudSettings
+from ati_cloud.payments import campaign
 
 SESSION_COOKIE = "ati_session"
 VERIFY_TTL = timedelta(hours=24)
@@ -282,6 +283,11 @@ class PlanInfo(BaseModel):
     price_minor: int
     currency: str
     features: dict[str, Any]
+    # Genel indirim kampanyası varsa: indirimsiz fiyat ve kampanya bilgisi.
+    list_price_minor: int | None = None
+    campaign_percent: int | None = None
+    campaign_label: str | None = None
+    campaign_ends_at: str | None = None
 
 
 class DeviceInfo(BaseModel):
@@ -452,7 +458,8 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
                 "ORDER BY sort_order, code"
             )
             rows = await cur.fetchall()
-        return [PlanInfo.model_validate(r) for r in rows]
+            active = await campaign.active(conn)
+        return [PlanInfo.model_validate(campaign.apply_to_plan(r, active)) for r in rows]
 
     # --- Kayıt ve doğrulama -------------------------------------------------------------------
 
@@ -908,7 +915,8 @@ def create_accounts_router(settings: CloudSettings, db: Database) -> APIRouter:
                 " AND a.deactivated_by = 'customer' "
                 " AND a.deactivated_at > now() - interval '30 days')::int AS resets_used "
                 "FROM licenses l JOIN license_plans p ON p.code = l.plan_code "
-                "WHERE l.customer_id = %s ORDER BY l.sold_at DESC NULLS LAST",
+                "WHERE l.customer_id = %s AND l.deleted_at IS NULL "
+                "ORDER BY l.sold_at DESC NULLS LAST",
                 (customer["id"],),
             )
             licenses = await cur.fetchall()

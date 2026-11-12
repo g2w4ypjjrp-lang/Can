@@ -39,6 +39,7 @@ from ati_cloud.admin.security import SecretBox
 from ati_cloud.admin.settings_api import load_payment_secrets
 from ati_cloud.config import CloudSettings
 from ati_cloud.licensing.service import Licensing
+from ati_cloud.payments import campaign
 from ati_cloud.payments.providers import (
     Buyer,
     CheckoutRequest,
@@ -329,6 +330,8 @@ class Payments:
             applied = await self.apply_coupon(conn, coupon, plan, customer["id"], lock=False)
         return {
             "code": applied.code,
+            "list_price_minor": plan["list_price_minor"],
+            "campaign_percent": plan["campaign_percent"],
             "subtotal_minor": int(plan["price_minor"]),
             "discount_minor": applied.discount_minor,
             "total_minor": applied.total_minor,
@@ -345,7 +348,8 @@ class Payments:
         plan = await cur.fetchone()
         if plan is None:
             raise PaymentError(404, "plan_unavailable", "Bu paket şu anda satışta değil.")
-        return plan
+        # Genel indirim kampanyası (varsa) paket fiyatına uygulanır; kupon bunun üzerine gelir.
+        return campaign.apply_to_plan(plan, await campaign.active(conn))
 
     async def checkout(
         self,
@@ -396,6 +400,12 @@ class Payments:
                 },
                 "mode": "free" if free else cfg.mode,
             }
+            if plan["campaign_percent"]:
+                snapshot["campaign"] = {
+                    "percent": plan["campaign_percent"],
+                    "label": plan["campaign_label"],
+                    "list_price_minor": plan["list_price_minor"],
+                }
             if applied:
                 snapshot["coupon"] = {
                     "code": applied.code,
@@ -403,8 +413,8 @@ class Payments:
                 }
             cur = await conn.execute(
                 "INSERT INTO orders (customer_id, currency, subtotal_minor, discount_minor, "
-                "total_minor, payment_provider, billing_snapshot, coupon_code) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                "total_minor, payment_provider, billing_snapshot, coupon_code, campaign_percent) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "RETURNING id, order_no, customer_id, total_minor, currency",
                 (
                     customer_id,
@@ -415,6 +425,7 @@ class Payments:
                     "free" if free else cfg.provider,
                     Jsonb(snapshot),
                     applied.code if applied else None,
+                    plan["campaign_percent"],
                 ),
             )
             order = _one(await cur.fetchone())

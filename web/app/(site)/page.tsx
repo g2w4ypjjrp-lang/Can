@@ -21,10 +21,10 @@ import {
 
 import { Architecture } from "@/components/home/Architecture";
 import { DesktopViz, EquityViz, HeroVisual, PhoneViz, RadarViz, RiskViz, ScannerViz, ScoreRing } from "@/components/home/Visuals";
+import { PriceTag } from "@/components/PriceTag";
 import { RiskNotice } from "@/components/RiskNotice";
 import { Backdrop, Badge, Container, IconTile, LinkButton, SectionTitle } from "@/components/ui";
 import { FAQ } from "@/lib/faq";
-import { formatPrice } from "@/lib/format";
 import { fetchPlans } from "@/lib/plans";
 
 const HIGHLIGHTS = [
@@ -407,7 +407,14 @@ export default async function HomePage() {
             {cheapest ? (
               <>
                 <p className="text-sm font-medium text-muted">Başlangıç fiyatı</p>
-                <p className="mt-1 text-4xl font-semibold tracking-tight text-fg">{formatPrice(cheapest.price_minor, cheapest.currency)}</p>
+                <PriceTag
+                  className="mt-1"
+                  minor={cheapest.price_minor}
+                  currency={cheapest.currency}
+                  listMinor={cheapest.list_price_minor}
+                  percent={cheapest.campaign_percent}
+                  priceClassName="text-4xl font-semibold tracking-tight text-fg"
+                />
                 <p className="mt-1 text-sm text-muted">{cheapest.name}</p>
               </>
             ) : (

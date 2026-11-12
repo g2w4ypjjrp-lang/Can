@@ -15,6 +15,7 @@ from pydantic import BaseModel, EmailStr, Field
 from ati_cloud.admin.context import Admin, AdminContext, Conn
 from ati_cloud.licensing.keys import InvalidLicenseKey
 from ati_cloud.licensing.service import LicenseError, Licensing
+from ati_cloud.payments import campaign
 
 Limit = Annotated[int, Query(ge=1, le=200)]
 Offset = Annotated[int, Query(ge=0, le=1_000_000)]
@@ -78,6 +79,20 @@ class ExtendRequest(BaseModel):
 
 class StepUpCode(BaseModel):
     code: str = Field(min_length=6, max_length=10)
+
+
+class LicenseDelete(BaseModel):
+    reason: str = Field(min_length=3, max_length=300)
+    code: str = Field(min_length=6, max_length=10)
+
+
+class CampaignUpdate(BaseModel):
+    """Genel indirim kampanyası: bütün ücretli paketlere yüzde indirim."""
+
+    enabled: bool
+    percent: int = Field(ge=1, le=90)
+    label: str = Field(default="", max_length=60)
+    ends_at: datetime | None = None
 
 
 class DeleteCustomer(BaseModel):
@@ -352,7 +367,7 @@ def create_admin_manage_router(ctx: AdminContext) -> APIRouter:
         limit: Limit = 50,
         offset: Offset = 0,
     ) -> dict[str, Any]:
-        where = ["true"]
+        where = ["l.deleted_at IS NULL"]
         params: list[Any] = []
         if q:
             text = q.strip()
@@ -611,6 +626,72 @@ def create_admin_manage_router(ctx: AdminContext) -> APIRouter:
                 conn, admin, request, license_id, sql, params, "admin.license_extended",
                 {"days": body.days, "reason": body.reason},
             )  # fmt: skip
+
+    @router.post("/licenses/{license_id}/delete")
+    async def delete_license(
+        license_id: str,
+        body: LicenseDelete,
+        request: Request,
+        admin: Admin = need["license.cancel"],
+    ) -> dict[str, Any]:
+        """Lisansı siler: iptal edilir (anahtar kalıcı olarak geçersiz, etkin bilgisayarlarda bir
+        sonraki yenilemede kapanır) ve yönetim ile müşteri listelerinden kalkar. Denetim zinciri
+        değiştirilemez olduğundan satır veritabanında kalır. Doğrulama kodu ister."""
+        lic = _uuid(license_id, "Lisans")
+        async with ctx.db.connection() as conn, conn.transaction():
+            await ctx.step_up(conn, admin, body.code)
+            await ctx.act_as(conn, admin)
+            cur = await conn.execute(
+                "SELECT status::text AS status, deleted_at FROM licenses WHERE id = %s FOR UPDATE",
+                (lic,),
+            )
+            row = await cur.fetchone()
+            if row is None or row["deleted_at"] is not None:
+                raise HTTPException(status_code=404, detail="Lisans bulunamadı")
+            if row["status"] != "cancelled":
+                await conn.execute(
+                    "UPDATE licenses SET status = 'cancelled', cancel_reason = %s WHERE id = %s",
+                    (f"silindi: {body.reason}", lic),
+                )
+            await conn.execute("UPDATE licenses SET deleted_at = now() WHERE id = %s", (lic,))
+            await ctx.audit(
+                conn, request, actor_id=admin.id, action="admin.license_deleted",
+                target_type="license", target_id=lic,
+                details={"reason": body.reason, "status_before": row["status"]},
+            )  # fmt: skip
+        return {"id": str(lic), "deleted": True}
+
+    # --- Genel indirim kampanyası -----------------------------------------------------------
+
+    @router.get("/campaign")
+    async def get_campaign(admin: Admin = need["plan.manage"]) -> dict[str, Any]:
+        async with ctx.db.connection() as conn:
+            stored = await campaign.load(conn)
+        value = stored or {"enabled": False, "percent": 10, "label": "", "ends_at": None}
+        return {**value, "active": campaign.is_active(stored)}
+
+    @router.put("/campaign")
+    async def put_campaign(
+        body: CampaignUpdate, request: Request, admin: Admin = need["plan.manage"]
+    ) -> dict[str, Any]:
+        value = {
+            "enabled": body.enabled,
+            "percent": body.percent,
+            "label": body.label.strip(),
+            "ends_at": body.ends_at.isoformat() if body.ends_at else None,
+        }
+        async with ctx.db.connection() as conn, conn.transaction():
+            await conn.execute(
+                "INSERT INTO system_settings (key, value, updated_by) VALUES (%s, %s, %s) "
+                "ON CONFLICT (key) DO UPDATE SET value = excluded.value, "
+                "updated_by = excluded.updated_by, updated_at = now()",
+                (campaign.KEY, Jsonb(value), admin.id),
+            )
+            await ctx.audit(
+                conn, request, actor_id=admin.id, action="admin.campaign_updated",
+                target_type="settings", target_id="campaign", details=value,
+            )  # fmt: skip
+        return {**value, "active": campaign.is_active(value)}
 
     @router.post("/licenses/{license_id}/reveal")
     async def reveal(
