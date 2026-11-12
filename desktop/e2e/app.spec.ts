@@ -162,6 +162,14 @@ test("risk ekranı kararları ve gerekçeleri gösterir", async ({ page }) => {
   await expect(page.getByTestId("risk-limits")).toContainText("%0.5");
 });
 
+test("ana sayfada Binance bakiyesi görünür (piyasa başına cüzdan)", async ({ page }) => {
+  await open(page);
+  const hero = page.getByTestId("balance-hero");
+  await expect(hero.getByTestId("balance-total")).toContainText("USDT");
+  await expect(hero.getByTestId("balance-wallets")).toContainText("Futures cüzdanı");
+  await expect(hero.getByTestId("balance-wallets")).toContainText("kullanılabilir");
+});
+
 test("bot paneli: başlat/durdur, hazırlık listesi ve sonraki karar", async ({ page }) => {
   await open(page);
   const panel = page.getByTestId("bot-panel");

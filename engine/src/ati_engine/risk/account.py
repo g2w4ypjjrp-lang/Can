@@ -50,6 +50,27 @@ class PositionExposure:
 
 
 @dataclass(frozen=True)
+class WalletBalance:
+    """Bir piyasadaki Binance cüzdanı (kote varlık, ör. USDT): toplam, kullanılabilir ve açık
+    pozisyonların gerçekleşmemiş kâr/zararı (Futures)."""
+
+    market: Market
+    asset: str
+    balance: Decimal
+    available: Decimal
+    unrealized_pnl: Decimal = ZERO
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "market": self.market.value,
+            "asset": self.asset,
+            "balance": str(self.balance),
+            "available": str(self.available),
+            "unrealized_pnl": str(self.unrealized_pnl),
+        }
+
+
+@dataclass(frozen=True)
 class AccountSnapshot:
     mode: TradingMode
     ts_ms: int
@@ -60,6 +81,7 @@ class AccountSnapshot:
     halted_at: int | None = None
     halt_reason: str | None = None
     errors: tuple[str, ...] = field(default_factory=tuple)
+    wallets: tuple[WalletBalance, ...] = ()
 
     @property
     def daily_loss(self) -> Decimal:
@@ -113,11 +135,14 @@ class AccountMonitor:
             now = self._clock()
             equity = ZERO
             exposures: list[PositionExposure] = []
+            wallets: list[WalletBalance] = []
             for engine in self.engines():
                 venue = engine.venue
                 balances = await venue.balances()
                 quote = sum((b.free + b.locked for b in balances if b.asset == self.quote), ZERO)
+                available = sum((b.free for b in balances if b.asset == self.quote), ZERO)
                 equity += quote
+                wallet_unrealized = ZERO
                 if engine.market is Market.USDM_FUTURES:
                     for p in await venue.positions():
                         if p.quantity == 0:
@@ -127,6 +152,7 @@ class AccountMonitor:
                         if not unrealized:
                             unrealized = (mark - p.entry_price) * p.quantity
                         equity += unrealized
+                        wallet_unrealized += unrealized
                         exposures.append(
                             PositionExposure(
                                 market=engine.market,
@@ -152,6 +178,15 @@ class AccountMonitor:
                                 leverage=1,
                             )
                         )
+                wallets.append(
+                    WalletBalance(
+                        market=engine.market,
+                        asset=self.quote,
+                        balance=quote,
+                        available=available,
+                        unrealized_pnl=wallet_unrealized,
+                    )
+                )
             day = utc_day(now)
             row = await self._day_row(day, equity, now)
             snapshot = AccountSnapshot(
@@ -163,6 +198,7 @@ class AccountMonitor:
                 positions=tuple(exposures),
                 halted_at=row[1],
                 halt_reason=row[2],
+                wallets=tuple(wallets),
             )
             self.last = snapshot
             return snapshot

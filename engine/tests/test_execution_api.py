@@ -140,6 +140,10 @@ async def test_testnet_trading_through_local_api(
         "exchange.usdm_futures.reconciled",
     } <= names
     assert risk["engine_state"] == "running" and risk["limits"]["max_leverage"] == 3
+    # Ana ekrandaki Binance bakiyesi: piyasa başına USDT cüzdanı.
+    (wallet,) = risk["account"]["wallets"]
+    assert wallet["market"] == "usdm_futures" and wallet["asset"] == "USDT"
+    assert float(wallet["balance"]) > 0 and float(wallet["available"]) <= float(wallet["balance"])
     assert risk["gate"]["approved"] == 1 and risk["gate"]["rejected"] == 3
     decisions = (await client.get("/v1/risk/decisions")).json()
     assert sorted(d["risk_verdict"] for d in decisions) == ["approved"] + ["rejected"] * 3

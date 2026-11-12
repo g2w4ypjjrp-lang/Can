@@ -1,4 +1,4 @@
-import { Activity, Briefcase, Gauge, Wallet } from "lucide-react";
+import { Briefcase, Gauge, RefreshCw, Wallet } from "lucide-react";
 import type { ReactNode } from "react";
 import { usePoll } from "../api/hooks";
 import type { ExecutionPositionInfo, OpportunitySummary, StatusResponse } from "../api/types.gen";
@@ -37,7 +37,69 @@ function Kpi({ icon, label, value, hint, tone, testId }: { icon: ReactNode; labe
   );
 }
 
-/** Kontrol paneli: hesap, bot, açık pozisyonlar ve en iyi fırsatlar. Teknik ayrıntılar en altta. */
+interface WalletInfo {
+  market: string;
+  asset: string;
+  balance: string;
+  available: string;
+  unrealized_pnl: string;
+}
+
+const usdt = (v: number) => v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Binance cüzdanı: toplam (bakiye + açık pozisyonların gerçekleşmemiş kâr/zararı), piyasa başına
+ * bakiye ve kullanılabilir tutar. Anahtar yoksa nereden ekleneceği yazılır. */
+function BalanceHero({ wallets, live, halted, age, onKeys }: { wallets: WalletInfo[] | null; live: boolean; halted: boolean; age?: number; onKeys: () => void }) {
+  const total = (wallets ?? []).reduce((sum, w) => sum + Number(w.balance) + Number(w.unrealized_pnl), 0);
+  const unrealized = (wallets ?? []).reduce((sum, w) => sum + Number(w.unrealized_pnl), 0);
+  return (
+    <section className={`balance-hero ${live ? "live" : ""}`} data-testid="balance-hero" aria-labelledby="bakiye-baslik">
+      <div className="balance-main">
+        <span id="bakiye-baslik" className="balance-label">
+          <Wallet size={16} aria-hidden="true" /> Binance bakiyesi {live ? "· gerçek hesap" : ""}
+        </span>
+        {wallets && wallets.length > 0 ? (
+          <>
+            <span className="balance-value" data-testid="balance-total">
+              {usdt(total)} <small>USDT</small>
+            </span>
+            <span className={`balance-sub ${unrealized > 0 ? "up" : unrealized < 0 ? "down" : ""}`}>
+              Açık pozisyonlarda {unrealized >= 0 ? "+" : ""}
+              {usdt(unrealized)} USDT{halted ? " · günlük zarar sınırı doldu, bugün yeni işlem yok" : ""}
+              {age !== undefined ? <span className="muted"> · {Math.round(age)} sn önce</span> : null}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="balance-value muted">—</span>
+            <span className="balance-sub">
+              Bakiye için Binance anahtarı gerekli.{" "}
+              <button type="button" className="ghost link" onClick={onKeys}>
+                Anahtar ekle
+              </button>
+            </span>
+          </>
+        )}
+      </div>
+      {wallets && wallets.length > 0 && (
+        <ul className="balance-wallets" data-testid="balance-wallets">
+          {wallets.map((w) => (
+            <li key={w.market}>
+              <span className="muted small">{MARKET_LABELS[w.market] ?? w.market} cüzdanı</span>
+              <b>
+                {usdt(Number(w.balance))} {w.asset}
+              </b>
+              <span className="muted small">kullanılabilir {usdt(Number(w.available))}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <RefreshCw size={14} className="balance-live-dot" aria-hidden="true" />
+    </section>
+  );
+}
+
+/** Kontrol paneli: Binance bakiyesi, bot, açık pozisyonlar ve en iyi fırsatlar. Teknik ayrıntılar en altta. */
 export function Dashboard() {
   const navigate = useNavigate();
   const status = usePoll((c) => c.get<StatusResponse>("/v1/status"), 2000);
@@ -54,6 +116,13 @@ export function Dashboard() {
     <div className="page" data-testid="page-dashboard">
       <ErrorBox error={status.error} what="Motor" />
       <GettingStarted mode={s?.trading_mode} />
+      <BalanceHero
+        wallets={(account?.wallets as WalletInfo[] | undefined) ?? null}
+        live={live}
+        halted={Boolean(account?.halted)}
+        age={account?.ts_age_s as number | undefined}
+        onKeys={() => navigate("settings")}
+      />
       <div className="kpis">
         <Kpi
           icon={<Wallet size={18} />}
@@ -61,13 +130,6 @@ export function Dashboard() {
           tone={live ? "live" : undefined}
           value={<span data-testid="trading-mode">{MODE_LABELS[s?.trading_mode ?? ""] ?? "—"}</span>}
           hint={s?.can_open_positions ? "Yeni işlem açılabilir" : "Şu an yeni işlem açılamaz"}
-        />
-        <Kpi
-          icon={<Activity size={18} />}
-          label="Özsermaye"
-          value={account ? `${price(account.equity as string)} USDT` : "—"}
-          hint={account ? (account.halted ? "Günlük zarar sınırı doldu; gün kilitli" : "Binance hesabı") : "Binance anahtarı bağlı değil"}
-          tone={account?.halted ? "down" : undefined}
         />
         <Kpi
           icon={<Gauge size={18} />}

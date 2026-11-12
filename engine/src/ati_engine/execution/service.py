@@ -457,6 +457,10 @@ class ExecutionService:
                     "halted": snapshot.halted_at is not None,
                     "halt_reason": snapshot.halt_reason,
                     "open_positions": len(snapshot.positions),
+                    # Binance cüzdanı (piyasa başına kote varlık): toplam, kullanılabilir,
+                    # gerçekleşmemiş kâr/zarar. Ana ekranda "Binance bakiyesi" olarak gösterilir.
+                    "wallets": [w.as_dict() for w in snapshot.wallets],
+                    "ts_age_s": round(snapshot.age_s(), 1),
                 },
             },
         }

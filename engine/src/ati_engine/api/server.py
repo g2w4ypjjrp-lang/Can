@@ -1227,6 +1227,10 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
     @app.get("/v1/risk/status")
     async def risk_status(_: Auth) -> dict[str, Any]:
         service = execution_or_404()
+        if service.markets:
+            # Ana ekrandaki Binance bakiyesi güncel olsun (15 sn'den eskiyse yenilenir).
+            with contextlib.suppress(Exception):
+                await service.monitor.snapshot(max_age_s=15)
         status_ = await service.status()
         return {
             **status_["risk"],
