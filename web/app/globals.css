@@ -934,7 +934,7 @@
     radial-gradient(600px 360px at 100% -10%, rgba(59, 232, 255, 0.22), transparent 62%),
     radial-gradient(560px 360px at 0% 110%, rgba(255, 79, 216, 0.16), transparent 60%),
     linear-gradient(180deg, #1d2a5c 0%, #172250 100%);
-  background-attachment: fixed;
+  background-color: #172250;
 }
 .phone-neon .neon-balance {
   border: 1px solid rgba(59, 232, 255, 0.45);
@@ -953,4 +953,336 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* --- Telefon paneli: modern cam kartlar, parlayan bakiye kartı, sekmeler, alt dock --- */
+.phone-neon .ph-header {
+  background: linear-gradient(180deg, rgba(25, 36, 79, 0.96) 0%, rgba(25, 36, 79, 0.86) 75%, rgba(25, 36, 79, 0));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.phone-neon .ph-gradient-text {
+  background: linear-gradient(90deg, #3be8ff, #c27bff 55%, #ff7ad9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.phone-neon .ph-dot {
+  position: relative;
+  display: inline-block;
+  height: 0.5rem;
+  width: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+}
+.phone-neon .ph-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: ph-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.phone-neon .ph-icon-button {
+  display: grid;
+  height: 2.5rem;
+  width: 2.5rem;
+  place-items: center;
+  border-radius: 1rem;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+}
+.phone-neon .ph-icon-button:disabled {
+  opacity: 0.5;
+}
+.phone-neon .ph-tabs {
+  scrollbar-width: none;
+}
+.phone-neon .ph-tabs::-webkit-scrollbar {
+  display: none;
+}
+.phone-neon .ph-tab {
+  flex-shrink: 0;
+  border-radius: 9999px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  transition: background 0.25s, color 0.25s, border-color 0.25s;
+}
+.phone-neon .ph-tab[aria-current="true"] {
+  border-color: transparent;
+  background: linear-gradient(90deg, #3be8ff, #b98aff);
+  color: #0b1640;
+  box-shadow: 0 6px 18px -8px rgba(59, 232, 255, 0.8);
+}
+.phone-neon .ph-card {
+  position: relative;
+  border-radius: 1.5rem;
+  border: 1px solid var(--glass-border);
+  background: linear-gradient(180deg, rgba(46, 64, 132, 0.86), rgba(31, 43, 98, 0.86));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 18px 40px -26px rgba(4, 8, 36, 0.95);
+}
+.phone-neon .ph-icon {
+  display: grid;
+  height: 2.25rem;
+  width: 2.25rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 0.85rem;
+  color: #0b1640;
+  background: linear-gradient(135deg, #3be8ff, #b98aff);
+  box-shadow: 0 6px 16px -8px rgba(59, 232, 255, 0.9);
+}
+.phone-neon .ph-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.75rem;
+  border: 1px solid rgba(59, 232, 255, 0.5);
+  background:
+    radial-gradient(380px 180px at 0% 0%, rgba(59, 232, 255, 0.3), transparent 70%),
+    radial-gradient(380px 200px at 100% 100%, rgba(255, 79, 216, 0.24), transparent 70%),
+    linear-gradient(135deg, #24357a, #2b2370);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 44px -16px rgba(59, 232, 255, 0.85);
+}
+.phone-neon .ph-hero::before {
+  content: "";
+  position: absolute;
+  inset: -40% -10% auto auto;
+  height: 220px;
+  width: 220px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(194, 123, 255, 0.35), transparent 65%);
+  animation: ph-float 9s ease-in-out infinite;
+  pointer-events: none;
+}
+.phone-neon .ph-hero > * {
+  position: relative;
+}
+.phone-neon .ph-hero.live {
+  border-color: rgba(255, 92, 138, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 44px -16px rgba(255, 92, 138, 0.9);
+}
+.phone-neon .ph-mode {
+  border-radius: 9999px;
+  border: 1px solid rgba(59, 232, 255, 0.45);
+  background: rgba(11, 22, 64, 0.45);
+  padding: 0.2rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #c9f8ff;
+}
+.phone-neon .ph-mode.live {
+  border-color: rgba(255, 92, 138, 0.8);
+  background: rgba(255, 92, 138, 0.22);
+  color: #ffd6e2;
+}
+.phone-neon .ph-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(11, 22, 64, 0.4);
+  padding: 0.15rem 0.35rem 0.15rem 0.75rem;
+  font-size: 0.8rem;
+}
+.phone-neon .ph-chip > b {
+  padding-right: 0.4rem;
+}
+.phone-neon .ph-tile {
+  border-radius: 1.25rem;
+  border: 1px solid var(--glass-border);
+  background: linear-gradient(180deg, rgba(46, 64, 132, 0.8), rgba(33, 46, 104, 0.8));
+  padding: 0.7rem 0.85rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.phone-neon .ph-state {
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.25rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.phone-neon .ph-state.on {
+  background: var(--success-bg);
+  color: var(--success-fg);
+  box-shadow: 0 0 18px -8px rgba(61, 255, 168, 0.9);
+}
+.phone-neon .ph-count {
+  min-width: 1.6rem;
+  border-radius: 9999px;
+  background: rgba(59, 232, 255, 0.16);
+  padding: 0.15rem 0.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #c9f8ff;
+}
+.phone-neon .ph-row {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 22, 64, 0.32);
+  padding: 0.75rem;
+}
+.phone-neon .ph-bar {
+  background: linear-gradient(90deg, #3be8ff, #b98aff);
+  transition: width 0.6s ease;
+}
+.phone-neon .ph-bar.pass {
+  background: linear-gradient(90deg, #26d98a, #3dffa8);
+  box-shadow: 0 0 10px -2px rgba(61, 255, 168, 0.8);
+}
+.phone-neon .ph-timeline {
+  position: relative;
+  padding-left: 1rem;
+}
+.phone-neon .ph-timeline::before {
+  content: "";
+  position: absolute;
+  bottom: 0.25rem;
+  left: 0.2rem;
+  top: 0.35rem;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(59, 232, 255, 0.7), rgba(194, 123, 255, 0.15));
+}
+.phone-neon .ph-timeline > li {
+  position: relative;
+}
+.phone-neon .ph-timeline > li::before {
+  content: "";
+  position: absolute;
+  left: -1.03rem;
+  top: 0.4rem;
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 9999px;
+  background: #3be8ff;
+  box-shadow: 0 0 0 3px rgba(25, 36, 79, 1);
+}
+.phone-neon .ph-dock {
+  border-radius: 1.6rem;
+  border: 1px solid var(--glass-border);
+  background: rgba(22, 32, 74, 0.82);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 40px -12px rgba(2, 6, 30, 0.9);
+}
+.phone-neon .ph-kill {
+  background: linear-gradient(90deg, #e11d48, #f43f5e 55%, #fb7185);
+  box-shadow: 0 10px 26px -10px rgba(244, 63, 94, 0.95);
+}
+.phone-neon .ph-sheet {
+  border: 1px solid var(--glass-border);
+  background: linear-gradient(180deg, #2a3a80, #1f2b66);
+  box-shadow: 0 -10px 50px -10px rgba(2, 6, 30, 0.9);
+  animation: ph-sheet 0.28s ease-out both;
+}
+.phone-neon .ph-toast {
+  animation: ph-rise 0.3s ease-out both;
+}
+.phone-neon .ph-skel {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
+  background-size: 200% 100%;
+  animation: ph-shimmer 1.4s linear infinite;
+}
+.phone-neon .ph-rise {
+  animation: ph-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.phone-neon .ph-orbit {
+  position: relative;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(59, 232, 255, 0.22), transparent 68%);
+}
+.phone-neon .ph-orbit::before,
+.phone-neon .ph-orbit::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1.5px solid transparent;
+  border-top-color: rgba(59, 232, 255, 0.85);
+  border-right-color: rgba(194, 123, 255, 0.5);
+  animation: ph-spin 3.2s linear infinite;
+}
+.phone-neon .ph-orbit::after {
+  inset: 10px;
+  border-top-color: rgba(255, 122, 217, 0.8);
+  border-right-color: transparent;
+  border-left-color: rgba(59, 232, 255, 0.4);
+  animation-duration: 4.6s;
+  animation-direction: reverse;
+}
+.phone-neon .ph-breathe {
+  animation: ph-breathe 1.8s ease-in-out infinite;
+}
+@keyframes ph-ping {
+  75%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+@keyframes ph-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ph-sheet {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ph-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes ph-float {
+  50% {
+    transform: translate(-30px, 24px);
+  }
+}
+@keyframes ph-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ph-breathe {
+  50% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 18px rgba(59, 232, 255, 0.7));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-neon *,
+  .phone-neon *::before,
+  .phone-neon *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

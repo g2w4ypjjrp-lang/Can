@@ -7,6 +7,11 @@ kupon kampanyalı fiyatın üzerine uygulanır, deneme paketi etkilenmez. Yönet
 lisans ayrıntısı → **Lisansı sil** (neden + doğrulama kodu + onay): anahtar kalıcı olarak geçersiz olur,
 listelerden kalkar; denetim kaydı saklanır.
 
+Aynı site güncellemesinde **telefon görünümü yenilendi**: bölüm sekmeleri (Özet, Bot, Pozisyonlar,
+Geçmiş, Fırsatlar, Bildirimler), parlayan bakiye kartı ve bu oturumdaki bakiye grafiği, coin rozetleri,
+botun sonraki kararı için geri sayım halkası, başarı oranı halkası, yüzen alt düğme çubuğu ve alttan açılan
+acil durdurma penceresi. Gerçek para modunda kart kırmızı çerçeveli ve "GERÇEK PARA" etiketli kalır.
+
 0.14.6'da yeni: **yeni logo** (neon degrade rozet, yükselen mumlar, trend çizgisi, hedef düğümü) ve
 şekillendirilmiş isim (degrade "AI", kalın "Trading", geniş aralıklı "INTELLIGENCE"); uygulama simgesi,
 açılış ekranı, menü, lisans ekranı, site ve telefon sayfasında.
