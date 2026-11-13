@@ -52,8 +52,13 @@ from ati_engine.security.exchange_keys import (
 )
 from ati_engine.storage.audit import AuditLog
 from ati_engine.storage.database import Database
+from ati_engine.storage.settings_store import SettingsStore
 
 logger = logging.getLogger(__name__)
+
+# Sanal hesabın kalıcı kaydı (piyasa başına) ve kayıt aralığı.
+PAPER_STATE_KEY = "paper.venue.{market}"
+PAPER_SAVE_INTERVAL_S = 5.0
 
 
 class ExecutionUnavailable(RuntimeError):
@@ -113,6 +118,7 @@ class ExecutionService:
         self._paper_symbols = paper_symbols
         self._paper_price = paper_price
         self.paper_balance = paper_balance
+        self._paper_task: asyncio.Task[None] | None = None
         self.label = ENV_LABELS[environment]
         self.settings = settings
         self.cfg = settings.execution
@@ -278,6 +284,12 @@ class ExecutionService:
             initial_quote=self.paper_balance / max(1, len(self.cfg.markets)),
             quote_asset=self.settings.quote_asset,
         )
+        stored = await SettingsStore(self.db).get(PAPER_STATE_KEY.format(market=market.value))
+        if isinstance(stored, dict) and stored.get("version") == 1:
+            try:
+                venue.restore(stored)
+            except Exception:  # bozuk kayıt: sanal hesap baştan başlar
+                logger.warning("Sanal hesap kaydı okunamadı", extra={"market": market.value})
         engine = TradingEngine(
             venue=venue,
             db=self.db,
@@ -301,12 +313,49 @@ class ExecutionService:
         if self.guard is not None:
             self.start_guard()
             self.guard.attach(market)
+        if self._paper_task is None:
+            self._paper_task = asyncio.create_task(self._paper_saver(), name="paper-save")
         await self.audit.record(
             actor="system",
             action="execution.connected",
             details={"market": market.value, "mode": "paper", "balance": str(self.paper_balance)},
         )
         return execution
+
+    async def save_paper(self) -> None:
+        """Değişen sanal hesapları kaydeder (bakiye, pozisyonlar, bekleyen emirler)."""
+        store = SettingsStore(self.db)
+        for market, execution in list(self.markets.items()):
+            venue = execution.engine.venue
+            if isinstance(venue, LivePaperVenue) and venue.dirty:
+                venue.dirty = False
+                await store.set(PAPER_STATE_KEY.format(market=market.value), venue.snapshot())
+
+    async def _paper_saver(self) -> None:
+        while True:
+            await asyncio.sleep(PAPER_SAVE_INTERVAL_S)
+            try:
+                await self.save_paper()
+            except Exception:  # kayıt hatası işlemleri durdurmaz; sonraki turda denenir
+                logger.warning("Sanal hesap kaydedilemedi", exc_info=True)
+
+    async def reset_paper(self, *, actor: str) -> dict[str, str]:
+        """Sanal hesabı başlangıç bakiyesine döndürür (açık sanal pozisyon yokken)."""
+        if not self.paper:
+            raise ExecutionUnavailable("Yalnızca sanal hesap sıfırlanabilir")
+        for execution in self.markets.values():
+            if execution.engine.positions.positions:
+                raise ExecutionBlocked("Açık sanal pozisyon varken sıfırlanamaz; önce kapatın")
+        share = self.paper_balance / max(1, len(self.cfg.markets))
+        balances: dict[str, str] = {}
+        for market, execution in self.markets.items():
+            venue = execution.engine.venue
+            if isinstance(venue, LivePaperVenue):
+                venue.reset(share)
+                balances[market.value] = str(share)
+        await self.save_paper()
+        await self.audit.record(actor=actor, action="execution.paper_reset", details=balances)
+        return balances
 
     async def feed_prices(self, prices: Mapping[str, float]) -> None:
         """Sanal hesap: canlı fiyatlar (anahtar ``"<piyasa>:<SEMBOL>"``) yürütücülere iletilir."""
@@ -423,6 +472,13 @@ class ExecutionService:
             await self.guard.detach(market)
 
     async def close(self) -> None:
+        if self._paper_task is not None:
+            self._paper_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._paper_task
+            self._paper_task = None
+            with contextlib.suppress(Exception):
+                await self.save_paper()  # kapanırken son durum
         self._guard_stop.set()
         if self._guard_task is not None:
             self._guard_task.cancel()

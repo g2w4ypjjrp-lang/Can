@@ -40,10 +40,15 @@ export function useForumAccount() {
   const [state, setState] = useState<"loading" | "anon" | "ok" | "error">("loading");
   const [mine, setMine] = useState<MyPosts | null>(null);
   const load = useCallback(() => {
+    // Önce oturum sorulur (ziyaretçiye de 200): girişsiz ziyaretçide konsolda 401 hatası oluşmaz.
     api
-      .get<MyPosts>("/v1/forum/me")
-      .then((data) => {
-        setMine(data);
+      .get<{ logged_in: boolean }>("/v1/forum/whoami")
+      .then(async (who) => {
+        if (!who.logged_in) {
+          setState("anon");
+          return;
+        }
+        setMine(await api.get<MyPosts>("/v1/forum/me"));
         setState("ok");
       })
       .catch((err: unknown) => setState(err instanceof ApiError && err.status === 401 ? "anon" : "error"));

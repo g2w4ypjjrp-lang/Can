@@ -36,9 +36,12 @@ export function TopicStateProvider({ number, children }: { number: number; child
   const [vote, setVote] = useState<"bull" | "bear" | null>(null);
 
   useEffect(() => {
+    // Girişsiz ziyaretçide kişisel durum istenmez (konsolda 401 hatası oluşmasın).
     api
-      .get<{ liked: string[]; vote: "bull" | "bear" | null }>(`/v1/forum/me/topics/${number}/state`)
-      .then((state) => {
+      .get<{ logged_in: boolean }>("/v1/forum/whoami")
+      .then(async (who) => {
+        if (!who.logged_in) return;
+        const state = await api.get<{ liked: string[]; vote: "bull" | "bear" | null }>(`/v1/forum/me/topics/${number}/state`);
         setLikedSet(new Set(state.liked));
         setVote(state.vote);
         setAnon(false);

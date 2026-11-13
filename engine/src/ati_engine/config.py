@@ -328,7 +328,7 @@ class ExecutionSettings(BaseModel):
     unknown_order_grace_s: float = Field(default=60.0, ge=0, le=3600)
     recv_window_ms: int = Field(default=5000, ge=1000, le=60_000)
     # Sanal hesap (Sanal mod): botun ve elle işlemin borsaya emir göndermeden, canlı fiyatlarla
-    # çalıştığı hesabın başlangıç bakiyesi (USDT). Motor yeniden başlayınca baştan başlar.
+    # çalıştığı hesabın başlangıç bakiyesi (USDT). Hesap kalıcıdır; Ayarlar'dan sıfırlanır.
     paper_balance_usdt: Decimal = Field(default=Decimal(10_000), gt=0, le=Decimal(10_000_000))
 
 

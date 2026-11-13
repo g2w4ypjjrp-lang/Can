@@ -1269,6 +1269,18 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         removed = await service_for("live").delete_key(market, actor=LOCAL_ACTOR)
         return {"removed": removed}
 
+    @app.post("/v1/execution/paper/reset")
+    async def execution_paper_reset(_: Auth) -> dict[str, Any]:
+        """Sanal hesabı başlangıç bakiyesine döndürür (açık sanal pozisyon yokken)."""
+        paper = runtime.execution_paper
+        if paper is None:
+            raise HTTPException(status_code=404, detail="Sanal hesap etkin değil")
+        try:
+            balances = await paper.reset_paper(actor=LOCAL_ACTOR)
+        except (ExecutionBlocked, ExecutionUnavailable) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"reset": True, "balances": balances}
+
     @app.post("/v1/execution/connect")
     async def execution_connect(
         market: Market, _: Auth, environment: Literal["testnet", "live"] | None = None

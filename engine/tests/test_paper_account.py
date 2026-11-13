@@ -37,14 +37,11 @@ BTC = SymbolInfo(
 )
 
 
-@pytest.fixture
-async def paper(
-    tmp_path: Path, db: Database
-) -> AsyncIterator[tuple[ExecutionService, dict[str, float]]]:
-    prices = {"BTCUSDT": 75_000.0}
-    symbols: dict[str, SymbolInfo] = {}  # açılışta boş: exchangeInfo sonra gelir
+def make_service(
+    tmp_path: Path, db: Database, prices: dict[str, float], symbols: dict[str, SymbolInfo]
+) -> ExecutionService:
     settings = EngineSettings(data_dir=tmp_path / "data", log_to_console=False)
-    svc = ExecutionService(
+    return ExecutionService(
         settings=settings,
         db=db,
         audit=AuditLog(db),
@@ -56,6 +53,15 @@ async def paper(
         paper_price=lambda market, symbol: prices.get(symbol),
         paper_balance=D(10_000),
     )
+
+
+@pytest.fixture
+async def paper(
+    tmp_path: Path, db: Database
+) -> AsyncIterator[tuple[ExecutionService, dict[str, float]]]:
+    prices = {"BTCUSDT": 75_000.0}
+    symbols: dict[str, SymbolInfo] = {}  # açılışta boş: exchangeInfo sonra gelir
+    svc = make_service(tmp_path, db, prices, symbols)
     await svc.connect_configured()  # anahtar gerekmez
     symbols["BTCUSDT"] = BTC
     yield svc, prices
@@ -117,3 +123,58 @@ async def test_bot_trades_in_paper_mode_and_stop_triggers_on_live_price(
     assert venue.futures_positions.get("BTCUSDT", (D(0), D(0)))[0] == 0
     assert venue.wallet["USDT"] < D(5_000)  # zarar ve komisyon sanal bakiyeden düştü
     assert "BTCUSDT" not in execution.engine.positions.positions
+
+
+async def test_paper_account_survives_restart_and_can_be_reset(
+    tmp_path: Path, db: Database
+) -> None:
+    prices = {"BTCUSDT": 75_000.0}
+    symbols = {"BTCUSDT": BTC}
+    svc = make_service(tmp_path, db, prices, symbols)
+    await svc.connect_configured()
+    auto = AutoTrader(
+        settings=AutoTradeSettings(enabled=True, trailing_runner=False),
+        limits=svc.settings.risk,
+        service=svc,
+        trading_mode=lambda: TradingMode.PAPER,
+    )
+    await auto.on_opportunity(signal())
+    assert auto.stats["opened"] == 1
+    venue = svc.markets[Market.USDM_FUTURES].engine.venue
+    assert isinstance(venue, LivePaperVenue)
+    qty, entry = venue.futures_positions["BTCUSDT"]
+    wallet = venue.wallet["USDT"]
+    stops_before = sorted((o.type.value, str(o.trigger_price)) for o in venue._orders.values()
+                          if o.client_id in venue._resting)  # fmt: skip
+    assert stops_before  # zarar durdur ve hedef emirleri bekliyor
+    with pytest.raises(Exception, match="Açık sanal pozisyon"):
+        await svc.reset_paper(actor="test")
+    await svc.close()  # kapanırken kaydedilir
+
+    # Motor yeniden başlar: sanal hesap kaldığı yerden sürer.
+    again = make_service(tmp_path, db, prices, symbols)
+    await again.connect_configured()
+    restored = again.markets[Market.USDM_FUTURES].engine.venue
+    assert isinstance(restored, LivePaperVenue)
+    assert restored.futures_positions["BTCUSDT"] == (qty, entry)
+    # İşlem motoru da pozisyonu tanır (ekranda görünür, stop/hedef yönetilir).
+    assert "BTCUSDT" in again.markets[Market.USDM_FUTURES].engine.positions.positions
+    assert restored.wallet["USDT"] == wallet
+    stops_after = sorted((o.type.value, str(o.trigger_price)) for o in restored._orders.values()
+                         if o.client_id in restored._resting)  # fmt: skip
+    assert stops_after == stops_before
+    # Geri gelen stop canlı fiyatla tetiklenir.
+    await again.feed_prices({"usdm_futures:BTCUSDT": 73_000.0})
+    await restored.drained()
+    assert restored.futures_positions.get("BTCUSDT", (D(0), D(0)))[0] == 0
+
+    # Pozisyon yokken sıfırlanır: bakiye başlangıca döner, kayıt da güncellenir.
+    balances = await again.reset_paper(actor="test")
+    assert balances == {"usdm_futures": "5000", "spot": "5000"}
+    assert restored.wallet == {"USDT": D(5000)}
+    await again.close()
+    third = make_service(tmp_path, db, prices, symbols)
+    await third.connect_configured()
+    fresh = third.markets[Market.USDM_FUTURES].engine.venue
+    assert isinstance(fresh, LivePaperVenue) and fresh.wallet == {"USDT": D(5000)}
+    await third.close()

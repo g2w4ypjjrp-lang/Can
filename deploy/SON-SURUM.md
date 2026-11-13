@@ -4,7 +4,8 @@
 başlıyor, bot ise Sanal modda işlem açmıyordu. Artık Sanal modda bot **sanal hesapta** çalışır:
 borsaya hiç emir gitmeden, canlı Binance fiyatlarıyla, 10.000 USDT sanal bakiyeyle (Futures ve Spot'a
 eşit bölünür) işlem açar; zarar durdur, hedef ve iz süren stop canlı fiyatla tetiklenir. Anahtar
-gerekmez; uygulama yeniden açılınca sanal hesap baştan başlar. Demo para seçtiyseniz uygulama artık
+gerekmez. Sanal hesap kalıcıdır: uygulama kapanıp açılınca bakiye, pozisyonlar ve stoplar kaldığı
+yerden sürer; Ayarlar → İşlem modu → **Sanal hesabı sıfırla** ile başa döner. Demo para seçtiyseniz uygulama artık
 açılışta Demo'da başlar (Gerçek para asla kendiliğinden açılmaz, her seferinde onay ister).
 
 0.14.8'de yeni: **uygulama doğrulaması** (Ayarlar → Doğrulama, isteğe bağlı). Google / Microsoft

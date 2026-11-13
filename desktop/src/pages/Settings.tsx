@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useAction, usePoll } from "../api/hooks";
 import type { AuditEntry, Market, TestnetKeyResponse } from "../api/types.gen";
 import { ModeSwitch } from "../components/ModeSwitch";
-import { Badge, Card, DataTable, ErrorBox, Field } from "../components/ui";
+import { Badge, Card, Confirm, DataTable, ErrorBox, Field } from "../components/ui";
 import { MARKET_LABELS, time } from "../lib/format";
 import { CrashReportsSection } from "./CrashReports";
 import { LicenseSection } from "./License";
@@ -12,6 +12,39 @@ import { TelegramSection } from "./Telegram";
 interface ExecutionStatus {
   live_locked: boolean;
   markets: Record<string, { key_stored: boolean; key_hint: string | null; connected: boolean; error: string | null }>;
+}
+
+/** Sanal hesabı başlangıç bakiyesine döndürür (açık sanal pozisyon yokken). */
+function PaperReset() {
+  const [ask, setAsk] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const reset = useAction(async (c) => {
+    await c.post("/v1/execution/paper/reset");
+    setDone("Sanal hesap 10.000 USDT ile yeniden başladı");
+  });
+  return (
+    <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+      <button type="button" onClick={() => setAsk(true)} disabled={reset.pending} data-testid="paper-reset">
+        Sanal hesabı sıfırla
+      </button>
+      {done && <span className="small" role="status">{done}</span>}
+      <ErrorBox error={reset.error} />
+      <Confirm
+        open={ask}
+        title="Sanal hesap sıfırlansın mı?"
+        confirmLabel="Sıfırla"
+        danger
+        onCancel={() => setAsk(false)}
+        onConfirm={() => {
+          setAsk(false);
+          setDone(null);
+          void reset.execute();
+        }}
+      >
+        Sanal bakiye başlangıca (10.000 USDT) döner; geçmiş işlemler kayıtta kalır. Açık sanal pozisyon varken sıfırlanamaz.
+      </Confirm>
+    </div>
+  );
 }
 
 export function Settings() {
@@ -28,11 +61,12 @@ export function Settings() {
         <ModeSwitch onChanged={() => void execution.refresh()} />
         <p className="muted small">
           <b>Sanal</b>, borsaya emir göndermeden canlı fiyatlarla 10.000 USDT'lik sanal hesapta işlem yapar (bot da çalışır;
-          anahtar gerekmez, uygulama yeniden açılınca sanal hesap baştan başlar). <b>Demo para</b>, Binance'in sahte bakiyeyle
+          anahtar gerekmez; sanal hesap uygulama kapanıp açılınca kaldığı yerden sürer, aşağıdan sıfırlanabilir). <b>Demo para</b>, Binance'in sahte bakiyeyle
           ve gerçek fiyatlarla çalışan Demo Trading ortamıdır. <b>Gerçek para</b> gerçek Binance hesabınızda işlem yapar: para
           çekme yetkisi kapalı gerçek hesap anahtarı, geçerli lisans ve onay ifadesi gerekir; uygulama yeniden başladığında
           güvenlik için Sanal ya da son seçtiğiniz Demo moda döner.
         </p>
+        <PaperReset />
       </Card>
 
       <h3 className="section-title">Binance hesap anahtarları (gerçek para)</h3>

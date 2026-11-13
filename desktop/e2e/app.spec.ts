@@ -458,3 +458,10 @@ test("doğrulama: açılır, kritik işlem kod ve onay ister, kurtarma koduyla k
   await expect(dialog).toHaveCount(0);
   await expect(card).toContainText("Kapalı");
 });
+
+test("sanal hesap: Ayarlar'dan onayla sıfırlanır", async ({ page }) => {
+  await open(page, "settings");
+  await page.getByTestId("paper-reset").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Sıfırla" }).click();
+  await expect(page.getByTestId("trading-mode-card").getByRole("status")).toContainText("Sanal hesap 10.000 USDT ile yeniden başladı");
+});
