@@ -25,9 +25,11 @@ export function Settings() {
       <Card title="İşlem modu" testId="trading-mode-card">
         <ModeSwitch onChanged={() => void execution.refresh()} />
         <p className="muted small">
-          <b>Sanal</b> emir göndermez. <b>Demo para</b>, Binance'in sahte bakiyeyle ve gerçek fiyatlarla çalışan Demo Trading
-          ortamıdır. <b>Gerçek para</b> gerçek Binance hesabınızda işlem yapar: para çekme yetkisi kapalı gerçek hesap anahtarı,
-          geçerli lisans ve onay ifadesi gerekir; uygulama yeniden başladığında güvenlik için sanal moda döner.
+          <b>Sanal</b>, borsaya emir göndermeden canlı fiyatlarla 10.000 USDT'lik sanal hesapta işlem yapar (bot da çalışır;
+          anahtar gerekmez, uygulama yeniden açılınca sanal hesap baştan başlar). <b>Demo para</b>, Binance'in sahte bakiyeyle
+          ve gerçek fiyatlarla çalışan Demo Trading ortamıdır. <b>Gerçek para</b> gerçek Binance hesabınızda işlem yapar: para
+          çekme yetkisi kapalı gerçek hesap anahtarı, geçerli lisans ve onay ifadesi gerekir; uygulama yeniden başladığında
+          güvenlik için Sanal ya da son seçtiğiniz Demo moda döner.
         </p>
       </Card>
 

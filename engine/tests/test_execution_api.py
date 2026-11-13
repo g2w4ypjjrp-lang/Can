@@ -69,7 +69,10 @@ TRADE = {
 async def test_testnet_trading_through_local_api(
     client: httpx.AsyncClient, exchange: FakeExchange, tmp_path: Path
 ) -> None:
-    status = (await client.get("/v1/execution/status")).json()
+    # Sanal modda etkin yürütücü sanal hesaptır; Demo durumu açıkça istenir.
+    active = (await client.get("/v1/execution/status")).json()
+    assert active["environment"] == "paper"
+    status = (await client.get("/v1/execution/status?environment=testnet")).json()
     assert status["live_locked"] is False and status["environment"] == "testnet"
     assert status["markets"]["usdm_futures"] == {
         "key_stored": False,
@@ -91,12 +94,10 @@ async def test_testnet_trading_through_local_api(
     )
     body = good.json()
     assert body["verified"] and body["stored"] and body["key_hint"] == "…cdef"
-    status = (await client.get("/v1/execution/status")).json()
+    status = (await client.get("/v1/execution/status?environment=testnet")).json()
     futures = status["markets"]["usdm_futures"]
     assert futures["connected"] and futures["last_reconcile"]["ok"]
 
-    blocked = await client.post("/v1/execution/trades", json=TRADE)
-    assert blocked.status_code == 409 and "Demo Trading değil" in blocked.json()["detail"]
     mode = await client.post("/v1/trading-mode", json={"mode": "testnet"})
     assert mode.status_code == 200
 
@@ -197,9 +198,7 @@ async def test_live_key_and_live_mode_refused(client: httpx.AsyncClient) -> None
     checks = {c["name"]: c for c in live.json()["checks"]}
     assert not checks["live_key_connected"]["passed"]
     assert "para çekme yetkisi KAPALI" in checks["live_key_connected"]["message"]
-    unknown = await client.post("/v1/execution/trades", json=TRADE)
-    assert unknown.status_code == 409  # mod PAPER
-    missing = await client.post("/v1/execution/connect?market=spot")
+    missing = await client.post("/v1/execution/connect?market=spot&environment=testnet")
     assert missing.status_code == 409 and "anahtarı kayıtlı değil" in missing.json()["detail"]
 
 
@@ -218,5 +217,5 @@ async def test_key_verification_has_an_upper_time_limit(
     body = response.json()
     assert response.status_code == 200 and body["verified"] is False and body["stored"] is False
     assert "yanıt vermedi" in body["message"] and "api.binance.com" in body["message"]
-    status = (await client.get("/v1/execution/status")).json()
+    status = (await client.get("/v1/execution/status?environment=testnet")).json()
     assert status["markets"]["usdm_futures"]["key_stored"] is False

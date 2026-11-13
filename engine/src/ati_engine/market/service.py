@@ -18,7 +18,7 @@ from typing import Any
 
 from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus
-from ati_engine.core.models import Market
+from ati_engine.core.models import Market, SymbolInfo
 from ati_engine.exchange.endpoints import MarketEndpoints, endpoints_for
 from ati_engine.exchange.rate_limit import (
     Priority,
@@ -355,6 +355,10 @@ class MarketDataService:
 
     def tracked_symbols(self) -> list[str]:
         return [s.symbol for s in self._registry.tracked(self.market)]
+
+    def symbol_infos(self) -> dict[str, SymbolInfo]:
+        """İzlenen sembollerin borsa kuralları (sanal hesap yürütücüsü de kullanır)."""
+        return {s.symbol: s for s in self._registry.tracked(self.market)}
 
     def tickers(self, limit: int, *, focus_only: bool = False) -> list[Ticker24h]:
         """İzlenen evrendeki semboller, 24 saatlik işlem hacmine göre azalan."""

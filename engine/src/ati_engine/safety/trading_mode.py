@@ -62,6 +62,11 @@ class ModeChangeResult:
     checks: tuple[CheckResult, ...]
 
 
+# Kullanıcının son seçtiği güvenli mod (Sanal ya da Demo): açılışta geri yüklenir. Gerçek para
+# hiçbir zaman saklanmaz ve kendiliğinden açılmaz.
+PREFERRED_MODE_KEY = "trading_mode.preferred"
+
+
 class TradingModeController:
     def __init__(
         self,

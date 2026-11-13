@@ -56,6 +56,7 @@ class EngineRuntime:
     paper: PaperCompetition | None = None
     execution: ExecutionService | None = None  # Demo Trading (test ağı)
     execution_live: ExecutionService | None = None  # gerçek hesap (kullanıcı onayıyla)
+    execution_paper: ExecutionService | None = None
     autotrader: AutoTrader | None = None
     remote: RemoteService | None = None
     live_prices: LivePrices | None = None
@@ -79,9 +80,13 @@ class EngineRuntime:
         return ticker.last if ticker is not None and ticker.last > 0 else None
 
     def active_execution(self) -> ExecutionService | None:
-        """İşlem moduna göre kullanılan yürütme servisi (gerçek hesap modunda canlı servis)."""
-        if self.trading_mode.mode is TradingMode.LIVE:
+        """İşlem moduna göre yürütme servisi: Gerçek para → gerçek hesap, Demo → Binance Demo
+        Trading, Sanal → sanal hesap (borsaya emir gitmez)."""
+        mode = self.trading_mode.mode
+        if mode is TradingMode.LIVE:
             return self.execution_live
+        if mode is TradingMode.PAPER and self.execution_paper is not None:
+            return self.execution_paper
         return self.execution
 
     version: str = __version__

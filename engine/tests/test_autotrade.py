@@ -165,10 +165,13 @@ async def test_disabled_or_wrong_mode_never_trades(
     )
     await off.on_opportunity(signal())
     assert off.skipped["kapalı"] == 1
+    # Mod ile yürütücü uyuşmazsa (Sanal moddayken Demo yürütücüsü) işlem engellenir; Sanal
+    # modda bot sanal hesabı kullanır (test_paper_account).
     mode[0] = TradingMode.PAPER
     auto = trader(svc, mode)
     await auto.on_opportunity(signal())
-    assert auto.skipped["mod_sanal"] == 1  # sanal modda bot işlem açmaz
+    assert auto.stats["rejected"] == 1
+    assert auto.recent[0]["result"] == "blocked" and "İşlem modu" in auto.recent[0]["reasons"][0]
     assert exchange.futures_positions == {}
 
 

@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "ati-desktop"
-version = "0.14.7"
+version = "0.14.8"
 dependencies = [
  "getrandom 0.3.4",
  "serde",

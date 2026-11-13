@@ -1,8 +1,9 @@
 """Otomatik işlem: fırsat sinyallerini işleme dönüştürür.
 
-Varsayılan olarak **kapalıdır**; kullanıcı açar. Seçili işlem moduna göre **Demo Trading**'de
-ya da kullanıcı gerçek hesap modunu (onay ifadesiyle) açtıysa **gerçek hesapta** çalışır; sanal
-modda işlem açmaz. Her işlem risk kapısından geçer; bu modül yalnızca niyet üretir:
+Varsayılan olarak **kapalıdır**; kullanıcı açar. Seçili işlem moduna göre **Sanal hesapta**
+(borsaya emir gitmez, canlı fiyatlar), **Demo Trading**'de ya da kullanıcı gerçek hesap modunu
+(onay ifadesiyle) açtıysa **gerçek hesapta** çalışır. Her işlem risk kapısından geçer; bu modül
+yalnızca niyet üretir:
 
 1. Sinyal: eşik üstü ``OpportunityScored`` (yön, stop ve hedef seviyesiyle). Mum kapanışından
    bu yana ``max_signal_age_s``'den eski sinyal kullanılmaz.
@@ -41,6 +42,9 @@ from ati_engine.risk.gate import DEFAULT_FEES, size_for_risk, trade_risk
 from ati_engine.scoring.live import OpportunityScored
 
 logger = logging.getLogger(__name__)
+
+# Karar kimliği hesaba göre ayrılır (aynı sinyal farklı hesaplarda çakışmasın).
+MODE_PREFIX = {TradingMode.LIVE: "canli-", TradingMode.PAPER: "sanal-"}
 
 # Sinyal fiyatından bu kadar R (stop uzaklığı) kaymış fiyatla giriş yapılmaz.
 MAX_DRIFT_R = Decimal("0.5")
@@ -175,8 +179,6 @@ class AutoTrader:
         if not self.enabled:
             return self._skip("kapalı")
         mode = self.trading_mode()
-        if mode is TradingMode.PAPER:
-            return self._skip("mod_sanal")
         if event.market not in self.cfg.markets:
             return self._skip("piyasa")
         if event.score < self.cfg.min_score:
@@ -341,7 +343,7 @@ class AutoTrader:
             take_profits = (TakeProfit(target, Decimal(1)),)
         return TradeIntent(
             decision_id=(
-                f"oto-{'canli-' if self.trading_mode() is TradingMode.LIVE else ''}"
+                f"oto-{MODE_PREFIX.get(self.trading_mode(), '')}"
                 f"{event.market.value}-{event.symbol}-{event.bar_open_time_ms}"
             ),
             market=event.market,

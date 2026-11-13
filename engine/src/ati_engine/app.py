@@ -31,8 +31,8 @@ from ati_engine.api.server import bind_socket, build_server, create_app
 from ati_engine.backtest.service import BacktestService
 from ati_engine.config import EngineSettings
 from ati_engine.core.bus import EventBus, OverflowPolicy
-from ati_engine.core.events import Alert, Heartbeat, TradeNotice
-from ati_engine.core.models import EngineState, Market, Severity
+from ati_engine.core.events import Alert, Heartbeat, PriceTick, TradeNotice
+from ati_engine.core.models import EngineState, Market, Severity, SymbolInfo, TradingMode
 from ati_engine.core.supervisor import RestartPolicy, TaskSupervisor
 from ati_engine.exchange.endpoints import endpoints_for
 from ati_engine.exchange.rate_limit import WeightBudget
@@ -76,7 +76,7 @@ from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.coordinator import SafetyCoordinator
 from ati_engine.safety.kill_switch import KillSwitch
 from ati_engine.safety.state import EngineStateMachine
-from ati_engine.safety.trading_mode import CallableCheck, TradingModeController
+from ati_engine.safety.trading_mode import PREFERRED_MODE_KEY, CallableCheck, TradingModeController
 from ati_engine.scanner.scanner import MarketScanner
 from ati_engine.scoring.live import OpportunityEngine, OpportunityScored
 from ati_engine.security.exchange_keys import ExchangeKeyStore
@@ -420,6 +420,35 @@ class Engine:
         runtime.execution = demo
         runtime.execution_live = live
 
+        def paper_symbols(market: Market) -> dict[str, SymbolInfo]:
+            data = runtime.market_data.get(market)
+            return data.symbol_infos() if data is not None else {}
+
+        # Sanal hesap: Sanal modda bot ve elle işlem canlı fiyatlarla, borsaya emir göndermeden.
+        paper = ExecutionService(
+            settings=runtime.settings,
+            db=runtime.db,
+            audit=runtime.audit,
+            keys=ExchangeKeyStore(runtime.vault),
+            trading_mode=lambda: runtime.trading_mode.mode,
+            engine_state=lambda: runtime.safety.state.state,
+            # Sanal hesabın kayıpları gerçek hesabın güvenlik durumunu etkilemesin: bekçi yok;
+            # günlük zarar sınırı yine her girişte risk kapısında denetlenir.
+            safety=None,
+            bus=runtime.bus,
+            environment="paper",
+            paper_symbols=paper_symbols,
+            paper_price=runtime.mark_price,
+            paper_balance=runtime.settings.execution.paper_balance_usdt,
+        )
+        runtime.execution_paper = paper
+        services.append(paper)
+
+        async def feed_paper(event: PriceTick) -> None:
+            await paper.feed_prices(event.prices)
+
+        runtime.bus.subscribe(PriceTick, feed_paper, name="paper-prices")
+
         async def live_key() -> tuple[bool, str]:
             if live.markets:
                 names = ", ".join(m.value for m in live.markets)
@@ -452,7 +481,7 @@ class Engine:
         autotrader = AutoTrader(
             settings=runtime.settings.autotrade,
             limits=runtime.settings.risk,
-            service=lambda: runtime.active_execution() or demo,
+            service=lambda: runtime.active_execution() or paper,
             trading_mode=lambda: runtime.trading_mode.mode,
             interval=runtime.settings.scoring.interval,
             market_price=market_price,
@@ -462,6 +491,10 @@ class Engine:
         runtime.bus.subscribe(TradeNotice, autotrader.on_trade_notice, name="autotrader-results")
 
         async def connect() -> None:
+            # Son seçilen Demo modu geri yüklenir (Gerçek para asla kendiliğinden açılmaz).
+            preferred = await SettingsStore(runtime.db).get(PREFERRED_MODE_KEY)
+            if preferred == TradingMode.TESTNET.value:
+                await runtime.trading_mode.request_mode(TradingMode.TESTNET, actor="system")
             for service in services:
                 try:
                     await service.connect_configured()

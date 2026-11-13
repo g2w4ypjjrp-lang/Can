@@ -147,6 +147,7 @@ from ati_engine.remote.crypto import b64url
 from ati_engine.remote.service import REMOTE_ENABLED_KEY, RemoteService
 from ati_engine.runtime import EngineRuntime
 from ati_engine.safety.kill_switch import KillSwitchConfirmationError
+from ati_engine.safety.trading_mode import PREFERRED_MODE_KEY
 from ati_engine.scanner.scanner import MarketScanner, row_dict
 from ati_engine.scoring.live import OpportunityEngine, top_reasons
 from ati_engine.scoring.score import Opportunity
@@ -316,6 +317,10 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         result = await runtime.trading_mode.request_mode(
             body.mode, actor=LOCAL_ACTOR, acknowledgement=body.acknowledgement
         )
+        if result.accepted and body.mode is not TradingMode.LIVE:
+            # Sanal ya da Demo seçimi hatırlanır (açılışta geri yüklenir). Gerçek para asla
+            # kendiliğinden açılmaz: her açılışta yeniden onay gerekir.
+            await SettingsStore(runtime.db).set(PREFERRED_MODE_KEY, body.mode.value)
         payload = TradingModeResponse(
             accepted=result.accepted,
             mode=result.mode,
@@ -1435,15 +1440,16 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             add("license", valid, "Lisans", "Etkin" if valid else "Lisans anahtarı girin",
                 "license")  # fmt: skip
         mode = runtime.trading_mode.mode
+        balance = runtime.settings.execution.paper_balance_usdt
         add(
             "mode",
-            mode is not TradingMode.PAPER,
+            True,
             "İşlem modu",
             {
                 TradingMode.PAPER: (
-                    "Sanal modda bot işlem açmaz. Uygulama her açılışta güvenlik için Sanal "
-                    "başlar; Gerçek para ya da Demo'yu seçin"
-                ),
+                    f"Sanal hesap: bot canlı fiyatlarla {balance:,.0f} USDT sanal bakiyeyle işlem "
+                    "açar; borsaya emir gitmez. Demo ya da Gerçek para için Ayarlar'dan seçin"
+                ).replace(",", "."),
                 TradingMode.TESTNET: "Demo para (sahte bakiye)",
                 TradingMode.LIVE: "GERÇEK PARA",
             }[mode],
@@ -1451,10 +1457,11 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         )
         execution = runtime.active_execution()
         info = await execution.status() if execution is not None else {"markets": {}}
-        account = "gerçek hesap" if mode is TradingMode.LIVE else "Demo Trading"
-        # Sanal modda anahtar maddesi gösterilmez (mod maddesi zaten eksik); hangi hesabın
-        # anahtarı gerektiği mod seçilince belli olur.
-        for market in trader.cfg.markets if mode is not TradingMode.PAPER else ():
+        account = {
+            TradingMode.LIVE: "gerçek hesap",
+            TradingMode.PAPER: "sanal hesap",
+        }.get(mode, "Demo Trading")
+        for market in trader.cfg.markets:
             entry = info["markets"].get(market.value) or {}
             connected = bool(entry.get("connected"))
             if connected:

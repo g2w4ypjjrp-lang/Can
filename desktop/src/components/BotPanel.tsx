@@ -237,8 +237,8 @@ export function BotPanel() {
       >
         Bot, fırsatları {INTERVALS.find((i) => i.key === askInterval)?.every ?? ""} değerlendirecek. Kısa aralıkta daha sık
         sinyal çıkar, ama fiyat gürültüsü ve komisyon payı da artar; saatlik giriş sınırı ve risk kapısı aynen geçerlidir.
-        Motor birkaç saniye yeniden başlar: bot kapanır, Gerçek para modundaysanız Sanal moda döner ve yeniden onay
-        gerekir. Fırsat taraması yeni aralıkla 1–3 dakikada yeniden dolar. Borsadaki stop emirleri yerinde kalır.
+        Motor birkaç saniye yeniden başlar: bot kapanır, Gerçek para modundaysanız güvenli moda (Sanal ya da son seçilen
+        Demo) döner ve yeniden onay gerekir. Fırsat taraması yeni aralıkla 1–3 dakikada yeniden dolar. Borsadaki stop emirleri yerinde kalır.
       </Confirm>
 
       <div className="bot-grid">

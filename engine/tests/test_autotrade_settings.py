@@ -123,7 +123,8 @@ async def test_decision_interval_is_saved_and_applied_after_restart(
 
 async def test_bot_on_off_survives_restart(engine_at: Callable[..., Any]) -> None:
     """Bot açık bırakıldıysa uygulama yeniden açılınca da açık gelir (işlem modu güvenlik
-    gereği Sanal başladığından gerçek hesapta, gerçek para yeniden onaylanana kadar girmez)."""
+    gereği Sanal başladığından gerçek hesapta, gerçek para yeniden onaylanana kadar girmez;
+    Sanal modda sanal hesapta işlem açar)."""
     async with engine_at() as http:
         assert (await http.get("/v1/autotrade")).json()["enabled"] is False
         assert (await http.post("/v1/autotrade", json={"enabled": True})).json()["enabled"] is True
@@ -131,7 +132,9 @@ async def test_bot_on_off_survives_restart(engine_at: Callable[..., Any]) -> Non
         status = (await http.get("/v1/autotrade")).json()
         assert status["enabled"] is True and status["environment"] == "paper"
         mode = next(c for c in status["checks"] if c["key"] == "mode")
-        assert mode["ok"] is False and "Sanal başlar" in mode["detail"]
+        # Sanal modda bot sanal hesapla işlem açar (borsaya emir gitmez).
+        assert mode["ok"] is True and "Sanal hesap" in mode["detail"]
+        assert "10.000 USDT" in mode["detail"]
         assert (await http.post("/v1/autotrade", json={"enabled": False})).json()[
             "enabled"
         ] is False

@@ -8,14 +8,14 @@ import { Confirm, ErrorBox } from "./ui";
 export const LIVE_PHRASE = "GERCEK PARA ILE ISLEM YAPILMASINI ONAYLIYORUM";
 
 const OPTIONS: { mode: "paper" | "testnet" | "live"; label: string; hint: string }[] = [
-  { mode: "paper", label: "Sanal", hint: "Emir gönderilmez" },
+  { mode: "paper", label: "Sanal", hint: "Sanal hesap, borsaya emir gitmez" },
   { mode: "testnet", label: "Demo para", hint: "Binance Demo Trading, sahte bakiye" },
   { mode: "live", label: "Gerçek para", hint: "Gerçek Binance hesabı" },
 ];
 
 /** İşlem modu seçici: Sanal / Demo para / Gerçek para. Gerçek para için onay ifadesi yazılır;
  * motor ayrıca gerçek hesap anahtarını (para çekme yetkisi kapalı), lisansı ve acil durdurmayı
- * denetler. ``compact`` botta kullanılır (yalnızca Demo / Gerçek). */
+ * denetler. ``compact`` botta kullanılır. */
 export function ModeSwitch({ compact = false, onChanged }: { compact?: boolean; onChanged?: () => void }) {
   const status = usePoll((c) => c.get<StatusResponse>("/v1/status"), 3000);
   const [askLive, setAskLive] = useState(false);
@@ -37,7 +37,8 @@ export function ModeSwitch({ compact = false, onChanged }: { compact?: boolean; 
     onChanged?.();
   }
 
-  const options = compact ? OPTIONS.filter((o) => o.mode !== "paper") : OPTIONS;
+  // Bot üç hesabın hepsinde çalışır (Sanal: sanal hesap, canlı fiyatlar).
+  const options = OPTIONS;
   return (
     <div className="stack" style={{ gap: 8 }}>
       <div className="mode-switch" role="radiogroup" aria-label="İşlem modu" data-testid={compact ? "bot-mode" : "mode-switch"}>
@@ -60,7 +61,7 @@ export function ModeSwitch({ compact = false, onChanged }: { compact?: boolean; 
       {current === "live" && (
         <div className="notice danger-notice" data-testid="live-banner">
           <AlertTriangle aria-hidden="true" size={16} /> <b>GERÇEK PARA modu açık.</b> İşlemler gerçek Binance hesabınızda yapılır;
-          kayıp riski vardır. Uygulama yeniden başlarsa güvenlik için sanal moda döner.
+          kayıp riski vardır. Uygulama yeniden başlarsa güvenlik için Sanal ya da son seçtiğiniz Demo moda döner.
         </div>
       )}
       <ErrorBox error={setMode.error} />
@@ -91,7 +92,7 @@ export function ModeSwitch({ compact = false, onChanged }: { compact?: boolean; 
           <li>İşlemler (bot dahil) gerçek Binance hesabınızda gerçek parayla yapılır. Kâr garantisi yoktur; kaybedebilirsiniz.</li>
           <li>Gerekenler: para çekme yetkisi KAPALI gerçek hesap anahtarı (Ayarlar), geçerli lisans, acil durdurmanın kapalı olması.</li>
           <li>Risk sınırları aynen uygulanır: zarar durdur zorunlu, işlem başına risk, günlük zarar ve kaldıraç sınırları.</li>
-          <li>Uygulama yeniden başladığında güvenlik için sanal moda döner; gerçek parayı her seferinde yeniden onaylarsınız.</li>
+          <li>Uygulama yeniden başladığında güvenlik için Sanal ya da son seçtiğiniz Demo moda döner; gerçek parayı her seferinde yeniden onaylarsınız.</li>
         </ul>
       </Confirm>
       {!compact && current && <span className="muted small">Şu an: {MODE_LABELS[current] ?? current}</span>}

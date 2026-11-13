@@ -128,7 +128,9 @@ export function BotSettingsCard() {
       <div className="stack" style={{ gap: 6, marginBottom: 12 }}>
         <span className="small">
           <b>Bot hangi hesapla işlem yapsın?</b>{" "}
-          {s.environment === "paper" && <span className="muted">(şu an Sanal: bot işlem açmaz)</span>}
+          {s.environment === "paper" && (
+            <span className="muted">(şu an Sanal: bot sanal hesapta canlı fiyatlarla işlem açar, borsaya emir gitmez)</span>
+          )}
         </span>
         <ModeSwitch compact onChanged={() => void auto.refresh()} />
       </div>

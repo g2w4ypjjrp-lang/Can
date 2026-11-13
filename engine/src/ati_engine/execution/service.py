@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Literal
@@ -33,6 +33,7 @@ from ati_engine.exchange.signing import RequestSigner
 from ati_engine.execution.binance_venue import BinanceFuturesVenue, BinanceSpotVenue
 from ati_engine.execution.engine import ManagedPosition, TradeIntent, TradingEngine
 from ati_engine.execution.orders import OrderRecord
+from ati_engine.execution.paper_live import LivePaperVenue, LiveSymbols, PriceSource
 from ati_engine.execution.reconcile import Reconciler, ReconcileReport
 from ati_engine.execution.venue import ExecutionBlocked
 from ati_engine.market.discovery import parse_exchange_info
@@ -59,8 +60,8 @@ class ExecutionUnavailable(RuntimeError):
     """İstenen piyasa için yürütücü bağlı değil."""
 
 
-Environment = Literal["testnet", "live"]
-ENV_LABELS = {"testnet": "Demo Trading", "live": "gerçek hesap"}
+Environment = Literal["testnet", "live", "paper"]
+ENV_LABELS = {"testnet": "Demo Trading", "live": "gerçek hesap", "paper": "sanal hesap"}
 
 
 @dataclass(frozen=True)
@@ -75,9 +76,9 @@ class TestnetEndpoints:
 class MarketExecution:
     market: Market
     engine: TradingEngine
-    rest: BinanceRestClient
+    rest: BinanceRestClient | None  # sanal hesapta yok
     reconciler: Reconciler
-    symbols: dict[str, SymbolInfo]
+    symbols: Mapping[str, SymbolInfo]
     stop: asyncio.Event = field(default_factory=asyncio.Event)
     task: asyncio.Task[None] | None = None
 
@@ -96,9 +97,22 @@ class ExecutionService:
         safety: SafetyCoordinator | None = None,
         bus: EventBus | None = None,
         environment: Environment = "testnet",
+        paper_symbols: Callable[[Market], Mapping[str, SymbolInfo]] | None = None,
+        paper_price: PriceSource | None = None,
+        paper_balance: Decimal = Decimal(10_000),
     ) -> None:
         self.environment: Environment = environment
-        self.mode = TradingMode.LIVE if environment == "live" else TradingMode.TESTNET
+        self.mode = {
+            "live": TradingMode.LIVE,
+            "paper": TradingMode.PAPER,
+        }.get(environment, TradingMode.TESTNET)
+        # Sanal hesap: anahtar gerekmez; sembol kuralları ve fiyatlar piyasa verisinden.
+        self.paper = environment == "paper"
+        # Anahtar kasasındaki ortam adı (sanal hesapta anahtar işlemi yapılmaz).
+        self._key_env: Literal["testnet", "live"] = "live" if environment == "live" else "testnet"
+        self._paper_symbols = paper_symbols
+        self._paper_price = paper_price
+        self.paper_balance = paper_balance
         self.label = ENV_LABELS[environment]
         self.settings = settings
         self.cfg = settings.execution
@@ -157,7 +171,7 @@ class ExecutionService:
                 targets=lambda: list(self.markets.values()),
                 bus=bus,
                 close_all=lambda reason: self.close_all(reason=reason, actor="risk_guard"),
-                prefix="live." if live else "",
+                prefix="live." if live else ("paper." if environment == "paper" else ""),
             )
         self._guard_stop = asyncio.Event()
         self._guard_task: asyncio.Task[None] | None = None
@@ -186,6 +200,8 @@ class ExecutionService:
         yetkiler okunur: para çekme/transfer açıksa ya da işlem yetkisi yoksa saklanmaz."""
         from ati_engine.exchange.signing import HmacSigner
 
+        if self.paper:
+            raise ExecutionUnavailable("Sanal hesap anahtar gerektirmez")
         api_key, secret = api_key.strip(), secret.strip()
         warnings: list[str] = []
         blocked: list[str] = []
@@ -222,7 +238,7 @@ class ExecutionService:
                                  check.can_trade)  # fmt: skip
         stored = None
         if check.ok:
-            stored = await self.keys.store(self.environment, market, api_key, secret)
+            stored = await self.keys.store(self._key_env, market, api_key, secret)
         await self.audit.record(
             actor=actor,
             action=f"execution.{self.environment}_key",
@@ -238,7 +254,7 @@ class ExecutionService:
 
     async def delete_key(self, market: Market, *, actor: str) -> bool:
         await self.disconnect(market)
-        removed = await self.keys.delete(self.environment, market)
+        removed = await self.keys.delete(self._key_env, market)
         await self.audit.record(
             actor=actor,
             action=f"execution.{self.environment}_key_deleted",
@@ -248,11 +264,71 @@ class ExecutionService:
 
     # --- Bağlantı ---------------------------------------------------------------------------
 
+    async def _connect_paper(self, market: Market) -> MarketExecution:
+        """Sanal hesap: borsaya emir gitmez; fiyatlar ve sembol kuralları piyasa verisinden."""
+        source = self._paper_symbols
+        price = self._paper_price
+        if source is None or price is None:
+            raise ExecutionUnavailable("Sanal hesap için piyasa verisi bağlı değil")
+        symbols = LiveSymbols(lambda: source(market))
+        venue = LivePaperVenue(
+            market,
+            price_source=price,
+            # Toplam sanal bakiye piyasalara eşit bölünür (özsermaye toplamı ayar kadar kalır).
+            initial_quote=self.paper_balance / max(1, len(self.cfg.markets)),
+            quote_asset=self.settings.quote_asset,
+        )
+        engine = TradingEngine(
+            venue=venue,
+            db=self.db,
+            symbols=symbols.get,
+            risk_gate=self.gate,
+            engine_state=self.engine_state,
+            fill_timeout_s=self.cfg.fill_timeout_s,
+        )
+        reconciler = Reconciler(engine, unknown_grace_s=self.cfg.unknown_order_grace_s)
+        engine.on_stream_reset = lambda: reconciler.run("stream_reset")
+        if self.bus is not None:
+            engine.on_trade = self.bus.publish
+        await engine.start()
+        execution = MarketExecution(market, engine, None, reconciler, symbols)
+        await reconciler.run("startup")
+        execution.task = asyncio.create_task(
+            reconciler.run_forever(self.cfg.reconcile_interval_s, execution.stop),
+            name=f"reconcile-paper-{market.value}",
+        )
+        self.markets[market] = execution
+        if self.guard is not None:
+            self.start_guard()
+            self.guard.attach(market)
+        await self.audit.record(
+            actor="system",
+            action="execution.connected",
+            details={"market": market.value, "mode": "paper", "balance": str(self.paper_balance)},
+        )
+        return execution
+
+    async def feed_prices(self, prices: Mapping[str, float]) -> None:
+        """Sanal hesap: canlı fiyatlar (anahtar ``"<piyasa>:<SEMBOL>"``) yürütücülere iletilir."""
+        if not self.paper:
+            return
+        grouped: dict[str, dict[str, float]] = {}
+        for key, value in prices.items():
+            market, _, symbol = key.partition(":")
+            grouped.setdefault(market, {})[symbol] = value
+        for market, execution in list(self.markets.items()):
+            venue = execution.engine.venue
+            batch = grouped.get(market.value)
+            if batch and isinstance(venue, LivePaperVenue):
+                await venue.feed(batch)
+
     async def connect(self, market: Market) -> MarketExecution:
         async with self._lock:
             if market in self.markets:
                 return self.markets[market]
-            loaded = await self.keys.load(self.environment, market)
+            if self.paper:
+                return await self._connect_paper(market)
+            loaded = await self.keys.load(self._key_env, market)
             if loaded is None:
                 raise ExecutionUnavailable(
                     f"{market.value} için {self.label} anahtarı kayıtlı değil"
@@ -321,7 +397,7 @@ class ExecutionService:
     async def connect_configured(self) -> None:
         """Anahtarı kayıtlı piyasalara bağlanır (açılışta). Hata motoru durdurmaz."""
         for market in self.cfg.markets:
-            if await self.keys.info(self.environment, market) is None:
+            if not self.paper and await self.keys.info(self._key_env, market) is None:
                 continue
             try:
                 await self.connect(market)
@@ -341,7 +417,8 @@ class ExecutionService:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await execution.task
         await execution.engine.stop()
-        await execution.rest.close()
+        if execution.rest is not None:
+            await execution.rest.close()
         if self.guard is not None:
             await self.guard.detach(market)
 
@@ -416,11 +493,13 @@ class ExecutionService:
     async def status(self) -> dict[str, Any]:
         markets: dict[str, Any] = {}
         for market in self.cfg.markets:
-            stored = await self.keys.info(self.environment, market)
+            stored = None if self.paper else await self.keys.info(self._key_env, market)
             execution = self.markets.get(market)
             entry: dict[str, Any] = {
-                "key_stored": stored is not None,
-                "key_hint": stored.api_key_hint if stored else None,
+                "key_stored": self.paper or stored is not None,
+                "key_hint": "sanal hesap"
+                if self.paper
+                else (stored.api_key_hint if stored else None),
                 "connected": execution is not None,
                 "error": self.last_error.get(market),
             }
