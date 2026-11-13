@@ -5,6 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CoinPriceCard, MarketBoard, MarketTicker, QuotesProvider } from "@/components/forum/Market";
+import { SentimentPoll, TopicStateProvider } from "@/components/forum/Interactions";
 import { Post } from "@/components/forum/Post";
 import { ReplyForm } from "@/components/forum/ReplyForm";
 import { CATEGORY_META, CategoryChip, CoinToken } from "@/components/forum/Visuals";
@@ -49,6 +50,7 @@ export default async function TopicPage({ params }: Props) {
 
   return (
     <QuotesProvider initial={quotes} extra={extra}>
+      <TopicStateProvider number={topic.number}>
       <div className="stage">
         <MarketTicker />
         <Container className="py-8">
@@ -112,9 +114,12 @@ export default async function TopicPage({ params }: Props) {
             <div className="min-w-0 space-y-4">
               <Post
                 index={1}
+                number={topic.number}
                 author={topic.author_name}
+                nick={topic.author_nick}
                 team={team}
                 posts={topic.author_posts}
+                likes={topic.like_count}
                 at={topic.published_at}
                 body={topic.body}
                 opener
@@ -142,11 +147,15 @@ export default async function TopicPage({ params }: Props) {
                 <section aria-label={`Yanıtlar (${topic.replies.length})`} className="space-y-4" data-testid="replies">
                   {topic.replies.map((reply, i) => (
                     <Post
-                      key={i}
+                      key={reply.id}
                       index={i + 2}
+                      number={topic.number}
+                      replyId={reply.id}
                       author={reply.author_name}
+                      nick={reply.author_nick}
                       team={reply.author_kind === "team"}
                       posts={reply.author_posts}
+                      likes={reply.like_count}
                       at={reply.published_at}
                       body={reply.body}
                     />
@@ -169,6 +178,9 @@ export default async function TopicPage({ params }: Props) {
 
             <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start" aria-label="Konu kenar çubuğu">
               {topic.coin_symbol ? <CoinPriceCard symbol={topic.coin_symbol} /> : null}
+              {topic.coin_symbol && topic.sentiment ? (
+                <SentimentPoll number={topic.number} coin={topic.coin_symbol} initial={topic.sentiment} />
+              ) : null}
               <MarketBoard limit={6} />
               <section className="rounded-2xl border border-border bg-surface p-4 text-sm" aria-labelledby="hatirlatma">
                 <h2 id="hatirlatma" className="font-semibold text-fg">
@@ -183,6 +195,7 @@ export default async function TopicPage({ params }: Props) {
           </div>
         </Container>
       </div>
+      </TopicStateProvider>
     </QuotesProvider>
   );
 }

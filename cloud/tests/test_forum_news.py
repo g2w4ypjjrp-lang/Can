@@ -637,3 +637,120 @@ async def test_mymemory_client_parses_and_reports_quota() -> None:
         assert await mm.translate(["Bitcoin and Ether", ""], "en") == ["Bitcoin & Ether", ""]
         with pytest.raises(TranslationError, match="kotası"):
             await mm.translate(["quota"], "en")
+
+
+async def test_profiles_likes_sentiment_and_leaderboard(
+    app: Any, clock: Clock, db: psycopg.Connection[Any], shopper: Callable[..., Any]
+) -> None:
+    admin = await activate_admin(app, clock, "kurucu@example.com", ["super_admin"])
+    ayse, okur = await shopper(), await shopper()
+    public = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver")
+
+    async def approve_all() -> None:
+        queue = (await admin.http.get("/admin/v1/forum/queue")).json()
+        for t in queue["topics"]:
+            await admin.http.post(
+                f"/admin/v1/forum/topics/{t['id']}/moderate", json={"action": "approve"}
+            )
+        for r in queue["replies"]:
+            await admin.http.post(
+                f"/admin/v1/forum/replies/{r['id']}/moderate", json={"action": "approve"}
+            )
+
+    first = await ayse.post("/v1/forum/me/topics", json=TOPIC)
+    number = first.json()["number"]
+    # Forum adı kalıcıdır: ikinci gönderide farklı ad yazılsa da profil adı kullanılır.
+    second = await ayse.post(
+        "/v1/forum/me/topics",
+        json={
+            **TOPIC,
+            "author_name": "Başka Ad",
+            "title": "Coin olmayan konu",
+            "coin_symbol": None,
+        },
+    )
+    plain_number = second.json()["number"]
+    await approve_all()
+    names = {
+        t["number"]: t["author_name"]
+        for t in (await public.get("/v1/forum/topics")).json()["items"]
+    }
+    assert names == {number: "Kripto Ayşe", plain_number: "Kripto Ayşe"}
+
+    # Ad başka üyedeyse (büyük/küçük harf fark etmez) ya da ayrılmışsa reddedilir.
+    taken = await okur.post(
+        f"/v1/forum/me/topics/{number}/replies",
+        json={"author_name": "kripto ayşe", "body": "Selam"},
+    )
+    assert taken.status_code == 409 and "başka bir üyede" in taken.json()["detail"]
+    reserved = await okur.post(
+        f"/v1/forum/me/topics/{number}/replies", json={"author_name": "Ekip", "body": "Selam"}
+    )
+    assert reserved.status_code == 422
+    ok = await okur.post(
+        f"/v1/forum/me/topics/{number}/replies", json={"author_name": "Okur", "body": "Katılıyorum"}
+    )
+    assert ok.status_code == 202
+    await approve_all()
+
+    # Beğeni: aç/kapa; kendi mesajını beğenemez.
+    liked = await okur.post("/v1/forum/me/like", json={"number": number})
+    assert liked.json() == {"liked": True, "count": 1}
+    assert (await okur.post("/v1/forum/me/like", json={"number": number})).json() == {
+        "liked": False,
+        "count": 0,
+    }
+    await okur.post("/v1/forum/me/like", json={"number": number})
+    own = await ayse.post("/v1/forum/me/like", json={"number": number})
+    assert own.status_code == 409
+    detail = (await public.get(f"/v1/forum/topics/{number}")).json()
+    reply = detail["replies"][0]
+    assert detail["like_count"] == 1 and detail["author_nick"] == "Kripto Ayşe"
+    assert reply["author_nick"] == "Okur" and reply["like_count"] == 0
+    reply_like = await ayse.post(
+        "/v1/forum/me/like", json={"number": number, "reply_id": reply["id"]}
+    )
+    assert reply_like.json() == {"liked": True, "count": 1}
+
+    # Yükseliş / düşüş oyu: kişi başı bir oy, değiştirilebilir; coinsiz konuda yok.
+    assert (await okur.post(f"/v1/forum/me/topics/{number}/sentiment", json={"vote": "bull"})).json() == {
+        "vote": "bull", "bull": 1, "bear": 0}  # fmt: skip
+    await ayse.post(f"/v1/forum/me/topics/{number}/sentiment", json={"vote": "bear"})
+    changed = await okur.post(f"/v1/forum/me/topics/{number}/sentiment", json={"vote": "bear"})
+    assert changed.json() == {"vote": "bear", "bull": 0, "bear": 2}
+    no_coin = await okur.post(
+        f"/v1/forum/me/topics/{plain_number}/sentiment", json={"vote": "bull"}
+    )
+    assert no_coin.status_code == 409
+    assert (await public.get(f"/v1/forum/topics/{number}")).json()["sentiment"] == {
+        "bull": 0,
+        "bear": 2,
+    }
+    state = (await okur.get(f"/v1/forum/me/topics/{number}/state")).json()
+    assert state == {"liked": ["topic"], "vote": "bear"}
+
+    # Profil ve liderlik tablosu.
+    profile = (await public.get("/v1/forum/members/Kripto Ayşe")).json()
+    assert profile["posts"] == 2 and profile["topics"] == 2 and profile["likes"] == 1
+    assert [t["number"] for t in profile["recent_topics"]] == [plain_number, number]
+    assert (await public.get("/v1/forum/members/yok-boyle")).status_code == 404
+    board = (await public.get("/v1/forum/leaderboard")).json()
+    assert [(b["nickname"], b["posts"], b["likes"]) for b in board] == [
+        ("Kripto Ayşe", 2, 1),
+        ("Okur", 1, 1),
+    ]
+    mine = (await okur.get("/v1/forum/me")).json()
+    assert mine["profile"]["nickname"] == "Okur" and mine["profile"]["posts"] == 1
+
+    # Konu silinince beğenileri de silinir; müşteri silinince profili, beğeni ve oyları.
+    removed = await admin.http.post(
+        f"/admin/v1/customers/{okur.customer_id}/delete",
+        json={"confirm_email": okur.email, "reason": "KVKK", "code": clock.code(admin.secret)},
+    )
+    assert removed.status_code == 200, removed.text
+    left = db.execute(
+        "SELECT (SELECT count(*) FROM forum_profiles), (SELECT count(*) FROM forum_likes), "
+        "(SELECT count(*) FROM forum_sentiment)"
+    ).fetchone()
+    assert left == (1, 1, 1)
+    await public.aclose()

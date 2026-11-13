@@ -1006,7 +1006,10 @@ def create_admin_manage_router(ctx: AdminContext) -> APIRouter:
             await conn.execute(
                 "UPDATE email_outbox SET to_email = %s WHERE to_email = %s", (anon, email)
             )
-            # Forum gönderileri müşterinin yazdığı metinlerdir: silinir.
+            # Forum gönderileri, profili, beğeni ve oyları müşterinin verisidir: silinir.
+            await conn.execute("DELETE FROM forum_likes WHERE customer_id = %s", (cid,))
+            await conn.execute("DELETE FROM forum_sentiment WHERE customer_id = %s", (cid,))
+            await conn.execute("DELETE FROM forum_profiles WHERE customer_id = %s", (cid,))
             await conn.execute("DELETE FROM forum_replies WHERE customer_id = %s", (cid,))
             await conn.execute("DELETE FROM forum_topics WHERE customer_id = %s", (cid,))
             await conn.execute(

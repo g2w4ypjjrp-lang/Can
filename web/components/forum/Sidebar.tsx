@@ -6,10 +6,11 @@ import Link from "next/link";
 import { InlineQuote, MarketBoard } from "@/components/forum/Market";
 import { RankLadder } from "@/components/forum/Ranks";
 import { CoinToken } from "@/components/forum/Visuals";
-import { timeAgo, type ForumOverview } from "@/lib/forum";
+import { Leaderboard } from "@/components/forum/Leaderboard";
+import { timeAgo, type ForumOverview, type LeaderEntry } from "@/lib/forum";
 import { RANKS } from "@/lib/ranks";
 
-export function ForumSidebar({ overview, now }: { overview: ForumOverview | null; now: number }) {
+export function ForumSidebar({ overview, now, leaders = [] }: { overview: ForumOverview | null; now: number; leaders?: LeaderEntry[] }) {
   return (
     <aside className="space-y-5" aria-label="Forum kenar çubuğu">
       <MarketBoard />
@@ -51,6 +52,19 @@ export function ForumSidebar({ overview, now }: { overview: ForumOverview | null
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+      {leaders.length ? (
+        <section aria-labelledby="aktif-baslik" className="rounded-2xl border border-border bg-surface p-4">
+          <h2 id="aktif-baslik" className="flex items-center justify-between text-sm font-semibold text-fg">
+            En aktif üyeler
+            <Link href="/forum/rutbeler#liderler" className="text-xs font-semibold text-accent-text underline-offset-4 hover:underline">
+              Tümü →
+            </Link>
+          </h2>
+          <div className="mt-3">
+            <Leaderboard entries={leaders.slice(0, 5)} compact />
+          </div>
         </section>
       ) : null}
       <section aria-labelledby="kurallar-baslik" className="rounded-2xl border border-border bg-surface p-4 text-sm">

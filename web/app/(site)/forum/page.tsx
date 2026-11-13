@@ -10,7 +10,7 @@ import { EmptyThreads, ThreadList } from "@/components/forum/ThreadList";
 import { CATEGORY_META, CandleBackdrop } from "@/components/forum/Visuals";
 import { Container, Notice } from "@/components/ui";
 import { firstParam } from "@/lib/format";
-import { fetchOverview, fetchTopics, isCategory, type ForumCategory } from "@/lib/forum";
+import { fetchLeaderboard, fetchOverview, fetchTopics, isCategory, type ForumCategory } from "@/lib/forum";
 import { fetchQuotes } from "@/lib/market";
 
 export const metadata: Metadata = {
@@ -36,7 +36,12 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
   const category: ForumCategory | undefined = isCategory(rawCategory) ? rawCategory : undefined;
   const q = (firstParam(params.ara) ?? "").trim().slice(0, 80);
   const page = Math.max(1, Math.min(500, Number(firstParam(params.sayfa)) || 1));
-  const [data, overview, quotes] = await Promise.all([fetchTopics({ category, q, page }), fetchOverview(), fetchQuotes()]);
+  const [data, overview, quotes, leaders] = await Promise.all([
+    fetchTopics({ category, q, page }),
+    fetchOverview(),
+    fetchQuotes(),
+    fetchLeaderboard(),
+  ]);
   const filtered = Boolean(category || q);
   // Göreli zamanlar sunucuda bir kez hesaplanır.
   const now = Date.now();
@@ -184,7 +189,7 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
               </nav>
             ) : null}
           </div>
-          <ForumSidebar overview={overview} now={now} />
+          <ForumSidebar overview={overview} now={now} leaders={leaders} />
         </Container>
       </div>
     </QuotesProvider>

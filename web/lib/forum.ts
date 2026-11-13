@@ -14,6 +14,7 @@ export interface TopicSummary {
   coin_symbol: string | null;
   author_name: string;
   author_kind: "customer" | "team";
+  author_nick?: string | null;
   pinned: boolean;
   locked: boolean;
   source_name: string | null;
@@ -30,7 +31,86 @@ export interface TopicSummary {
 export interface TopicDetail extends TopicSummary {
   body: string;
   author_posts: number;
-  replies: { author_name: string; author_kind: "customer" | "team"; body: string; published_at: string; author_posts: number }[];
+  like_count: number;
+  sentiment: { bull: number; bear: number } | null;
+  replies: {
+    id: string;
+    author_name: string;
+    author_kind: "customer" | "team";
+    author_nick: string | null;
+    body: string;
+    published_at: string;
+    author_posts: number;
+    like_count: number;
+  }[];
+}
+
+export interface ForumMember {
+  nickname: string;
+  joined_at: string;
+  topics: number;
+  replies: number;
+  posts: number;
+  likes: number;
+  recent_topics: { number: number; title: string; category: ForumCategory; coin_symbol: string | null; published_at: string; reply_count: number }[];
+}
+
+export interface LeaderEntry {
+  nickname: string;
+  posts: number;
+  topics: number;
+  likes: number;
+}
+
+export async function fetchMember(nickname: string): Promise<ForumMember | null | "error"> {
+  const cfg = runtimeConfig();
+  try {
+    const response = await fetch(`${cfg.serverApiUrl}/v1/forum/members/${encodeURIComponent(nickname)}`, {
+      signal: AbortSignal.timeout(3000),
+      cache: "no-store",
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) return "error";
+    return (await response.json()) as ForumMember;
+  } catch {
+    return "error";
+  }
+}
+
+export async function fetchLeaderboard(): Promise<LeaderEntry[]> {
+  const cfg = runtimeConfig();
+  try {
+    const response = await fetch(`${cfg.serverApiUrl}/v1/forum/leaderboard`, { signal: AbortSignal.timeout(3000), cache: "no-store" });
+    return response.ok ? ((await response.json()) as LeaderEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Gönderi metni blokları: "> " ile başlayan satırlar alıntıdır (Alıntıla düğmesi böyle ekler). */
+export function bodyBlocks(body: string): { kind: "quote" | "text"; text: string }[] {
+  const blocks: { kind: "quote" | "text"; text: string }[] = [];
+  for (const chunk of body.split(/\n{2,}/)) {
+    const lines = chunk.split("\n");
+    let buffer: string[] = [];
+    let mode: "quote" | "text" | null = null;
+    const flush = () => {
+      const text = buffer.join("\n").trim();
+      if (mode && text) blocks.push({ kind: mode, text });
+      buffer = [];
+    };
+    for (const line of lines) {
+      const quoted = /^>\s?/.test(line);
+      const kind = quoted ? "quote" : "text";
+      if (mode !== kind) {
+        flush();
+        mode = kind;
+      }
+      buffer.push(quoted ? line.replace(/^>\s?/, "") : line);
+    }
+    flush();
+  }
+  return blocks;
 }
 
 export interface ForumOverview {

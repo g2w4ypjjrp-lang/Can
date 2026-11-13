@@ -160,6 +160,15 @@ class TeamTopic(BaseModel):
     pinned: bool = False
 
 
+class LikeRequest(BaseModel):
+    number: int = Field(ge=1)
+    reply_id: str | None = Field(default=None, max_length=36)
+
+
+class SentimentVote(BaseModel):
+    vote: Literal["bull", "bear"]
+
+
 class TopicModeration(BaseModel):
     action: Literal[
         "approve", "reject", "hide", "restore", "pin", "unpin", "lock", "unlock", "delete"
@@ -174,6 +183,8 @@ class ReplyModeration(BaseModel):
 
 TOPIC_PUBLIC = (
     "t.number, t.title, t.category, t.coin_symbol, t.author_name, t.author_kind, t.pinned, "
+    "(SELECT nickname::text FROM forum_profiles p WHERE p.customer_id = t.customer_id) "
+    "AS author_nick, "
     "t.locked, t.source_name, t.source_url, t.view_count, t.published_at, "
     "(SELECT count(*) FROM forum_replies r WHERE r.topic_id = t.id AND r.status = 'approved') "
     "AS reply_count, "
@@ -194,6 +205,55 @@ AUTHOR_POSTS = (
     "AND x.status = 'approved') + (SELECT count(*) FROM forum_replies y "
     "WHERE y.customer_id = {a}.customer_id AND y.status = 'approved') END"
 )
+
+
+RESERVED_NAMES = {
+    "ai trading ekibi",
+    "ekip",
+    "yönetici",
+    "yonetici",
+    "admin",
+    "moderatör",
+    "moderator",
+}
+
+# Profil istatistikleri (yayımlanmış mesajlar ve alınan beğeniler).
+PROFILE_STATS = (
+    "(SELECT count(*) FROM forum_topics x WHERE x.customer_id = p.customer_id "
+    "AND x.status = 'approved') AS topics, "
+    "(SELECT count(*) FROM forum_replies y WHERE y.customer_id = p.customer_id "
+    "AND y.status = 'approved') AS replies, "
+    "(SELECT count(*) FROM forum_likes l WHERE (l.target_type = 'topic' AND l.target_id IN "
+    "(SELECT id FROM forum_topics x WHERE x.customer_id = p.customer_id "
+    "AND x.status = 'approved')) "
+    "OR (l.target_type = 'reply' AND l.target_id IN (SELECT id FROM forum_replies y "
+    "WHERE y.customer_id = p.customer_id AND y.status = 'approved'))) AS likes"
+)
+
+
+async def author_name_for(conn: Any, customer_id: Any, requested: str) -> str:
+    """Müşterinin forum adı kalıcıdır (profil ve rütbe): ilk gönderide seçilir, sonra değişmez.
+    Ad başka bir üyedeyse ya da ayrılmış bir adsa reddedilir."""
+    cur = await conn.execute(
+        "SELECT nickname::text AS nickname FROM forum_profiles WHERE customer_id = %s",
+        (customer_id,),
+    )
+    row = await cur.fetchone()
+    if row is not None:
+        return str(row["nickname"])
+    if requested.casefold() in RESERVED_NAMES:
+        raise HTTPException(status_code=422, detail="Bu ad kullanılamaz; başka bir ad seçin")
+    cur = await conn.execute(
+        "INSERT INTO forum_profiles (customer_id, nickname) VALUES (%s, %s) "
+        "ON CONFLICT DO NOTHING RETURNING nickname::text AS nickname",
+        (customer_id, requested),
+    )
+    created = await cur.fetchone()
+    if created is None:
+        raise HTTPException(
+            status_code=409, detail="Bu forum adı başka bir üyede; başka bir ad seçin"
+        )
+    return str(created["nickname"])
 
 
 async def create_team_topic(conn: Any, admin: Admin, body: TeamTopic, **source: Any) -> Any:
@@ -224,6 +284,8 @@ def create_forum_router(settings: CloudSettings, db: Database) -> APIRouter:
     customer_dep = Depends(current_customer)
     topic_limit = SlidingWindowLimiter(5, 3600)
     reply_limit = SlidingWindowLimiter(20, 3600)
+    like_limit = SlidingWindowLimiter(120, 3600)
+    vote_limit = SlidingWindowLimiter(60, 3600)
 
     def verified(customer: dict[str, Any]) -> None:
         if customer.get("email_verified_at") is None:
@@ -360,20 +422,87 @@ def create_forum_router(settings: CloudSettings, db: Database) -> APIRouter:
             if found is None:
                 raise HTTPException(status_code=404, detail="Konu bulunamadı")
             cur = await conn.execute(
-                f"SELECT {TOPIC_PUBLIC}, t.body, {AUTHOR_POSTS.format(a='t')} AS author_posts "  # noqa: S608
+                f"SELECT {TOPIC_PUBLIC}, t.body, {AUTHOR_POSTS.format(a='t')} AS author_posts, "  # noqa: S608
+                "(SELECT nickname::text FROM forum_profiles p WHERE p.customer_id = t.customer_id) "
+                "AS author_nick, (SELECT count(*) FROM forum_likes l WHERE l.target_type = 'topic' "
+                "AND l.target_id = t.id) AS like_count, "
+                "(SELECT count(*) FROM forum_sentiment s WHERE s.topic_id = t.id "
+                "AND s.vote = 'bull') AS bull, (SELECT count(*) FROM forum_sentiment s "
+                "WHERE s.topic_id = t.id AND s.vote = 'bear') AS bear "
                 "FROM forum_topics t WHERE t.id = %s",
                 (found["id"],),
             )
             row = await cur.fetchone()
             cur = await conn.execute(
-                f"SELECT r.author_name, r.author_kind, r.body, r.published_at, "  # noqa: S608
-                f"{AUTHOR_POSTS.format(a='r')} AS author_posts FROM forum_replies r "
+                f"SELECT r.id::text AS id, r.author_name, r.author_kind, r.body, r.published_at, "  # noqa: S608
+                f"{AUTHOR_POSTS.format(a='r')} AS author_posts, "
+                "(SELECT nickname::text FROM forum_profiles p WHERE p.customer_id = r.customer_id) "
+                "AS author_nick, (SELECT count(*) FROM forum_likes l WHERE l.target_type = 'reply' "
+                "AND l.target_id = r.id) AS like_count FROM forum_replies r "
                 "WHERE r.topic_id = %s AND r.status = 'approved' ORDER BY r.published_at LIMIT 500",
                 (found["id"],),
             )
             replies = await cur.fetchall()
         response.headers["Cache-Control"] = "no-store"
-        return {**(row or {}), "replies": replies}
+        data = dict(row or {})
+        bull, bear = int(data.pop("bull", 0)), int(data.pop("bear", 0))
+        data["sentiment"] = {"bull": bull, "bear": bear} if data.get("coin_symbol") else None
+        return {**data, "replies": replies}
+
+    @router.get("/members/{nickname}")
+    async def member(nickname: str, response: Response) -> dict[str, Any]:
+        """Üye profili: rütbe için yayımlanmış mesaj sayısı, alınan beğeni ve son konular."""
+        if not _NAME.match(nickname):
+            raise HTTPException(status_code=404, detail="Üye bulunamadı")
+        async with db.connection() as conn:
+            cur = await conn.execute(
+                f"SELECT p.customer_id, p.nickname::text AS nickname, p.created_at, {PROFILE_STATS} "  # noqa: S608, E501
+                "FROM forum_profiles p WHERE p.nickname = %s",
+                (nickname,),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Üye bulunamadı")
+            cur = await conn.execute(
+                "SELECT t.number, t.title, t.category, t.coin_symbol, t.published_at, "
+                "(SELECT count(*) FROM forum_replies r WHERE r.topic_id = t.id "
+                "AND r.status = 'approved') AS reply_count FROM forum_topics t "
+                "WHERE t.customer_id = %s AND t.status = 'approved' "
+                "ORDER BY t.published_at DESC LIMIT 10",
+                (row.pop("customer_id"),),
+            )
+            recent = await cur.fetchall()
+        response.headers["Cache-Control"] = "public, max-age=30"
+        return {
+            "nickname": row["nickname"],
+            "joined_at": row["created_at"],
+            "topics": row["topics"],
+            "replies": row["replies"],
+            "posts": row["topics"] + row["replies"],
+            "likes": row["likes"],
+            "recent_topics": recent,
+        }
+
+    @router.get("/leaderboard")
+    async def leaderboard(response: Response) -> list[dict[str, Any]]:
+        """En aktif üyeler (yayımlanmış mesaj, eşitlikte beğeni)."""
+        async with db.connection() as conn:
+            cur = await conn.execute(
+                f"SELECT * FROM (SELECT p.nickname::text AS nickname, p.created_at, {PROFILE_STATS} "  # noqa: S608, E501
+                "FROM forum_profiles p) x WHERE x.topics + x.replies > 0 "
+                "ORDER BY x.topics + x.replies DESC, x.likes DESC, x.created_at LIMIT 20"
+            )
+            rows = await cur.fetchall()
+        response.headers["Cache-Control"] = "public, max-age=60"
+        return [
+            {
+                "nickname": r["nickname"],
+                "posts": r["topics"] + r["replies"],
+                "topics": r["topics"],
+                "likes": r["likes"],
+            }
+            for r in rows
+        ]
 
     @router.post("/me/topics", status_code=202)
     async def create_topic(
@@ -400,7 +529,7 @@ def create_forum_router(settings: CloudSettings, db: Database) -> APIRouter:
                 "RETURNING number",
                 (
                     customer["id"],
-                    body.author_name,
+                    await author_name_for(conn, customer["id"], body.author_name),
                     body.category,
                     body.title,
                     body.body,
@@ -444,7 +573,13 @@ def create_forum_router(settings: CloudSettings, db: Database) -> APIRouter:
             await conn.execute(
                 "INSERT INTO forum_replies (topic_id, customer_id, author_kind, author_name, "
                 "body, flags) VALUES (%s, %s, 'customer', %s, %s, %s)",
-                (topic["id"], customer["id"], body.author_name, body.body, flags_of(body.body)),
+                (
+                    topic["id"],
+                    customer["id"],
+                    await author_name_for(conn, customer["id"], body.author_name),
+                    body.body,
+                    flags_of(body.body),
+                ),
             )
         return {
             "status": "pending",
@@ -468,9 +603,123 @@ def create_forum_router(settings: CloudSettings, db: Database) -> APIRouter:
                 (customer["id"],),
             )
             replies = await cur.fetchall()
+            cur = await conn.execute(
+                f"SELECT p.nickname::text AS nickname, p.created_at, {PROFILE_STATS} "  # noqa: S608
+                "FROM forum_profiles p WHERE p.customer_id = %s",
+                (customer["id"],),
+            )
+            profile = await cur.fetchone()
         for reply in replies:
             reply["body"] = excerpt(reply["body"], 160)
-        return {"topics": topics, "replies": replies}
+        if profile is not None:
+            profile["posts"] = profile["topics"] + profile["replies"]
+        return {"topics": topics, "replies": replies, "profile": profile}
+
+    @router.get("/me/topics/{number}/state")
+    async def my_state(number: int, customer: dict[str, Any] = customer_dep) -> dict[str, Any]:
+        """Konuda kişinin beğendikleri ve yükseliş/düşüş oyu (düğmelerin durumu)."""
+        async with db.connection() as conn:
+            topic = await _approved_topic(conn, number)
+            cur = await conn.execute(
+                "SELECT l.target_type, l.target_id::text AS target_id FROM forum_likes l "
+                "WHERE l.customer_id = %s AND ((l.target_type = 'topic' AND l.target_id = %s) "
+                "OR (l.target_type = 'reply' AND l.target_id IN "
+                "(SELECT id FROM forum_replies WHERE topic_id = %s)))",
+                (customer["id"], topic["id"], topic["id"]),
+            )
+            liked = [
+                "topic" if r["target_type"] == "topic" else r["target_id"]
+                for r in await cur.fetchall()
+            ]
+            cur = await conn.execute(
+                "SELECT vote FROM forum_sentiment WHERE topic_id = %s AND customer_id = %s",
+                (topic["id"], customer["id"]),
+            )
+            vote = await cur.fetchone()
+        return {"liked": liked, "vote": vote["vote"] if vote else None}
+
+    @router.post("/me/like")
+    async def like(
+        body: LikeRequest, request: Request, customer: dict[str, Any] = customer_dep
+    ) -> dict[str, Any]:
+        """Beğeni (aç/kapa). Kendi mesajınızı beğenemezsiniz."""
+        check_origin(settings, request)
+        verified(customer)
+        limited(like_limit, str(customer["id"]))
+        async with db.connection() as conn, conn.transaction():
+            topic = await _approved_topic(conn, body.number)
+            if body.reply_id is None:
+                target_type, target_id, owner = "topic", topic["id"], topic["customer_id"]
+            else:
+                cur = await conn.execute(
+                    "SELECT id, customer_id FROM forum_replies WHERE id = %s AND topic_id = %s "
+                    "AND status = 'approved'",
+                    (_uuid(body.reply_id), topic["id"]),
+                )
+                reply = await cur.fetchone()
+                if reply is None:
+                    raise HTTPException(status_code=404, detail="Yanıt bulunamadı")
+                target_type, target_id, owner = "reply", reply["id"], reply["customer_id"]
+            if owner == customer["id"]:
+                raise HTTPException(status_code=409, detail="Kendi mesajınızı beğenemezsiniz")
+            cur = await conn.execute(
+                "DELETE FROM forum_likes WHERE customer_id = %s AND target_type = %s "
+                "AND target_id = %s RETURNING target_id",
+                (customer["id"], target_type, target_id),
+            )
+            removed = await cur.fetchone() is not None
+            if not removed:
+                await conn.execute(
+                    "INSERT INTO forum_likes (customer_id, target_type, target_id) "
+                    "VALUES (%s, %s, %s)",
+                    (customer["id"], target_type, target_id),
+                )
+            cur = await conn.execute(
+                "SELECT count(*) AS n FROM forum_likes WHERE target_type = %s AND target_id = %s",
+                (target_type, target_id),
+            )
+            count = (await cur.fetchone() or {"n": 0})["n"]
+        return {"liked": not removed, "count": count}
+
+    @router.post("/me/topics/{number}/sentiment")
+    async def sentiment(
+        number: int, body: SentimentVote, request: Request, customer: dict[str, Any] = customer_dep
+    ) -> dict[str, Any]:
+        """Coin konusunda yükseliş / düşüş beklentisi (kişi başı bir oy, değiştirilebilir)."""
+        check_origin(settings, request)
+        verified(customer)
+        limited(vote_limit, str(customer["id"]))
+        async with db.connection() as conn:
+            topic = await _approved_topic(conn, number)
+            if not topic["coin_symbol"]:
+                raise HTTPException(status_code=409, detail="Bu konuda coin oylaması yok")
+            await conn.execute(
+                "INSERT INTO forum_sentiment (topic_id, customer_id, vote) VALUES (%s, %s, %s) "
+                "ON CONFLICT (topic_id, customer_id) DO UPDATE SET vote = EXCLUDED.vote, "
+                "updated_at = now()",
+                (topic["id"], customer["id"], body.vote),
+            )
+            cur = await conn.execute(
+                "SELECT count(*) FILTER (WHERE vote = 'bull') AS bull, "
+                "count(*) FILTER (WHERE vote = 'bear') AS bear FROM forum_sentiment "
+                "WHERE topic_id = %s",
+                (topic["id"],),
+            )
+            counts = await cur.fetchone() or {"bull": 0, "bear": 0}
+        return {"vote": body.vote, "bull": counts["bull"], "bear": counts["bear"]}
+
+    async def _approved_topic(conn: Any, number: int) -> Any:
+        if number < 1 or number > 2**62:
+            raise HTTPException(status_code=404, detail="Konu bulunamadı")
+        cur = await conn.execute(
+            "SELECT id, customer_id, coin_symbol FROM forum_topics WHERE number = %s "
+            "AND status = 'approved'",
+            (number,),
+        )
+        topic = await cur.fetchone()
+        if topic is None:
+            raise HTTPException(status_code=404, detail="Konu bulunamadı")
+        return topic
 
     return router
 
@@ -571,6 +820,12 @@ def create_admin_forum_router(ctx: AdminContext) -> APIRouter:
                     "AND status = 'drafted'",
                     (tid,),
                 )
+                await conn.execute(
+                    "DELETE FROM forum_likes WHERE (target_type = 'topic' AND target_id = %s) "
+                    "OR (target_type = 'reply' AND target_id IN "
+                    "(SELECT id FROM forum_replies WHERE topic_id = %s))",
+                    (tid, tid),
+                )
                 await conn.execute("DELETE FROM forum_topics WHERE id = %s", (tid,))
                 status = "deleted"
             elif body.action in TOPIC_TRANSITIONS:
@@ -661,6 +916,10 @@ def create_admin_forum_router(ctx: AdminContext) -> APIRouter:
             if row is None:
                 raise HTTPException(status_code=404, detail="Yanıt bulunamadı")
             if body.action == "delete":
+                await conn.execute(
+                    "DELETE FROM forum_likes WHERE target_type = 'reply' AND target_id = %s",
+                    (rid,),
+                )
                 await conn.execute("DELETE FROM forum_replies WHERE id = %s", (rid,))
                 status = "deleted"
             else:

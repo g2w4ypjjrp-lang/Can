@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { isCategory, paragraphs, timeAgo } from "@/lib/forum";
+import { bodyBlocks, isCategory, paragraphs, timeAgo } from "@/lib/forum";
+import { nextRank, rankFor } from "@/lib/ranks";
 import { findForbiddenClaims } from "@/lib/content-policy";
 
 describe("forum yardımcıları", () => {
@@ -31,5 +32,26 @@ describe("forum yardımcıları", () => {
         "Kazanç vaat eden, reklam, yönlendirme bağlantısı ya da kişisel iletişim bilgisi içeren gönderiler yayımlanmaz.",
       ),
     ).toEqual([]);
+  });
+
+  it("alıntı blokları ayrılır", () => {
+    expect(bodyBlocks("> Ayşe yazdı:\n> destek 170\n\nKatılıyorum.\nStop 165.")).toEqual([
+      { kind: "quote", text: "Ayşe yazdı:\ndestek 170" },
+      { kind: "text", text: "Katılıyorum.\nStop 165." },
+    ]);
+    expect(bodyBlocks("Önce metin\n> sonra alıntı")).toEqual([
+      { kind: "text", text: "Önce metin" },
+      { kind: "quote", text: "sonra alıntı" },
+    ]);
+  });
+
+  it("rütbe eşikleri", () => {
+    expect(rankFor(0, false).name).toBe("Sui");
+    expect(rankFor(3, false).name).toBe("Avalanche");
+    expect(rankFor(199, false).name).toBe("Ethereum");
+    expect(rankFor(200, false).name).toBe("Bitcoin");
+    expect(rankFor(5, true).name).toBe("Ekip");
+    expect(nextRank(5, false)).toMatchObject({ rank: { name: "Toncoin" }, remaining: 2 });
+    expect(nextRank(250, false)).toBeNull();
   });
 });

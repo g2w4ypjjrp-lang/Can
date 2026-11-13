@@ -5,7 +5,17 @@ import { useCallback, useEffect, useState } from "react";
 import { useApi } from "@/components/ApiContext";
 import { ApiError } from "@/lib/api";
 
+export interface ForumProfile {
+  nickname: string;
+  posts: number;
+  topics: number;
+  replies: number;
+  likes: number;
+  created_at: string;
+}
+
 export interface MyPosts {
+  profile?: ForumProfile | null;
   topics: {
     number: number;
     title: string;

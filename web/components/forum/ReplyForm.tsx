@@ -1,7 +1,7 @@
 "use client";
 
 import { Send } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { useApi } from "@/components/ApiContext";
 import { LoginPrompt } from "@/components/forum/LoginPrompt";
@@ -19,7 +19,26 @@ export function ReplyForm({ number }: { number: number }) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  const area = useRef<HTMLTextAreaElement>(null);
+  const nickname = account.mine?.profile?.nickname ?? null;
+
   useEffect(() => setName(rememberedName()), []);
+  useEffect(() => {
+    if (nickname) setName(nickname);
+  }, [nickname]);
+  // "Alıntıla" düğmesi alıntıyı buraya ekler.
+  useEffect(() => {
+    function onQuote(event: Event) {
+      const text = (event as CustomEvent<string>).detail;
+      setBody((current) => `${current}${current && !current.endsWith("\n") ? "\n\n" : ""}${text}`);
+      requestAnimationFrame(() => {
+        area.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        area.current?.focus();
+      });
+    }
+    window.addEventListener("forum-quote", onQuote);
+    return () => window.removeEventListener("forum-quote", onQuote);
+  }, []);
 
   if (account.state === "loading") return <p className="text-sm text-muted">Yükleniyor…</p>;
   if (account.state === "anon") return <LoginPrompt next={`/forum/${number}`} action="Yanıt yazmak" />;
@@ -34,6 +53,7 @@ export function ReplyForm({ number }: { number: number }) {
       rememberName(name.trim());
       setBody("");
       setDone(result.message);
+      account.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : NETWORK_ERROR);
     } finally {
@@ -44,12 +64,23 @@ export function ReplyForm({ number }: { number: number }) {
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-4 rounded-3xl border border-border bg-surface p-5 shadow-sm" data-testid="reply-form">
       <h2 className="font-semibold text-fg">Hızlı yanıt</h2>
-      <Field id="yanit-ad" label="Forumda görünecek adınız" required minLength={2} maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
+      <Field
+        id="yanit-ad"
+        label="Forumda görünecek adınız"
+        hint={nickname ? "Forum adınız kalıcıdır (profil ve rütbeniz bu adla)." : "İlk gönderinizde seçtiğiniz ad kalıcı forum adınız olur."}
+        required
+        minLength={2}
+        maxLength={40}
+        value={name}
+        readOnly={Boolean(nickname)}
+        onChange={(e) => setName(e.target.value)}
+      />
       <div>
         <label htmlFor="yanit-metin" className="block text-sm font-medium text-fg">
           Yanıtınız
         </label>
         <textarea
+          ref={area}
           id="yanit-metin"
           required
           minLength={2}

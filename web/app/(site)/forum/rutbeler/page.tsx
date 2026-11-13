@@ -3,9 +3,11 @@ import type { Metadata } from "next";
 import { ChevronRight, MessageSquarePlus, ShieldCheck, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
+import { Leaderboard } from "@/components/forum/Leaderboard";
 import { RankBanner } from "@/components/forum/Ranks";
 import { CandleBackdrop } from "@/components/forum/Visuals";
 import { Container } from "@/components/ui";
+import { fetchLeaderboard } from "@/lib/forum";
 import { RANKS, TEAM_RANK } from "@/lib/ranks";
 
 export const metadata: Metadata = {
@@ -19,7 +21,8 @@ const STEPS = [
   { icon: ShieldCheck, title: "Kurallara uyun", text: "Reddedilen ya da gizlenen gönderiler sayılmaz. Kazanç vaadi ve reklam yayımlanmaz." },
 ];
 
-export default function RanksPage() {
+export default async function RanksPage() {
+  const leaders = await fetchLeaderboard();
   return (
     <div className="stage">
       <header className="relative overflow-hidden border-b border-border">
@@ -51,6 +54,16 @@ export default function RanksPage() {
             </li>
           ))}
         </ol>
+
+        <section aria-labelledby="liderler" className="mt-12">
+          <h2 id="liderler" className="flex items-center gap-2 text-2xl font-bold text-fg">
+            <span aria-hidden="true">🏆</span> Liderlik tablosu
+          </h2>
+          <p className="mt-1 text-sm text-muted">En çok yayımlanmış mesajı olan üyeler (eşitlikte alınan “Faydalı” sayısı).</p>
+          <div className="mt-4">
+            <Leaderboard entries={leaders} />
+          </div>
+        </section>
 
         <div className="mt-12 grid gap-6 lg:grid-cols-[1fr_16rem]">
           <section aria-labelledby="nasil" className="rounded-2xl border border-border bg-surface p-6">

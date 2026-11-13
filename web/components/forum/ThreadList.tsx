@@ -94,7 +94,16 @@ export function ThreadList({
                         </Link>
                       </p>
                       <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                        <span className="font-medium text-fg">{t.author_name}</span>
+                        {t.author_nick ? (
+                          <Link
+                            href={`/forum/uye/${encodeURIComponent(t.author_nick)}`}
+                            className="relative z-10 font-medium text-fg underline-offset-4 hover:text-accent-text hover:underline"
+                          >
+                            {t.author_name}
+                          </Link>
+                        ) : (
+                          <span className="font-medium text-fg">{t.author_name}</span>
+                        )}
                         {t.author_posts !== undefined ? <RankPill posts={t.author_posts} team={team} /> : null}
                         <span aria-hidden="true">·</span>
                         <CategoryChip category={t.category} />

@@ -7,6 +7,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useApi } from "@/components/ApiContext";
 import { LoginPrompt } from "@/components/forum/LoginPrompt";
 import { rememberName, rememberedName, useForumAccount, type MyPosts } from "@/components/forum/useForumAccount";
+import { RankPill } from "@/components/forum/Ranks";
 import { CATEGORY_META, CoinToken } from "@/components/forum/Visuals";
 import { Button, Field, Notice, inputBase } from "@/components/ui";
 import { NETWORK_ERROR } from "@/lib/api";
@@ -92,7 +93,11 @@ export function NewTopic() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  const nickname = account.mine?.profile?.nickname ?? null;
   useEffect(() => setName(rememberedName()), []);
+  useEffect(() => {
+    if (nickname) setName(nickname);
+  }, [nickname]);
 
   if (account.state === "loading") return <p className="text-sm text-muted">Yükleniyor…</p>;
   if (account.state === "anon") return <LoginPrompt next="/forum/yeni" action="Konu açmak" />;
@@ -165,7 +170,12 @@ export function NewTopic() {
           <Field
             id="konu-ad"
             label="Forumda görünecek adınız"
-            hint="Gerçek adınızı yazmak zorunda değilsiniz."
+            hint={
+              nickname
+                ? "Forum adınız kalıcıdır (profil ve rütbeniz bu adla)."
+                : "Gerçek adınızı yazmak zorunda değilsiniz. İlk gönderinizdeki ad kalıcı forum adınız olur."
+            }
+            readOnly={Boolean(nickname)}
             required
             minLength={2}
             maxLength={40}
@@ -218,6 +228,23 @@ export function NewTopic() {
       </form>
 
       <aside className="space-y-4">
+        {account.mine?.profile ? (
+          <div className="rounded-3xl border border-border bg-surface p-5 shadow-sm" data-testid="my-profile">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">Forum profiliniz</p>
+            <p className="mt-2 flex flex-wrap items-center gap-2 font-semibold text-fg">
+              {account.mine.profile.nickname} <RankPill posts={account.mine.profile.posts} team={false} />
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              {account.mine.profile.posts} yayımlanmış mesaj · {account.mine.profile.likes} faydalı
+            </p>
+            <Link
+              href={`/forum/uye/${encodeURIComponent(account.mine.profile.nickname)}`}
+              className="mt-3 inline-block text-sm font-semibold text-accent-text underline-offset-4 hover:underline"
+            >
+              Profilim ve rütbem →
+            </Link>
+          </div>
+        ) : null}
         <div className="rounded-3xl border border-border bg-surface p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted">Önizleme</p>
           <div className="mt-3 flex items-start gap-3">

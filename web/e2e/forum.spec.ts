@@ -112,7 +112,7 @@ test("yönetici onaylar ve reddeder; yanıt onaydan sonra görünür", async () 
   await expect(card).toContainText("Strateji ve analiz");
   await expect(card).toContainText("Deneme Yatırımcı");
   await noAxeViolations(page);
-  await card.getByRole("link").click();
+  await card.getByRole("link", { name: "SOL için destek seviyeleri" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("SOL için destek seviyeleri");
   await expect(page).toHaveTitle(/SOL için destek seviyeleri/); // başlık akışla gelir; denetimden önce beklenir
   await expect(page.getByText("1 görüntüleme")).toBeVisible(); // bir ziyaret bir görüntüleme
@@ -160,10 +160,10 @@ test("coin haberi panelden paylaşılır, forumda sabit ekip konusu olur", async
   );
   await admin.getByRole("link", { name: "Coin haberleri" }).click();
   await expect(admin.getByRole("heading", { level: 1, name: "Coin haberleri" })).toBeVisible();
-  const card = admin.getByTestId(/^news-/).filter({ hasText: "Testcoin" });
+  const card = admin.getByTestId(/^news-[0-9a-f]{8}$/).filter({ hasText: "Testcoin" });
   await expect(card).toContainText("Yeni coin");
   await expect(card).toContainText("Binance duyuruları");
-  await expect(admin.getByTestId(/^news-/).filter({ hasText: "Bitcoin haftaya" })).toHaveCount(0); // yeni coin sekmesi
+  await expect(admin.getByTestId(/^news-[0-9a-f]{8}$/).filter({ hasText: "Bitcoin haftaya" })).toHaveCount(0); // yeni coin sekmesi
   await expect(admin.getByTestId("news-sources")).toContainText("Binance yeni işlem çiftleri");
   await noAxeViolations(admin);
 
@@ -176,20 +176,20 @@ test("coin haberi panelden paylaşılır, forumda sabit ekip konusu olur", async
   await noAxeViolations(admin);
   await form.getByRole("button", { name: "Forumda paylaş" }).click();
   await expect(admin.getByRole("status").filter({ hasText: /Paylaşıldı: forum konusu #\d+/ })).toBeVisible();
-  await expect(admin.getByTestId(/^news-/).filter({ hasText: "Testcoin" })).toHaveCount(0);
+  await expect(admin.getByTestId(/^news-[0-9a-f]{8}$/).filter({ hasText: "Testcoin" })).toHaveCount(0);
 
   await admin.getByRole("tab", { name: /Tüm yeni haberler/ }).click();
-  const english = admin.getByTestId(/^news-/).filter({ hasText: "Bitcoin 70 bini aştı" });
+  const english = admin.getByTestId(/^news-[0-9a-f]{8}$/).filter({ hasText: "Bitcoin 70 bini aştı" });
   await expect(english.getByTestId("news-title")).toHaveText("Bitcoin 70 bini aştı");
   await expect(english).toContainText("Orijinal: Bitcoin rallies past 70k");
   await expect(admin.getByTestId("news-translation")).toContainText("MyMemory");
-  const other = admin.getByTestId(/^news-/).filter({ hasText: "Bitcoin haftaya" });
+  const other = admin.getByTestId(/^news-[0-9a-f]{8}$/).filter({ hasText: "Bitcoin haftaya" });
   await other.getByRole("button", { name: "Gizle" }).click();
   await expect(other).toHaveCount(0);
   await admin.getByRole("tab", { name: "Gizlenenler" }).click();
-  await expect(admin.getByTestId(/^news-/).filter({ hasText: "Bitcoin haftaya" })).toBeVisible();
+  await expect(admin.getByTestId(/^news-[0-9a-f]{8}$/).filter({ hasText: "Bitcoin haftaya" })).toBeVisible();
   await admin.getByRole("tab", { name: "Paylaşılanlar" }).click();
-  await expect(admin.getByTestId(/^news-/).filter({ hasText: "Testcoin" })).toContainText(/Forumda: konu #\d+/);
+  await expect(admin.getByTestId(/^news-[0-9a-f]{8}$/).filter({ hasText: "Testcoin" })).toContainText(/Forumda: konu #\d+/);
 
   // Forumda: sabit, resmî, kaynak bağlantılı.
   await page.goto("/forum");
@@ -197,7 +197,7 @@ test("coin haberi panelden paylaşılır, forumda sabit ekip konusu olur", async
   await expect(first).toContainText("Binance Testcoin (TST) listeliyor");
   await expect(first).toContainText("Resmî");
   await expect(first).toContainText("Sabit");
-  await first.getByRole("link").click();
+  await first.getByRole("link", { name: "Binance Testcoin (TST) listeliyor" }).click();
   await expect(page).toHaveTitle(/Binance Testcoin \(TST\) listeliyor/);
   await expect(page.getByTestId("topic-source")).toHaveAttribute("href", "https://www.binance.com/en/support/announcement/detail/abc");
   await expect(page.getByTestId("topic-source")).toContainText("Binance duyuruları");
@@ -234,7 +234,7 @@ test("yeni coin haberinden otomatik taslak onaya düşer, düzenlenip yayımlan�
   await expect(admin.getByTestId("auto-draft").getByLabel("Yeni coin haberlerinden otomatik taslak oluştur")).toBeChecked();
   await expect(admin.getByTestId("nav-badge-forum")).toContainText("1");
   await admin.getByRole("tab", { name: /Onay bekleyen taslaklar/ }).click();
-  await expect(admin.getByTestId(/^news-/).filter({ hasText: "Otocoin" })).toContainText(/Otomatik taslak onay bekliyor: konu #\d+/);
+  await expect(admin.getByTestId(/^news-[0-9a-f]{8}$/).filter({ hasText: "Otocoin" })).toContainText(/Otomatik taslak onay bekliyor: konu #\d+/);
   await noAxeViolations(admin);
 
   await admin.getByTestId("auto-draft").getByRole("link", { name: /taslak onay bekliyor/ }).click();
@@ -261,4 +261,67 @@ test("yeni coin haberinden otomatik taslak onaya düşer, düzenlenip yayımlan�
   await expect(page.getByTestId("rank-1")).toContainText("Bitcoin");
   await expect(page.getByTestId("rank-10")).toContainText("Başlangıç");
   await noAxeViolations(page);
+});
+
+test("ikinci üye: beğeni, yükseliş oyu, alıntıyla yanıt, kalıcı ad, profil ve liderlik tablosu", async ({ browser }) => {
+  const token = randomBytes(32).toString("base64url");
+  await sql(
+    "WITH c AS (INSERT INTO customers (email, password_hash, email_verified_at) VALUES ('okur@example.com', " +
+      "'$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA', now()) RETURNING id) " +
+      "INSERT INTO customer_sessions (customer_id, refresh_token_hash, client_kind, expires_at) " +
+      "SELECT id, sha256(convert_to($1, 'UTF8')), 'web', now() + interval '1 day' FROM c",
+    [token],
+  );
+  const ctx = await browser.newContext({ locale: "tr-TR", timezoneId: "Europe/Istanbul", baseURL: "http://127.0.0.1:3100" });
+  await ctx.addCookies([{ name: "ati_session", value: token, domain: "127.0.0.1", path: "/", httpOnly: true, sameSite: "Strict" }]);
+  const okur = await ctx.newPage();
+  const [row] = await sql<{ number: string }>("SELECT number FROM forum_topics WHERE title = 'Binance Testcoin (TST) listeliyor'");
+  await okur.goto(`/forum/${row!.number}`);
+  await expect(okur).toHaveTitle(/Binance Testcoin/);
+
+  const like = okur.getByTestId("like-topic");
+  await expect(like).toContainText("Faydalı 0");
+  await like.click();
+  await expect(like).toHaveAttribute("aria-pressed", "true");
+  await expect(like).toContainText("Faydalı 1");
+
+  const poll = okur.getByTestId("sentiment");
+  await poll.getByTestId("vote-bull").click();
+  await expect(poll.getByTestId("sentiment-counts")).toContainText("Yükseliş %100 (1)");
+  await expect(poll.getByTestId("vote-bull")).toHaveAttribute("aria-pressed", "true");
+
+  await okur.getByTestId("post-1").getByRole("button", { name: "Alıntıla" }).click();
+  const reply = okur.getByTestId("reply-form");
+  await expect(reply.getByLabel("Yanıtınız")).toHaveValue(/^> AI Trading Ekibi yazdı:\n> /);
+  await reply.getByLabel("Yanıtınız").press("End");
+  await reply.getByLabel("Yanıtınız").pressSequentially("Takipteyim.");
+  // Ad başka üyede: reddedilir; başka ad seçilince yanıt onaya gider ve ad kalıcı olur.
+  await reply.getByLabel("Forumda görünecek adınız").fill("Deneme Yatırımcı");
+  await reply.getByRole("button", { name: "Onaya gönder" }).click();
+  await expect(reply.getByRole("alert")).toContainText("başka bir üyede");
+  await reply.getByLabel("Forumda görünecek adınız").fill("Okur Ali");
+  await reply.getByRole("button", { name: "Onaya gönder" }).click();
+  await expect(reply.getByRole("status")).toContainText("onayından sonra");
+  await expect(reply.getByLabel("Forumda görünecek adınız")).toHaveAttribute("readonly", "");
+  await noAxeViolations(okur);
+
+  await admin.goto("/yonetim/forum");
+  await admin.getByTestId("queue-reply").filter({ hasText: "Takipteyim" }).getByRole("button", { name: /onayla$/ }).click();
+  await expect(admin.getByTestId("queue-reply")).toHaveCount(0);
+
+  await okur.reload();
+  const post = okur.getByTestId("post-2");
+  await expect(post.locator("blockquote")).toContainText("AI Trading Ekibi yazdı:");
+  await expect(post).toContainText("Takipteyim.");
+  await post.getByRole("link", { name: "Okur Ali" }).click();
+  await expect(okur.getByTestId("member-name")).toHaveText("Okur Ali");
+  await expect(okur.getByTestId("member-stats")).toContainText("Mesaj1");
+  await expect(okur.getByTestId("rank-10")).toContainText("Sui");
+  await noAxeViolations(okur);
+
+  await okur.goto("/forum/rutbeler");
+  const board = okur.getByTestId("leaderboard");
+  await expect(board).toContainText("Deneme Yatırımcı");
+  await expect(board).toContainText("Okur Ali");
+  await ctx.close();
 });

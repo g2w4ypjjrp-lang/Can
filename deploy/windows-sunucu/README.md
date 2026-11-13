@@ -172,6 +172,14 @@ belirtilmelidir (hukukçu onayı).
 * **Forum:** site → **Forum** (canarslan.net.tr/forum). Müşterinin açtığı konu ve yanıt, panel →
   **Topluluk → Forum onayları**'nda onaylanmadan görünmez; reddederken yazdığınız neden müşteriye
   görünür. Kazanç vaadi, bağlantı ve iletişim bilgisi içeren gönderiler otomatik işaretlenir.
+* **Forum üyeleri:** müşterinin ilk gönderisindeki ad kalıcı forum adı olur (başkası aynı adı
+  alamaz; "Ekip", "Yönetici" gibi adlar ayrılmıştır). Her üyenin profil sayfası
+  (canarslan.net.tr/forum/uye/AD) rütbe sancağını, mesaj ve "Faydalı" sayısını gösterir; liderlik
+  tablosu Rütbe sistemi sayfasında. Mesajlarda **Faydalı** (beğeni) ve **Alıntıla** düğmeleri, coin
+  konularında **Yükseliş / Düşüş** oylaması vardır (topluluk görüşüdür, yatırım tavsiyesi değildir).
+* **Haber çevirisi:** İngilizce kaynakların başlık ve özeti Türkçeye çevrilir (Coin haberleri →
+  Türkçe çeviri). Varsayılan ücretsiz MyMemory; isterseniz ücretsiz DeepL API anahtarı girilir.
+  Haberin tamamı kopyalanmaz; tamamı kaynak bağlantısındadır.
 * **Forum rütbeleri:** canarslan.net.tr/forum/rutbeler. Yayımlanan (onaylı) mesaj sayısıyla
   Seviye 10 Sui'den (başlangıç) Seviye 1 Bitcoin'e (200+ mesaj) yükselinir; ekip ayrı "Ekip" rütbesi
   taşır. Rütbe her mesajın yanında sancak olarak görünür.
