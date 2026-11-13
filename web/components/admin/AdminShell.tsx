@@ -28,6 +28,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useApi } from "@/components/ApiContext";
 import { CommandPalette } from "@/components/admin/CommandPalette";
 import { useAdmin } from "@/components/admin/AdminSession";
+import { useAdminQuery } from "@/components/admin/kit";
 import { LogoMark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ADMIN_NAV, NAV_GROUPS, ROLE_LABELS, can, type NavEntry } from "@/lib/admin";
@@ -61,7 +62,17 @@ function initials(name: string, email: string) {
   return letters.toLocaleUpperCase("tr-TR");
 }
 
-function Sidebar({ items, pathname, onNavigate }: { items: NavEntry[]; pathname: string; onNavigate?: () => void }) {
+function Sidebar({
+  items,
+  pathname,
+  onNavigate,
+  badges = {},
+}: {
+  items: NavEntry[];
+  pathname: string;
+  onNavigate?: () => void;
+  badges?: Record<string, number>;
+}) {
   return (
     <nav aria-label="Yönetim menüsü" className="flex-1 overflow-y-auto px-3 pb-4">
       {NAV_GROUPS.map((group) => {
@@ -87,6 +98,12 @@ function Sidebar({ items, pathname, onNavigate }: { items: NavEntry[]; pathname:
                       {active ? <span aria-hidden="true" className="absolute inset-y-2 left-0 w-1 rounded-full bg-brand" /> : null}
                       <Icon aria-hidden="true" className={`h-4 w-4 shrink-0 ${active ? "text-accent-text" : ""}`} />
                       {item.label}
+                      {badges[item.href] ? (
+                        <span className="ml-auto rounded-full bg-brand px-2 py-0.5 text-[11px] font-bold text-white" data-testid={`nav-badge-${item.href.split("/").pop()}`}>
+                          {badges[item.href]}
+                          <span className="visually-hidden"> onay bekliyor</span>
+                        </span>
+                      ) : null}
                     </Link>
                   </li>
                 );
@@ -105,6 +122,18 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
+  // Onay bekleyen forum gönderileri (otomatik taslaklar dâhil): menüde sayı rozeti.
+  const pending = useAdminQuery<{ topics: number; replies: number }>(
+    can(me, "forum.moderate") ? `/admin/v1/forum/pending-count?p=${encodeURIComponent(pathname)}` : null,
+  );
+  const waiting = (pending.data?.topics ?? 0) + (pending.data?.replies ?? 0);
+  const badges: Record<string, number> = waiting ? { "/yonetim/forum": waiting } : {};
+  const reloadPending = pending.reload;
+  useEffect(() => {
+    // Forum onay sayfası bir işlem yapınca rozet hemen güncellenir.
+    window.addEventListener("ati:forum-moderated", reloadPending);
+    return () => window.removeEventListener("ati:forum-moderated", reloadPending);
+  }, [reloadPending]);
 
   useEffect(() => setDrawer(false), [pathname]);
 
@@ -170,7 +199,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-1 bg-bg">
       <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-border bg-surface lg:flex">
         {brand}
-        <Sidebar items={items} pathname={pathname} />
+        <Sidebar items={items} pathname={pathname} badges={badges} />
         {userCard}
       </aside>
 
@@ -184,7 +213,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 <X aria-hidden="true" className="h-5 w-5" />
               </button>
             </div>
-            <Sidebar items={items} pathname={pathname} onNavigate={() => setDrawer(false)} />
+            <Sidebar items={items} pathname={pathname} onNavigate={() => setDrawer(false)} badges={badges} />
             {userCard}
           </aside>
         </div>

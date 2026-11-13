@@ -53,7 +53,7 @@ export function Board({ overview, now }: { overview: ForumOverview; now: number 
                 <div className="min-w-0 text-sm">
                   {c.last ? (
                     <>
-                      <Link href={`/forum/${c.last.number}`} className="block truncate font-medium text-fg underline-offset-4 hover:text-accent-text hover:underline">
+                      <Link href={`/forum/${c.last.number}`} prefetch={false} className="block truncate font-medium text-fg underline-offset-4 hover:text-accent-text hover:underline">
                         {c.last.title}
                       </Link>
                       <p className="truncate text-xs text-muted">

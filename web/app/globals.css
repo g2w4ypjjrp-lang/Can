@@ -928,6 +928,26 @@
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 18px 50px -24px color-mix(in srgb, var(--accent-text) 55%, transparent);
   }
 
+  /* Rütbe sancağı: altı kırlangıç kuyruğu kesimli dikey kart; ilk üç rütbede ışık geçer. */
+  .rank-pennant {
+    border-radius: 0.9rem 0.9rem 0 0;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 18px), 0 100%);
+  }
+  .rank-shine {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .rank-shine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+    transform: translateX(-140%);
+    animation: sale-shine 4.5s ease-in-out infinite;
+  }
+
   /* Geri sayım kutuları: saniye değişince hafif sıçrama. */
   .count-box {
     min-width: 3.1rem;
@@ -975,7 +995,8 @@
   .count-flip,
   .forum-cover::after,
   .flash-up,
-  .flash-down {
+  .flash-down,
+  .rank-shine::after {
     animation: none;
   }
   .confetti {

@@ -6,6 +6,7 @@ export const PUBLIC_PAGES = [
   "/paketler",
   "/indir",
   "/forum",
+  "/forum/rutbeler",
   "/sss",
   "/yardim",
   "/iletisim",

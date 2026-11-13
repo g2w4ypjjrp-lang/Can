@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLink, EyeOff, Newspaper, RefreshCw, Rocket, Share2, Undo2 } from "lucide-react";
+import { Bot, Clock3, ExternalLink, EyeOff, Newspaper, RefreshCw, Rocket, Share2, Undo2 } from "lucide-react";
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 import { useApi } from "@/components/ApiContext";
@@ -20,7 +21,7 @@ interface NewsItem {
   url: string;
   symbols: string[];
   published_at: string;
-  status: "new" | "shared" | "dismissed";
+  status: "new" | "drafted" | "shared" | "dismissed";
   topic_number: number | null;
 }
 
@@ -36,12 +37,14 @@ interface SourceState {
 interface NewsData {
   items: NewsItem[];
   new_counts: { listing: number; news: number };
+  pending_drafts: number;
+  auto_draft: boolean;
   last_run: string | null;
   interval_s: number;
   sources: SourceState[];
 }
 
-type Tab = "listing" | "all" | "shared" | "dismissed";
+type Tab = "listing" | "all" | "drafted" | "shared" | "dismissed";
 
 function shortTitle(text: string): string {
   if (text.length <= 120) return text;
@@ -173,6 +176,11 @@ function NewsCard({ item, onChanged }: { item: NewsItem; onChanged: (note?: stri
                 <Undo2 aria-hidden="true" className="h-3.5 w-3.5" /> Geri al
               </button>
             ) : null}
+            {item.status === "drafted" && item.topic_number ? (
+              <Link href="/yonetim/forum" className="inline-flex items-center gap-1.5 text-sm font-semibold text-warn-fg underline-offset-4 hover:underline">
+                <Clock3 aria-hidden="true" className="h-3.5 w-3.5" /> Otomatik taslak onay bekliyor: konu #{item.topic_number}
+              </Link>
+            ) : null}
             {item.status === "shared" && item.topic_number ? (
               <a href={`/forum/${item.topic_number}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-success-fg underline-offset-4 hover:underline">
                 Forumda: konu #{item.topic_number}
@@ -184,6 +192,47 @@ function NewsCard({ item, onChanged }: { item: NewsItem; onChanged: (note?: stri
         </div>
       </div>
     </li>
+  );
+}
+
+/** Yeni coin haberinden otomatik konu taslağı: taslak forum onay kuyruğuna düşer. */
+function AutoDraft({ data, onSaved }: { data: NewsData; onSaved: () => void }) {
+  const api = useApi();
+  const action = useAdminAction();
+
+  async function toggle(enabled: boolean) {
+    const ok = await action.run(
+      () => api.put("/admin/v1/news/auto-draft", { enabled }),
+      enabled ? "Otomatik taslak açıldı" : "Otomatik taslak kapatıldı",
+    );
+    if (ok) onSaved();
+  }
+
+  return (
+    <AdminCard title="Otomatik konu taslağı" description="Yeni coin haberi gelince forumda konu taslağı hazırlanır ve onayınıza düşer.">
+      <div className="space-y-3 text-sm" data-testid="auto-draft">
+        <label className="flex items-center gap-2 font-medium text-fg">
+          <input type="checkbox" checked={data.auto_draft} disabled={action.pending} onChange={(e) => void toggle(e.target.checked)} className="h-4 w-4" />
+          Yeni coin haberlerinden otomatik taslak oluştur
+        </label>
+        <ul className="list-disc space-y-1 pl-5 text-muted">
+          <li>Yalnızca coin sembolü belli, son 48 saatte yayımlanmış listeleme haberleri.</li>
+          <li>Aynı coin için son 24 saatte konu varsa yeni taslak açılmaz.</li>
+          <li>Taslak siz onaylamadan sitede görünmez; onaydan önce düzenleyebilirsiniz.</li>
+        </ul>
+        <p className="flex items-center gap-2 text-fg">
+          <Bot aria-hidden="true" className="h-4 w-4 text-accent-text" />
+          {data.pending_drafts ? (
+            <Link href="/yonetim/forum" className="font-semibold underline-offset-4 hover:underline">
+              {data.pending_drafts} taslak onay bekliyor → Forum onayları
+            </Link>
+          ) : (
+            "Onay bekleyen taslak yok"
+          )}
+        </p>
+        <Feedback error={action.error} message={action.message} />
+      </div>
+    </AdminCard>
   );
 }
 
@@ -230,6 +279,7 @@ export function CoinNews() {
   const params = {
     listing: "kind=listing&status=new",
     all: "status=new",
+    drafted: "status=drafted",
     shared: "status=shared",
     dismissed: "status=dismissed",
   }[tab];
@@ -239,9 +289,10 @@ export function CoinNews() {
 
   async function onRefresh() {
     setNote(null);
-    const result = await refresh.run(() => api.post<{ added: number }>("/admin/v1/news/refresh"));
+    const result = await refresh.run(() => api.post<{ added: number; drafted: number }>("/admin/v1/news/refresh"));
     if (result) {
-      setNote(result.added ? `${result.added} yeni haber eklendi` : "Yeni haber yok");
+      const drafted = result.drafted ? `, ${result.drafted} otomatik taslak onaya düştü` : "";
+      setNote(result.added ? `${result.added} yeni haber eklendi${drafted}` : "Yeni haber yok");
       view.reload();
     }
   }
@@ -249,6 +300,7 @@ export function CoinNews() {
   const tabs: [Tab, string][] = [
     ["listing", `Yeni coinler${data ? ` (${data.new_counts.listing})` : ""}`],
     ["all", `Tüm yeni haberler${data ? ` (${data.new_counts.listing + data.new_counts.news})` : ""}`],
+    ["drafted", `Onay bekleyen taslaklar${data ? ` (${data.pending_drafts})` : ""}`],
     ["shared", "Paylaşılanlar"],
     ["dismissed", "Gizlenenler"],
   ];
@@ -325,7 +377,12 @@ export function CoinNews() {
             </ul>
           </div>
         </div>
-        {data ? <Sources data={data} onSaved={view.reload} /> : null}
+        {data ? (
+          <div className="space-y-6">
+            <AutoDraft data={data} onSaved={view.reload} />
+            <Sources data={data} onSaved={view.reload} />
+          </div>
+        ) : null}
       </div>
     </AdminPage>
   );

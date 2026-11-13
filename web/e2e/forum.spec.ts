@@ -114,7 +114,12 @@ test("yönetici onaylar ve reddeder; yanıt onaydan sonra görünür", async () 
   await noAxeViolations(page);
   await card.getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("SOL için destek seviyeleri");
+  await expect(page).toHaveTitle(/SOL için destek seviyeleri/); // başlık akışla gelir; denetimden önce beklenir
+  await expect(page.getByText("1 görüntüleme")).toBeVisible(); // bir ziyaret bir görüntüleme
   await expect(page.getByTestId("topic-body")).toContainText("170 seviyesi destek");
+  // Rütbe: ilk mesajla Seviye 10 (Sui); bir üst rütbeye kalan mesaj yazar.
+  await expect(page.getByTestId("author-rank").first()).toContainText("Seviye 10 · Sui");
+  await expect(page.getByTestId("author-rank").first()).toContainText("Avalanche için 2 mesaj");
   await noAxeViolations(page);
 
   const reply = page.getByTestId("reply-form");
@@ -183,6 +188,7 @@ test("coin haberi panelden paylaşılır, forumda sabit ekip konusu olur", async
   await expect(first).toContainText("Resmî");
   await expect(first).toContainText("Sabit");
   await first.getByRole("link").click();
+  await expect(page).toHaveTitle(/Binance Testcoin \(TST\) listeliyor/);
   await expect(page.getByTestId("topic-source")).toHaveAttribute("href", "https://www.binance.com/en/support/announcement/detail/abc");
   await expect(page.getByTestId("topic-source")).toContainText("Binance duyuruları");
   await noAxeViolations(page);
@@ -200,4 +206,49 @@ test("coin haberi panelden paylaşılır, forumda sabit ekip konusu olur", async
   await expect(row).toContainText("Gizli");
   await page.goto("/forum");
   await expect(page.getByTestId(/^topic-\d+$/)).toHaveCount(1);
+});
+
+test("yeni coin haberinden otomatik taslak onaya düşer, düzenlenip yayımlanır", async () => {
+  // Haber çekme turu taslağı böyle hazırlar (tur bulut testlerinde sınanır; burada dış kaynak yok).
+  await sql(
+    "WITH t AS (INSERT INTO forum_topics (author_kind, author_name, category, title, body, coin_symbol, source_name, " +
+      "source_url, status, flags) VALUES ('team', 'AI Trading Ekibi', 'yeni-coin', 'Binance Otocoin (OTO) listeliyor', " +
+      "'Yeni coin haberi: “Binance Will List Otocoin (OTO)”. Bilgilendirme amaçlıdır; yatırım tavsiyesi değildir.', 'OTO', " +
+      "'Binance duyuruları', 'https://www.binance.com/en/support/announcement/detail/oto', 'pending', '{otomatik taslak}') RETURNING id) " +
+      "INSERT INTO coin_news (source, external_id, kind, title, url, symbols, published_at, status, topic_id) " +
+      "SELECT 'binance', 'e2e-oto', 'listing', 'Binance Will List Otocoin (OTO)', " +
+      "'https://www.binance.com/en/support/announcement/detail/oto', '{OTO}', now(), 'drafted', id FROM t",
+  );
+  await admin.goto("/yonetim/haberler");
+  await expect(admin.getByTestId("auto-draft")).toContainText("1 taslak onay bekliyor");
+  await expect(admin.getByTestId("auto-draft").getByLabel("Yeni coin haberlerinden otomatik taslak oluştur")).toBeChecked();
+  await expect(admin.getByTestId("nav-badge-forum")).toContainText("1");
+  await admin.getByRole("tab", { name: /Onay bekleyen taslaklar/ }).click();
+  await expect(admin.getByTestId(/^news-/).filter({ hasText: "Otocoin" })).toContainText(/Otomatik taslak onay bekliyor: konu #\d+/);
+  await noAxeViolations(admin);
+
+  await admin.getByTestId("auto-draft").getByRole("link", { name: /taslak onay bekliyor/ }).click();
+  const draft = admin.getByTestId(/^queue-topic-/).filter({ hasText: "Otocoin" });
+  await expect(draft).toContainText("Otomatik taslak (yeni coin haberi)");
+  await expect(draft).toContainText("Kaynak: Binance duyuruları");
+  await draft.getByRole("button", { name: "Düzenle" }).click();
+  const edit = draft.getByTestId("edit-draft");
+  await edit.getByLabel("Başlık").fill("Binance Otocoin (OTO) listeliyor: ayrıntılar");
+  await noAxeViolations(admin);
+  await edit.getByRole("button", { name: "Değişiklikleri kaydet" }).click();
+  await expect(admin.getByRole("status").filter({ hasText: "Taslak güncellendi" })).toBeVisible();
+  const edited = admin.getByTestId(/^queue-topic-/).filter({ hasText: "listeliyor: ayrıntılar" });
+  await edited.getByRole("button", { name: /onayla$/ }).click();
+  await expect(admin.getByRole("status").filter({ hasText: "Onaylandı ve yayımlandı" })).toBeVisible();
+  await expect(admin.getByTestId("nav-badge-forum")).toHaveCount(0);
+
+  const news = await sql<{ status: string }>("SELECT status FROM coin_news WHERE external_id = 'e2e-oto'");
+  expect(news).toEqual([{ status: "shared" }]);
+  await page.goto("/forum?kategori=yeni-coin");
+  const row = page.getByTestId(/^topic-\d+$/).filter({ hasText: "Binance Otocoin (OTO) listeliyor: ayrıntılar" });
+  await expect(row).toContainText("Ekip");
+  await page.goto("/forum/rutbeler");
+  await expect(page.getByTestId("rank-1")).toContainText("Bitcoin");
+  await expect(page.getByTestId("rank-10")).toContainText("Başlangıç");
+  await noAxeViolations(page);
 });

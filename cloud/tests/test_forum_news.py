@@ -12,6 +12,8 @@ from __future__ import annotations
 import contextlib
 import json
 from collections.abc import AsyncIterator, Callable
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 from typing import Any
 
 import httpx
@@ -109,6 +111,7 @@ async def test_customer_topic_needs_approval(
     assert listing["total"] == 1
     item = listing["items"][0]
     assert item["number"] == number and item["reply_count"] == 0
+    assert item["author_posts"] == 1
     assert item["excerpt"].startswith("Merhaba, 15 dakikalık")
     assert {c["code"]: c["count"] for c in listing["categories"]}["strateji"] == 1
     detail = (await anonymous.get(f"/v1/forum/topics/{number}")).json()
@@ -295,6 +298,9 @@ async def test_news_fetch_share_and_dismiss(
     finance = await activate_admin(app, clock, "finans@example.com", ["finance"])
     app.state.news_fetcher = fake_sources([["BTCUSDT"], ["BTCUSDT", "NEWUSDT"]])
     assert (await finance.http.get("/admin/v1/news")).status_code == 403
+    # Bu test elle paylaşımı sınar; otomatik taslak ayrı testte (sonuç günün tarihine bağlı olmasın).
+    off = await admin.http.put("/admin/v1/news/auto-draft", json={"enabled": False})
+    assert off.json() == {"enabled": False}
 
     first = await admin.http.post("/admin/v1/news/refresh")
     assert first.status_code == 200, first.text
@@ -375,3 +381,156 @@ async def test_claim_runs_once_per_interval(app: Any) -> None:
     db = app.state.db
     assert await news.claim(db, 900) is True
     assert await news.claim(db, 900) is False
+
+
+def _rss(items: list[tuple[str, str, datetime]]) -> bytes:
+    body = "".join(
+        f"<item><title>{title}</title><link>https://www.btchaber.com/{slug}/</link>"
+        f"<guid>https://www.btchaber.com/?p={slug}</guid>"
+        f"<pubDate>{format_datetime(at)}</pubDate></item>"
+        for title, slug, at in items
+    )
+    return f'<?xml version="1.0"?><rss><channel>{body}</channel></rss>'.encode()
+
+
+def _sources(cms: dict[str, Any], rss: bytes, pairs: list[list[str]]) -> Callable[[], Any]:
+    calls = {"pairs": 0}
+
+    async def fetch(url: str) -> bytes:
+        if "cms/article" in url:
+            return json.dumps(cms).encode()
+        if "ticker/price" in url:
+            index = min(calls["pairs"], len(pairs) - 1)
+            calls["pairs"] += 1
+            return json.dumps([{"symbol": s} for s in pairs[index]]).encode()
+        if "btchaber" in url:
+            return rss
+        raise httpx.ConnectError("kapalı")
+
+    @contextlib.asynccontextmanager
+    async def factory() -> AsyncIterator[Any]:
+        yield fetch
+
+    return factory
+
+
+async def test_new_coin_news_creates_draft_for_approval(
+    app: Any, clock: Clock, db: psycopg.Connection[Any], shopper: Callable[..., Any]
+) -> None:
+    admin = await activate_admin(app, clock, "kurucu@example.com", ["super_admin"])
+    now = datetime.now(UTC)
+    cms = {
+        "data": {
+            "catalogs": [
+                {
+                    "articles": [
+                        {
+                            "code": "c" * 32,
+                            "title": "Binance Will List Testcoin (TST) with Seed Tag Applied",
+                            "releaseDate": int((now - timedelta(hours=2)).timestamp() * 1000),
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    rss = _rss(
+        [
+            ("ABC token yarın listelenecek ($ABC)", "abc", now - timedelta(hours=1)),
+            ("ABC işlem görmeye başladı ($ABC)", "abc2", now - timedelta(minutes=30)),
+            ("Eski coin OLDX listelendi ($OLDX)", "old", now - timedelta(days=5)),
+            ("Bitcoin haftaya yatay başladı ($BTC)", "btc", now - timedelta(hours=1)),
+        ]
+    )
+    app.state.news_fetcher = _sources(cms, rss, [["BTCUSDT"], ["BTCUSDT", "TSTUSDT"]])
+
+    first = (await admin.http.post("/admin/v1/news/refresh")).json()
+    # TST (Binance) ve ABC (ilk haber; aynı coinin ikincisi atlanır). Eski ve listeleme olmayan yok.
+    assert first["drafted"] == 2, first
+    queue = (await admin.http.get("/admin/v1/forum/queue")).json()["topics"]
+    drafts = {t["coin_symbol"]: t for t in queue}
+    assert set(drafts) == {"TST", "ABC"}
+    tst = drafts["TST"]
+    assert tst["title"] == "Binance Testcoin (TST) listeliyor"
+    assert tst["author_kind"] == "team" and tst["category"] == "yeni-coin"
+    assert tst["flags"] == ["otomatik taslak"]
+    assert tst["source_url"].startswith("https://www.binance.com/en/support/announcement/detail/")
+    assert "yatırım tavsiyesi değildir" in tst["body"]
+    assert (await admin.http.get("/admin/v1/forum/pending-count")).json() == {
+        "topics": 2,
+        "replies": 0,
+    }
+    # Onaylanmadan sitede görünmez.
+    public = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver")
+    assert (await public.get("/v1/forum/topics")).json()["total"] == 0
+
+    listed = (await admin.http.get("/admin/v1/news", params={"status": "drafted"})).json()
+    assert listed["pending_drafts"] == 2 and listed["auto_draft"] is True
+    assert len(listed["items"]) == 2 and all(i["topic_number"] for i in listed["items"])
+    tst_news = next(i for i in listed["items"] if "TST" in i["symbols"])
+    abc_news = next(i for i in listed["items"] if "ABC" in i["symbols"])
+    taken = await admin.http.post(
+        f"/admin/v1/news/{tst_news['id']}/share",
+        json={"category": "haber", "title": "İkinci paylaşım", "body": "Aynı haber yeniden."},
+    )
+    assert taken.status_code == 409  # taslağı zaten onay bekliyor
+
+    # Taslak düzenlenip onaylanır; müşteri metni düzenlenemez.
+    edited = await admin.http.post(
+        f"/admin/v1/forum/topics/{tst['id']}/edit",
+        json={
+            "category": "yeni-coin",
+            "title": "Binance Testcoin (TST) listeliyor: tarih ve ayrıntılar",
+            "body": "Binance, Testcoin (TST) için listeleme duyurdu. Yatırım tavsiyesi değildir.",
+            "coin_symbol": "TST",
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    customer = await shopper()
+    own = await customer.post(
+        "/v1/forum/me/topics",
+        json={"author_name": "Ayşe", "category": "genel", "title": "Müşteri konusu",
+              "body": "Bu metni yönetici değiştiremez."},
+    )  # fmt: skip
+    own_id = next(
+        t["id"] for t in (await admin.http.get("/admin/v1/forum/queue")).json()["topics"]
+        if t["number"] == own.json()["number"]
+    )  # fmt: skip
+    refused = await admin.http.post(
+        f"/admin/v1/forum/topics/{own_id}/edit",
+        json={"category": "genel", "title": "Değiştirildi", "body": "Değiştirilmiş metin."},
+    )
+    assert refused.status_code == 404
+
+    await admin.http.post(
+        f"/admin/v1/forum/topics/{tst['id']}/moderate", json={"action": "approve"}
+    )
+    await admin.http.post(
+        f"/admin/v1/forum/topics/{drafts['ABC']['id']}/moderate",
+        json={"action": "reject", "note": "Kaynak yetersiz"},
+    )
+    topics = (await public.get("/v1/forum/topics")).json()
+    assert [t["title"] for t in topics["items"]] == [
+        "Binance Testcoin (TST) listeliyor: tarih ve ayrıntılar"
+    ]
+    statuses = dict(
+        db.execute(
+            "SELECT external_id, status FROM coin_news WHERE id = ANY(%s)",
+            ([tst_news["id"], abc_news["id"]],),
+        ).fetchall()
+    )
+    assert sorted(statuses.values()) == ["dismissed", "shared"]
+
+    # İkinci tur: aynı haberler tekrar taslak olmaz; yeni TSTUSDT çifti de (TST konusu 24 saat içinde).
+    second = (await admin.http.post("/admin/v1/news/refresh")).json()
+    assert second["drafted"] == 0 and second["added"] == 1
+
+    # Kapalıyken yeni coin haberi taslak olmaz.
+    await admin.http.put("/admin/v1/news/auto-draft", json={"enabled": False})
+    app.state.news_fetcher = _sources(
+        cms, _rss([("YENİ token listeleniyor ($YNI)", "yni", now)]), [["BTCUSDT"]]
+    )
+    third = (await admin.http.post("/admin/v1/news/refresh")).json()
+    assert third["added"] == 1 and third["drafted"] == 0
+    assert "admin.news_auto_draft" in audit_actions(db)
+    await public.aclose()

@@ -4,8 +4,10 @@ import { Flame, Rocket, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 
 import { InlineQuote, MarketBoard } from "@/components/forum/Market";
+import { RankLadder } from "@/components/forum/Ranks";
 import { CoinToken } from "@/components/forum/Visuals";
 import { timeAgo, type ForumOverview } from "@/lib/forum";
+import { RANKS } from "@/lib/ranks";
 
 export function ForumSidebar({ overview, now }: { overview: ForumOverview | null; now: number }) {
   return (
@@ -41,7 +43,7 @@ export function ForumSidebar({ overview, now }: { overview: ForumOverview | null
               <li key={l.number} className="flex gap-2.5">
                 {l.coin_symbol ? <CoinToken symbol={l.coin_symbol} size="sm" /> : null}
                 <div className="min-w-0">
-                  <Link href={`/forum/${l.number}`} className="line-clamp-2 text-sm font-medium text-fg underline-offset-4 hover:underline">
+                  <Link href={`/forum/${l.number}`} prefetch={false} className="line-clamp-2 text-sm font-medium text-fg underline-offset-4 hover:underline">
                     {l.title}
                   </Link>
                   <p className="text-xs text-muted">{timeAgo(l.published_at, now)}</p>
@@ -62,15 +64,17 @@ export function ForumSidebar({ overview, now }: { overview: ForumOverview | null
           <li>Paylaşımlar yatırım tavsiyesi değildir; kripto işlemleri kayıpla sonuçlanabilir.</li>
         </ul>
       </section>
-      <section aria-labelledby="rutbe-baslik" className="rounded-2xl border border-border bg-surface p-4 text-sm">
-        <h2 id="rutbe-baslik" className="font-semibold text-fg">Rütbeler</h2>
-        <p className="mt-1 text-muted">Yayımlanan mesaj sayınızla yükselir:</p>
-        <ul className="mt-2 grid grid-cols-2 gap-1.5 text-xs text-fg">
-          <li><span aria-hidden="true">🦐</span> Karides · 0–2</li>
-          <li><span aria-hidden="true">🐟</span> Balık · 3–9</li>
-          <li><span aria-hidden="true">🐬</span> Yunus · 10–29</li>
-          <li><span aria-hidden="true">🐋</span> Balina · 30+</li>
-        </ul>
+      <section aria-labelledby="rutbe-baslik" className="rounded-2xl border border-border bg-surface p-4 text-sm" data-testid="rank-ladder">
+        <h2 id="rutbe-baslik" className="flex items-center justify-between font-semibold text-fg">
+          Rütbeler
+          <Link href="/forum/rutbeler" className="text-xs font-semibold text-accent-text underline-offset-4 hover:underline">
+            Rütbe sistemi →
+          </Link>
+        </h2>
+        <p className="mt-1 text-xs text-muted">Yayımlanan mesajlarınızla Seviye 10&apos;dan Seviye 1&apos;e yükselin.</p>
+        <div className="mt-3">
+          <RankLadder ranks={RANKS} />
+        </div>
       </section>
     </aside>
   );

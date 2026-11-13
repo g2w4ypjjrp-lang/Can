@@ -172,10 +172,17 @@ belirtilmelidir (hukukçu onayı).
 * **Forum:** site → **Forum** (canarslan.net.tr/forum). Müşterinin açtığı konu ve yanıt, panel →
   **Topluluk → Forum onayları**'nda onaylanmadan görünmez; reddederken yazdığınız neden müşteriye
   görünür. Kazanç vaadi, bağlantı ve iletişim bilgisi içeren gönderiler otomatik işaretlenir.
+* **Forum rütbeleri:** canarslan.net.tr/forum/rutbeler. Yayımlanan (onaylı) mesaj sayısıyla
+  Seviye 10 Sui'den (başlangıç) Seviye 1 Bitcoin'e (200+ mesaj) yükselinir; ekip ayrı "Ekip" rütbesi
+  taşır. Rütbe her mesajın yanında sancak olarak görünür.
 * **Coin haberleri:** panel → **Topluluk → Coin haberleri**. Sunucu 15 dakikada bir herkese açık
   kaynaklardan (Binance duyuruları ve yeni işlem çiftleri, Cointelegraph, BTCHaber, Uzmancoin,
   Investing.com Türkiye) başlık ve kısa özet çeker; "Şimdi yenile" ile hemen çekilir. Beğendiğiniz
-  haberde **Paylaş** → metni düzenleyip forumda ekip konusu olarak yayımlayın. Aralık `bulut.env`
+  haberde **Paylaş** → metni düzenleyip forumda ekip konusu olarak yayımlayın.
+  **Otomatik taslak** (varsayılan açık, aynı sayfadan kapatılır): yeni coin haberi (sembolü belli,
+  son 48 saatte yayımlanmış listeleme) gelince forum konusu taslağı kendiliğinden hazırlanır ve
+  **Forum onayları**'na düşer (menüde bekleyen sayısı görünür). Onaydan önce **Düzenle** ile başlık ve
+  metni değiştirebilirsiniz; onaylamadan sitede görünmez. Aynı coin için 24 saatte bir taslak açılır. Aralık `bulut.env`
   içinde `ATI_NEWS_INTERVAL_S` ile değişir (0 kapatır). Forum sayfalarındaki canlı fiyat bandı
   Binance'in herkese açık piyasa verisidir (`ATI_MARKET_DATA_URL=` boş bırakılırsa kapanır).
 

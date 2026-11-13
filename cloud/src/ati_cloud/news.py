@@ -12,6 +12,11 @@ Kaynaklar (hepsi herkese açık, kimlik bilgisi kullanılmaz; kimsenin hesabına
 Yalnızca başlık, kısa özet (en çok 300 karakter) ve kaynağa bağlantı saklanır; haberin tamamı
 kopyalanmaz. Bağlantılar yalnızca ``https`` ve kaynağın kendi alan adı olabilir.
 
+**Otomatik taslak** (panelden açılıp kapatılır, varsayılan açık): yeni bir coin haberi (listeleme,
+coin sembolü belli, son 48 saatte yayımlanmış) gelince forumda ekip konusu taslağı hazırlanır ve
+**onay kuyruğuna** düşer; yönetici onaylamadan yayımlanmaz. Aynı coin için son 24 saatte konu varsa
+yeni taslak açılmaz; bir turda en çok 10 taslak.
+
 API sürecinde arka planda çalışır (``ATI_NEWS_INTERVAL_S``, varsayılan 15 dakika; 0 kapatır).
 Birden çok süreç çalışsa da veritabanındaki "sıra bende" kaydı sayesinde tek çekim yapılır.
 
@@ -34,7 +39,7 @@ import re
 import xml.etree.ElementTree as ET
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
@@ -46,11 +51,21 @@ from pydantic import BaseModel, Field
 
 from ati_cloud.accounts import Database
 from ati_cloud.admin.context import Admin, AdminContext
-from ati_cloud.forum import CoinSymbol, TeamTopic, Title, TopicBody, create_team_topic
+from ati_cloud.forum import (
+    TEAM_NAME,
+    CoinSymbol,
+    TeamTopic,
+    Title,
+    TopicBody,
+    create_team_topic,
+)
 
 logger = logging.getLogger(__name__)
 
 MAX_BYTES = 3 * 1024 * 1024
+AUTO_DRAFT_MAX_AGE = timedelta(hours=48)
+AUTO_DRAFT_PER_RUN = 10
+AUTO_FLAG = "otomatik taslak"
 KEEP_ROWS = 3000
 USER_AGENT = "Mozilla/5.0 (compatible; ATI-News/1.0)"
 
@@ -353,6 +368,92 @@ async def claim(db: Database, interval_s: int) -> bool:
         return await cur.fetchone() is not None
 
 
+_BINANCE_LIST = re.compile(r"^Binance Will List (.+?)(?:\s+with\b.*)?$", re.IGNORECASE)
+
+
+def _shorten(text: str, limit: int) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1].rsplit(" ", 1)[0] + "…"
+
+
+def draft_title(item: Item) -> str:
+    """Taslak başlığı: Binance listeleme başlıkları Türkçeleştirilir, diğerleri olduğu gibi."""
+    match = _BINANCE_LIST.match(item.title)
+    title = f"Binance {match.group(1)} listeliyor" if match else item.title
+    if item.symbols and not any(sym in title for sym in item.symbols):
+        title = f"{item.symbols[0]}: {title}"
+    title = _shorten(title, 120)
+    return title if len(title) >= 5 else f"Yeni coin: {item.symbols[0] if item.symbols else title}"
+
+
+def draft_body(item: Item, source_name: str) -> str:
+    parts = [f"Yeni coin haberi: “{item.title}”"]
+    if item.summary and item.summary != item.title:
+        parts.append(item.summary)
+    parts.append(
+        f"Kaynak: {source_name}. Ayrıntılar ve kesin tarihler için kaynak bağlantısına bakın."
+    )
+    parts.append(
+        "Bu konu yeni coin haberinden otomatik hazırlanıp ekip onayıyla yayımlandı. "
+        "Bilgilendirme amaçlıdır; yatırım tavsiyesi değildir."
+    )
+    return "\n\n".join(parts)[:5000]
+
+
+async def auto_draft_enabled(conn: Any) -> bool:
+    value = await _setting(conn, "news_auto_draft")
+    return bool(value.get("enabled", True)) if isinstance(value, dict) else True
+
+
+async def create_drafts(conn: Any, fresh: list[tuple[Any, Item]]) -> int:
+    """Yeni coin haberlerinden onay bekleyen ekip konusu taslakları (bkz. modül açıklaması)."""
+    drafted = 0
+    cutoff = datetime.now(UTC) - AUTO_DRAFT_MAX_AGE
+    seen: set[str] = set()
+    for news_id, item in sorted(fresh, key=lambda pair: pair[1].published_at, reverse=True):
+        if drafted >= AUTO_DRAFT_PER_RUN:
+            break
+        if item.kind != "listing" or not item.symbols or item.published_at < cutoff:
+            continue
+        symbol = item.symbols[0]
+        if symbol in seen or not re.fullmatch(r"[A-Z0-9]{2,12}", symbol):
+            continue
+        seen.add(symbol)
+        cur = await conn.execute(
+            "SELECT 1 FROM forum_topics WHERE coin_symbol = %s "
+            "AND status IN ('pending', 'approved') AND created_at > now() - interval '24 hours' "
+            "LIMIT 1",
+            (symbol,),
+        )
+        if await cur.fetchone() is not None:
+            continue
+        source = SOURCES.get(item.source)
+        source_name = source.name if source else item.source
+        cur = await conn.execute(
+            "INSERT INTO forum_topics (author_kind, author_name, category, title, body, "
+            "coin_symbol, source_name, source_url, status, flags) "
+            "VALUES ('team', %s, 'yeni-coin', %s, %s, %s, %s, %s, 'pending', %s) RETURNING id",
+            (
+                TEAM_NAME,
+                draft_title(item),
+                draft_body(item, source_name),
+                symbol,
+                source_name[:60],
+                item.url,
+                [AUTO_FLAG],
+            ),
+        )
+        topic = await cur.fetchone()
+        if topic is None:
+            continue
+        await conn.execute(
+            "UPDATE coin_news SET status = 'drafted', topic_id = %s WHERE id = %s",
+            (topic["id"], news_id),
+        )
+        drafted += 1
+    return drafted
+
+
 async def fetch_all(db: Database, fetch: Fetcher) -> dict[str, Any]:
     """Açık kaynakların hepsinden çeker, yenileri kaydeder; kaynak başına durum döner."""
     async with db.connection() as conn:
@@ -380,7 +481,7 @@ async def fetch_all(db: Database, fetch: Fetcher) -> dict[str, Any]:
         except Exception as exc:  # bir kaynağın hatası diğerlerini durdurmaz
             logger.info("Haber kaynağı okunamadı: %s (%s)", key, type(exc).__name__)
             status[key] = {"ok": False, "count": 0, "error": _describe(exc)}
-    added = 0
+    fresh: list[tuple[Any, Item]] = []
     async with db.connection() as conn:
         for item in collected:
             cur = await conn.execute(
@@ -398,15 +499,23 @@ async def fetch_all(db: Database, fetch: Fetcher) -> dict[str, Any]:
                     item.published_at,
                 ),
             )
-            if await cur.fetchone() is not None:
-                added += 1
+            row = await cur.fetchone()
+            if row is not None:
+                fresh.append((row["id"], item))
+        drafted = await create_drafts(conn, fresh) if await auto_draft_enabled(conn) else 0
         # Eski ve paylaşılmamış haberler temizlenir (tablo sınırlı kalır).
         await conn.execute(
-            "DELETE FROM coin_news WHERE status <> 'shared' AND id IN (SELECT id FROM coin_news "
-            "WHERE status <> 'shared' ORDER BY published_at DESC OFFSET %s)",
+            "DELETE FROM coin_news WHERE status NOT IN ('shared', 'drafted') AND id IN ("
+            "SELECT id FROM coin_news WHERE status NOT IN ('shared', 'drafted') "
+            "ORDER BY published_at DESC OFFSET %s)",
             (KEEP_ROWS,),
         )
-        summary = {"at": datetime.now(UTC).isoformat(), "added": added, "sources": status}
+        summary = {
+            "at": datetime.now(UTC).isoformat(),
+            "added": len(fresh),
+            "drafted": drafted,
+            "sources": status,
+        }
         await _store(conn, "news_status", summary)
     return summary
 
@@ -455,6 +564,10 @@ class NewsStatus(BaseModel):
     status: Literal["new", "dismissed"]
 
 
+class AutoDraft(BaseModel):
+    enabled: bool
+
+
 class SourcesUpdate(BaseModel):
     enabled: list[str] = Field(max_length=len(SOURCES))
 
@@ -471,7 +584,7 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
     async def list_news(
         admin: Admin = moderate,
         kind: Annotated[Literal["listing", "news"] | None, Query()] = None,
-        status: Annotated[Literal["new", "shared", "dismissed"] | None, Query()] = "new",
+        status: Annotated[Literal["new", "drafted", "shared", "dismissed"] | None, Query()] = "new",
         q: Annotated[str | None, Query(max_length=80)] = None,
     ) -> dict[str, Any]:
         async with ctx.db.connection() as conn:
@@ -495,6 +608,12 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
                 "SELECT kind, count(*) AS n FROM coin_news WHERE status = 'new' GROUP BY kind"
             )
             fresh = {r["kind"]: r["n"] for r in await cur.fetchall()}
+            cur = await conn.execute(
+                "SELECT count(*) AS n FROM coin_news n JOIN forum_topics t ON t.id = n.topic_id "
+                "WHERE n.status = 'drafted' AND t.status = 'pending'"
+            )
+            drafts = (await cur.fetchone() or {"n": 0})["n"]
+            auto = await auto_draft_enabled(conn)
             last = await _setting(conn, "news_status")
             enabled = await enabled_sources(conn)
         for item in items:
@@ -504,6 +623,8 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
         return {
             "items": items,
             "new_counts": {"listing": fresh.get("listing", 0), "news": fresh.get("news", 0)},
+            "pending_drafts": drafts,
+            "auto_draft": auto,
             "last_run": (last or {}).get("at") if isinstance(last, dict) else None,
             "interval_s": ctx.settings.news_interval_s,
             "sources": [
@@ -548,6 +669,16 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
             )  # fmt: skip
         return {"enabled": enabled}
 
+    @router.put("/auto-draft")
+    async def auto_draft(body: AutoDraft, request: Request, admin: Admin = moderate) -> Any:
+        async with ctx.db.connection() as conn:
+            await _store(conn, "news_auto_draft", {"enabled": body.enabled})
+            await ctx.audit(
+                conn, request, actor_id=admin.id, action="admin.news_auto_draft",
+                details={"enabled": body.enabled},
+            )  # fmt: skip
+        return {"enabled": body.enabled}
+
     @router.post("/{news_id}/share", status_code=201)
     async def share(
         news_id: str, body: ShareNews, request: Request, admin: Admin = moderate
@@ -563,6 +694,11 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
                 raise HTTPException(status_code=404, detail="Haber bulunamadı")
             if news["status"] == "shared":
                 raise HTTPException(status_code=409, detail="Bu haber zaten paylaşıldı")
+            if news["status"] == "drafted":
+                raise HTTPException(
+                    status_code=409,
+                    detail="Bu haberin otomatik taslağı onay bekliyor (Forum onayları)",
+                )
             source = SOURCES.get(news["source"])
             topic = await create_team_topic(
                 conn,
@@ -596,8 +732,8 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
             raise HTTPException(status_code=404, detail="Haber bulunamadı")
         async with ctx.db.connection() as conn:
             cur = await conn.execute(
-                "UPDATE coin_news SET status = %s WHERE id = %s AND status <> 'shared' "
-                "RETURNING id",
+                "UPDATE coin_news SET status = %s WHERE id = %s "
+                "AND status NOT IN ('shared', 'drafted') RETURNING id",
                 (body.status, news_id),
             )
             if await cur.fetchone() is None:

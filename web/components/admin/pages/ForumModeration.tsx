@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, ExternalLink, MessagesSquare, Pin, Trash2 } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, ExternalLink, MessagesSquare, Pencil, Pin, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { useApi } from "@/components/ApiContext";
@@ -29,11 +29,16 @@ interface QueueTopic {
   category: ForumCategory;
   coin_symbol: string | null;
   author_name: string;
+  author_kind: "customer" | "team";
   flags: string[];
   created_at: string;
+  source_name: string | null;
+  source_url: string | null;
   customer_email: string | null;
   author_approved: number;
 }
+
+const AUTO_FLAG = "otomatik taslak";
 
 interface QueueReply {
   id: string;
@@ -78,11 +83,17 @@ function Flags({ flags }: { flags: string[] }) {
   if (!flags.length) return null;
   return (
     <span className="flex flex-wrap gap-1.5">
-      {flags.map((flag) => (
-        <span key={flag} className="inline-flex items-center gap-1 rounded-full border border-warn-border bg-warn-bg px-2 py-0.5 text-xs font-semibold text-warn-fg">
-          <AlertTriangle aria-hidden="true" className="h-3 w-3" /> {flag}
-        </span>
-      ))}
+      {flags.map((flag) =>
+        flag === AUTO_FLAG ? (
+          <span key={flag} className="inline-flex items-center gap-1 rounded-full border border-info-border bg-info-bg px-2 py-0.5 text-xs font-semibold text-info-fg">
+            <Bot aria-hidden="true" className="h-3 w-3" /> Otomatik taslak (yeni coin haberi)
+          </span>
+        ) : (
+          <span key={flag} className="inline-flex items-center gap-1 rounded-full border border-warn-border bg-warn-bg px-2 py-0.5 text-xs font-semibold text-warn-fg">
+            <AlertTriangle aria-hidden="true" className="h-3 w-3" /> {flag}
+          </span>
+        ),
+      )}
     </span>
   );
 }
@@ -142,6 +153,105 @@ function Decision({
   );
 }
 
+/** Ekip taslağını onaylamadan önce düzenleme (müşteri metinleri düzenlenmez). */
+function EditDraft({ topic, onSaved }: { topic: QueueTopic; onSaved: () => void }) {
+  const api = useApi();
+  const action = useAdminAction();
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const ok = await action.run(() =>
+      api.post(`/admin/v1/forum/topics/${topic.id}/edit`, {
+        category: data.get("category"),
+        title: String(data.get("title") ?? "").trim(),
+        body: String(data.get("body") ?? ""),
+        coin_symbol: String(data.get("coin") ?? "").trim() || null,
+      }),
+    );
+    if (ok) onSaved();
+  }
+
+  return (
+    <form onSubmit={(e) => void submit(e)} className="mt-3 space-y-3 rounded-2xl border border-accent-text/30 bg-surface p-4" data-testid="edit-draft">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-sm text-fg">
+          Kategori
+          <select name="category" defaultValue={topic.category} className={`mt-1 ${inputClass}`}>
+            {(Object.keys(CATEGORY_META) as ForumCategory[]).map((c) => (
+              <option key={c} value={c}>
+                {CATEGORY_META[c].label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm text-fg">
+          Coin
+          <input name="coin" maxLength={16} defaultValue={topic.coin_symbol ?? ""} className={`mt-1 ${inputClass}`} />
+        </label>
+      </div>
+      <label className="block text-sm text-fg">
+        Başlık
+        <input name="title" required minLength={5} maxLength={120} defaultValue={topic.title} className={`mt-1 ${inputClass}`} />
+      </label>
+      <label className="block text-sm text-fg">
+        Metin
+        <textarea name="body" required minLength={10} maxLength={5000} rows={6} defaultValue={topic.body} className={`mt-1 ${inputClass}`} />
+      </label>
+      <Button type="submit" size="sm" disabled={action.pending}>
+        Değişiklikleri kaydet
+      </Button>
+      <Feedback error={action.error} />
+    </form>
+  );
+}
+
+function QueueTopicCard({ topic: t, onDone }: { topic: QueueTopic; onDone: (note: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const team = t.author_kind === "team";
+  return (
+    <li className="rounded-2xl border border-border bg-bg/60 p-4" data-testid={`queue-topic-${t.number}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <CategoryChip category={t.category} />
+        {t.coin_symbol ? <CoinToken symbol={t.coin_symbol} size="sm" /> : null}
+        <Flags flags={t.flags} />
+        <span className="text-xs text-muted">
+          {team ? "Ekip konusu" : t.author_approved ? `${t.author_approved} yayımlanmış konusu var` : "İlk konusu"}
+        </span>
+      </div>
+      <h3 className="mt-3 text-lg font-semibold text-fg">{t.title}</h3>
+      <p className="mt-2 max-h-72 overflow-y-auto whitespace-pre-line break-words rounded-xl bg-surface px-3 py-2 text-sm leading-relaxed text-fg">
+        {t.body}
+      </p>
+      <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+        <span>
+          {t.author_name} · {team ? "yönetim" : (t.customer_email ?? "silinmiş müşteri")} · {dateTime(t.created_at)}
+        </span>
+        {t.source_url ? (
+          <a href={t.source_url} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1 font-semibold text-accent-text underline-offset-4 hover:underline">
+            Kaynak: {t.source_name ?? "haber"} <ExternalLink aria-hidden="true" className="h-3 w-3" />
+          </a>
+        ) : null}
+      </p>
+      {team ? (
+        <button type="button" className={`${smallButton} mt-3`} onClick={() => setEditing((v) => !v)} aria-expanded={editing}>
+          <Pencil aria-hidden="true" className="h-3.5 w-3.5" /> Düzenle
+        </button>
+      ) : null}
+      {editing ? (
+        <EditDraft
+          topic={t}
+          onSaved={() => {
+            setEditing(false);
+            onDone("Taslak güncellendi");
+          }}
+        />
+      ) : null}
+      <Decision kind="topics" id={t.id} label={`“${t.title}”`} onDone={onDone} />
+    </li>
+  );
+}
+
 function Queue({ onChanged }: { onChanged: () => void }) {
   const queue = useAdminQuery<{ topics: QueueTopic[]; replies: QueueReply[] }>("/admin/v1/forum/queue");
   const [note, setNote] = useState<string | null>(null);
@@ -149,6 +259,7 @@ function Queue({ onChanged }: { onChanged: () => void }) {
     setNote(text);
     queue.reload();
     onChanged();
+    window.dispatchEvent(new Event("ati:forum-moderated"));
   };
   const data = queue.data;
   return (
@@ -163,24 +274,7 @@ function Queue({ onChanged }: { onChanged: () => void }) {
         <AdminCard title={`Bekleyen konular (${data.topics.length})`}>
           <ul className="space-y-4">
             {data.topics.map((t) => (
-              <li key={t.id} className="rounded-2xl border border-border bg-bg/60 p-4" data-testid={`queue-topic-${t.number}`}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <CategoryChip category={t.category} />
-                  {t.coin_symbol ? <CoinToken symbol={t.coin_symbol} size="sm" /> : null}
-                  <Flags flags={t.flags} />
-                  <span className="text-xs text-muted">
-                    {t.author_approved ? `${t.author_approved} yayımlanmış konusu var` : "İlk konusu"}
-                  </span>
-                </div>
-                <h3 className="mt-3 text-lg font-semibold text-fg">{t.title}</h3>
-                <p className="mt-2 max-h-72 overflow-y-auto whitespace-pre-line break-words rounded-xl bg-surface px-3 py-2 text-sm leading-relaxed text-fg">
-                  {t.body}
-                </p>
-                <p className="mt-2 text-xs text-muted">
-                  {t.author_name} · {t.customer_email ?? "silinmiş müşteri"} · {dateTime(t.created_at)}
-                </p>
-                <Decision kind="topics" id={t.id} label={`“${t.title}”`} onDone={done} />
-              </li>
+              <QueueTopicCard key={`${t.id}-${t.title}-${t.body.length}`} topic={t} onDone={done} />
             ))}
           </ul>
         </AdminCard>
@@ -325,6 +419,7 @@ function AllTopics({ version, onChanged }: { version: number; onChanged: () => v
             onChanged={() => {
               list.reload();
               onChanged();
+              window.dispatchEvent(new Event("ati:forum-moderated"));
             }}
           />
         ))}

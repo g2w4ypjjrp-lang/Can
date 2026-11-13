@@ -1,6 +1,8 @@
 // Forum: herkese açık konu listesi ve konu sayfası (sunucu tarafı). API'ye ulaşılamazsa sayfa
 // çökmez; boş liste gösterilir. Gönderiler düz metindir; HTML yorumlanmaz.
 
+import { cache } from "react";
+
 import { runtimeConfig } from "@/lib/config";
 
 export type ForumCategory = "genel" | "strateji" | "soru" | "yeni-coin" | "haber";
@@ -21,6 +23,7 @@ export interface TopicSummary {
   reply_count: number;
   last_reply_at: string | null;
   last_reply_author: string | null;
+  author_posts?: number;
   excerpt?: string;
 }
 
@@ -92,7 +95,8 @@ export async function fetchTopics(params: { category?: ForumCategory; q?: string
   }
 }
 
-export async function fetchTopic(number: number): Promise<TopicDetail | null | "error"> {
+/** Konu ayrıntısı. Aynı istekte (sayfa başlığı + sayfa) bir kez çekilir: görüntüleme bir artar. */
+export const fetchTopic = cache(async (number: number): Promise<TopicDetail | null | "error"> => {
   const cfg = runtimeConfig();
   try {
     const response = await fetch(`${cfg.serverApiUrl}/v1/forum/topics/${number}`, {
@@ -105,7 +109,7 @@ export async function fetchTopic(number: number): Promise<TopicDetail | null | "
   } catch {
     return "error";
   }
-}
+});
 
 /** "3 dk önce", "2 gün önce"; bir haftadan eskiyse tarih. */
 export function timeAgo(iso: string | null | undefined, now = Date.now()): string {

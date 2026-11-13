@@ -251,7 +251,8 @@ def create_forum_router(settings: CloudSettings, db: Database) -> APIRouter:
         )
         async with db.connection() as conn:
             cur = await conn.execute(
-                f"SELECT {TOPIC_PUBLIC}, t.body FROM forum_topics t WHERE {where} "  # noqa: S608
+                f"SELECT {TOPIC_PUBLIC}, t.body, {AUTHOR_POSTS.format(a='t')} AS author_posts "  # noqa: S608
+                f"FROM forum_topics t WHERE {where} "
                 "ORDER BY t.pinned DESC, t.published_at DESC LIMIT %(limit)s OFFSET %(offset)s",
                 params,
             )
@@ -498,7 +499,8 @@ def create_admin_forum_router(ctx: AdminContext) -> APIRouter:
         async with ctx.db.connection() as conn:
             cur = await conn.execute(
                 "SELECT t.id, t.number, t.title, t.body, t.category, t.coin_symbol, "
-                "t.author_name, t.flags, t.created_at, c.email::text AS customer_email, "
+                "t.author_name, t.author_kind, t.flags, t.created_at, t.source_name, "
+                "t.source_url, c.email::text AS customer_email, "
                 "(SELECT count(*) FROM forum_topics x WHERE x.customer_id = t.customer_id "
                 "AND x.status = 'approved') AS author_approved "
                 "FROM forum_topics t LEFT JOIN customers c ON c.id = t.customer_id "
@@ -564,6 +566,11 @@ def create_admin_forum_router(ctx: AdminContext) -> APIRouter:
                 raise HTTPException(status_code=404, detail="Konu bulunamadı")
             status = row["status"]
             if body.action == "delete":
+                await conn.execute(
+                    "UPDATE coin_news SET status = 'dismissed' WHERE topic_id = %s "
+                    "AND status = 'drafted'",
+                    (tid,),
+                )
                 await conn.execute("DELETE FROM forum_topics WHERE id = %s", (tid,))
                 status = "deleted"
             elif body.action in TOPIC_TRANSITIONS:
@@ -579,6 +586,14 @@ def create_admin_forum_router(ctx: AdminContext) -> APIRouter:
                     "ELSE published_at END WHERE id = %s",
                     (status, note or None, admin.id, status, tid),
                 )
+                # Otomatik taslağın haberi: onaylanınca paylaşılmış, reddedilince gizli sayılır.
+                news_status = {"approved": "shared", "rejected": "dismissed"}.get(status)
+                if news_status:
+                    await conn.execute(
+                        "UPDATE coin_news SET status = %s WHERE topic_id = %s "
+                        "AND status IN ('drafted', 'dismissed', 'shared')",
+                        (news_status, tid),
+                    )
             else:
                 column, value = {
                     "pin": ("pinned", True),
@@ -596,6 +611,39 @@ def create_admin_forum_router(ctx: AdminContext) -> APIRouter:
                 details={"title": row["title"], "note": note},
             )  # fmt: skip
         return {"id": tid, "status": status}
+
+    @router.post("/topics/{topic_id}/edit")
+    async def edit_topic(
+        topic_id: str, body: TeamTopic, request: Request, admin: Admin = moderate
+    ) -> dict[str, Any]:
+        """Ekip konusunu (ör. otomatik taslak) düzenler. Müşteri metinleri düzenlenmez."""
+        tid = _uuid(topic_id)
+        async with ctx.db.connection() as conn, conn.transaction():
+            cur = await conn.execute(
+                "UPDATE forum_topics SET category = %s, title = %s, body = %s, coin_symbol = %s "
+                "WHERE id = %s AND author_kind = 'team' RETURNING number",
+                (body.category, body.title, body.body, body.coin_symbol, tid),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                raise HTTPException(
+                    status_code=404, detail="Ekip konusu bulunamadı (müşteri metni düzenlenemez)"
+                )
+            await ctx.audit(
+                conn, request, actor_id=admin.id, action="admin.forum_topic_edit",
+                target_type="forum_topic", target_id=tid, details={"title": body.title},
+            )  # fmt: skip
+        return {"id": tid, "number": row["number"]}
+
+    @router.get("/pending-count")
+    async def pending_count(admin: Admin = moderate) -> dict[str, int]:
+        async with ctx.db.connection() as conn:
+            cur = await conn.execute(
+                "SELECT (SELECT count(*) FROM forum_topics WHERE status = 'pending') AS topics, "
+                "(SELECT count(*) FROM forum_replies WHERE status = 'pending') AS replies"
+            )
+            row = await cur.fetchone() or {"topics": 0, "replies": 0}
+        return {"topics": row["topics"], "replies": row["replies"]}
 
     @router.post("/replies/{reply_id}/moderate")
     async def moderate_reply(

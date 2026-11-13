@@ -1,10 +1,12 @@
 // Konu satırları (klasik forum listesi): konu, yanıt, görüntüleme, son mesaj. Satırın tamamı
-// tıklanır (başlık bağlantısı satırı kaplar).
+// tıklanır (başlık bağlantısı satırı kaplar). Konu bağlantıları önceden yüklenmez: sunucu her
+// konu sayfası çiziminde görüntülemeyi bir artırır (önceden yükleme sahte görüntüleme sayardı).
 
 import { Lock, MessagesSquare, Pin, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { RankPill } from "@/components/forum/Ranks";
 import { CATEGORY_META, CategoryChip, CoinToken } from "@/components/forum/Visuals";
 import { timeAgo, type TopicSummary } from "@/lib/forum";
 
@@ -85,6 +87,7 @@ export function ThreadList({
                         ) : null}
                         <Link
                           href={`/forum/${t.number}`}
+                          prefetch={false}
                           className="font-semibold text-fg after:absolute after:inset-0 after:content-[''] group-hover:text-accent-text focus-visible:outline-none"
                         >
                           {t.title}
@@ -92,6 +95,7 @@ export function ThreadList({
                       </p>
                       <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                         <span className="font-medium text-fg">{t.author_name}</span>
+                        {t.author_posts !== undefined ? <RankPill posts={t.author_posts} team={team} /> : null}
                         <span aria-hidden="true">·</span>
                         <CategoryChip category={t.category} />
                         {t.coin_symbol ? <span className="font-mono font-semibold text-accent-text">${t.coin_symbol}</span> : null}

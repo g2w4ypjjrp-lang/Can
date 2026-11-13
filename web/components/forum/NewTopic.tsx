@@ -42,7 +42,7 @@ function MyPostsList({ mine }: { mine: MyPosts }) {
             <li key={t.number} className="rounded-2xl border border-border bg-bg/60 px-4 py-3" data-testid={`my-topic-${t.number}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 {t.status === "approved" ? (
-                  <Link href={`/forum/${t.number}`} className="font-semibold text-fg underline-offset-4 hover:underline">
+                  <Link href={`/forum/${t.number}`} prefetch={false} className="font-semibold text-fg underline-offset-4 hover:underline">
                     {t.title}
                   </Link>
                 ) : (

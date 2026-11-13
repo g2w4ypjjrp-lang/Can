@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 
-import { AuthorAvatar, RankBadge } from "@/components/forum/Visuals";
+import { AuthorRank } from "@/components/forum/Ranks";
+import { AuthorAvatar } from "@/components/forum/Visuals";
 import { paragraphs, postDate } from "@/lib/forum";
 
 export function Post({
@@ -41,10 +42,10 @@ export function Post({
         </span>
         <div className="min-w-0 sm:mt-1">
           <p className="truncate font-semibold text-fg">{author}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 sm:justify-center">
-            <RankBadge posts={posts} team={team} />
-          </div>
-          <p className="mt-1 text-xs text-muted">{posts} mesaj</p>
+          <p className="text-xs text-muted">{posts} mesaj</p>
+        </div>
+        <div className="ml-auto sm:ml-0 sm:mt-2">
+          <AuthorRank posts={posts} team={team} />
         </div>
       </div>
       <div className="min-w-0 p-4 sm:p-5">

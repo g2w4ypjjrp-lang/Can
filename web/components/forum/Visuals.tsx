@@ -125,28 +125,6 @@ export function CategoryChip({ category, solid = false }: { category: ForumCateg
   );
 }
 
-/** Forum rütbesi (yayımlanmış mesaj sayısına göre): kripto dünyasının deniz canlıları. */
-export function rankOf(posts: number, team: boolean): { label: string; emoji: string } {
-  if (team) return { label: "Ekip", emoji: "🛡️" };
-  if (posts >= 30) return { label: "Balina", emoji: "🐋" };
-  if (posts >= 10) return { label: "Yunus", emoji: "🐬" };
-  if (posts >= 3) return { label: "Balık", emoji: "🐟" };
-  return { label: "Karides", emoji: "🦐" };
-}
-
-export function RankBadge({ posts, team }: { posts: number; team: boolean }) {
-  const rank = rankOf(posts, team);
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-        team ? "border-success-border bg-success-bg text-success-fg" : "border-border bg-surface-2 text-fg"
-      }`}
-    >
-      <span aria-hidden="true">{rank.emoji}</span> {rank.label}
-    </span>
-  );
-}
-
 /** Süs: mum grafiği ve hareketli ortalama (sabit tohumla üretilir; her çizimde aynı). */
 export function CandleBackdrop({ className = "" }: { className?: string }) {
   let seed = 11;
