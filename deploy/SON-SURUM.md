@@ -125,7 +125,7 @@ harcama sınırı tanımlanabilir).
 1. GitHub → depo → **Actions** → **Masaüstü** → **Run workflow** → dal:
    `claude/laughing-hawking-wmt8mo` → **Run workflow**. Yaklaşık 25 dakika sürer.
 2. Yeşil olunca çalıştırmanın altındaki **Artifacts** → `ati-windows-installer-unsigned` ZIP'ini
-   indirip açın: `AI Trading Intelligence_0.14.7_x64-setup.exe`.
+   indirip açın: `AI Trading Intelligence_0.14.8_x64-setup.exe`.
 3. Dosyayı VDS'ye kopyalayıp hazırlayın (indirme klasörüne koyar, SHA-256'yı ve varsa güncelleme
    imzasını yazar):
 
@@ -133,7 +133,7 @@ harcama sınırı tanımlanabilir).
    powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 surum-hazirla -Dosya "<setup.exe yolu>"
    ```
 
-4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.14.7), adres, SHA-256, boyut ve
+4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.14.8), adres, SHA-256, boyut ve
    imzayı girin → doğrulama kodunuzla **Yayınla**. Artık canarslan.net.tr/indir sayfasında görünür.
 
 ## C. Bilgisayarınızda kurulum / güncelleme
