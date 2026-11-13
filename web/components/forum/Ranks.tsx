@@ -83,18 +83,18 @@ export function AuthorRank({ posts, team }: { posts: number; team: boolean }) {
   const next = nextRank(posts, team);
   return (
     <div className="flex flex-col items-center gap-1.5" data-testid="author-rank">
-      <div className={`rank-pennant flex w-24 flex-col items-center border-2 bg-gradient-to-b px-2 pb-5 pt-2 text-white ${l.banner} ${l.ring}`}>
-        <span className="text-[11px] font-black tabular">{rank.level === 0 ? "★" : `SV ${rank.level}`}</span>
-        <span className="mt-1.5">
-          <Medal rank={rank} size="md" />
+      <div className={`rank-pennant flex w-[4.5rem] flex-col items-center border-2 bg-gradient-to-b px-1.5 pb-4 pt-1.5 text-white ${l.banner} ${l.ring}`}>
+        <span className="text-[10px] font-black tabular">{rank.level === 0 ? "★" : `SV ${rank.level}`}</span>
+        <span className="mt-1">
+          <Medal rank={rank} size="sm" />
         </span>
-        <span className="mt-1.5 text-[11px] font-extrabold uppercase" lang={rank.level === 0 ? undefined : "en"}>
+        <span className="mt-1 text-[9.5px] font-extrabold uppercase" lang={rank.level === 0 ? undefined : "en"}>
           {rank.name}
         </span>
       </div>
       <p className="text-[11px] font-semibold text-fg">{label(rank)}</p>
       {next ? (
-        <div className="w-24">
+        <div className="w-[6.5rem]">
           <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
             <div className={`h-full rounded-full bg-gradient-to-r ${look(next.rank).medal} ${progressWidth(next.progress)}`} />
           </div>

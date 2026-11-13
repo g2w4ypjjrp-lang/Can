@@ -112,15 +112,15 @@ export function MarketBoard({ limit = 8 }: { limit?: number }) {
   const { quotes, flash } = useLive();
   if (!quotes.length) return null;
   return (
-    <section aria-labelledby="piyasa-baslik" className="rounded-2xl border border-border bg-surface p-4">
-      <h2 id="piyasa-baslik" className="flex items-center justify-between text-sm font-semibold text-fg">
-        Piyasa <span className="text-xs font-normal text-muted">24 sa · USDT</span>
+    <section aria-labelledby="piyasa-baslik" className="fb-box">
+      <h2 id="piyasa-baslik" className="fb-thead justify-between">
+        Piyasa <span className="text-[11px] font-normal text-white/85">24 sa · USDT</span>
       </h2>
-      <ul className="mt-3 space-y-1.5">
+      <ul className="space-y-0.5 p-2 text-[13px]">
         {quotes.slice(0, limit).map((q) => {
           const f = flash[q.base];
           return (
-            <li key={q.base} className="flex items-center justify-between gap-2 rounded-lg px-1.5 py-1 text-sm hover:bg-surface-2">
+            <li key={q.base} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 hover:bg-surface-2">
               <span className="flex items-center gap-2">
                 <CoinToken symbol={q.base} size="xs" />
                 <span className="font-semibold text-fg">{q.base}</span>
@@ -135,7 +135,7 @@ export function MarketBoard({ limit = 8 }: { limit?: number }) {
           );
         })}
       </ul>
-      <p className="mt-3 text-[11px] text-muted">Kaynak: Binance herkese açık piyasa verisi. Bilgi amaçlıdır.</p>
+      <p className="border-t border-border px-3 py-2 text-[11px] text-muted">Kaynak: Binance herkese açık piyasa verisi. Bilgi amaçlıdır.</p>
     </section>
   );
 }
@@ -189,7 +189,7 @@ export function InlineQuote({ symbol }: { symbol: string }) {
   const q = quotes.find((x) => x.base === symbol);
   if (!q) return null;
   return (
-    <span className="flex items-center gap-2 text-xs">
+    <span className="flex shrink-0 flex-col items-end text-[11.5px] leading-tight">
       <span className="tabular text-fg">{formatQuote(q.price)}</span>
       <Change pct={q.changePct} />
     </span>

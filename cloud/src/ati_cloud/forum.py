@@ -36,6 +36,7 @@ from ati_cloud.accounts import (
     check_origin,
     customer_dependency,
     limited,
+    session_customer_id,
 )
 from ati_cloud.admin.context import Admin, AdminContext
 from ati_cloud.config import CloudSettings
@@ -384,6 +385,18 @@ def create_forum_router(settings: CloudSettings, db: Database) -> APIRouter:
                 "ORDER BY published_at DESC LIMIT 5"
             )
             listings = await cur.fetchall()
+            cur = await conn.execute(
+                "SELECT nickname::text AS nickname FROM forum_profiles "
+                "ORDER BY created_at DESC LIMIT 1"
+            )
+            newest = await cur.fetchone()
+            cur = await conn.execute(
+                "SELECT (SELECT count(*) FROM forum_topics WHERE status = 'approved' "
+                "AND published_at > now() - interval '24 hours') + (SELECT count(*) "
+                "FROM forum_replies WHERE status = 'approved' "
+                "AND published_at > now() - interval '24 hours') AS n"
+            )
+            posts_24h = (await cur.fetchone() or {"n": 0})["n"]
         categories = []
         for code in CATEGORIES:
             row = stats.get(code) or {"topics": 0, "replies": 0}
@@ -406,6 +419,8 @@ def create_forum_router(settings: CloudSettings, db: Database) -> APIRouter:
             "categories": categories,
             "trending": trending,
             "listings": listings,
+            "newest_member": newest["nickname"] if newest else None,
+            "posts_24h": posts_24h,
         }
 
     @router.get("/topics/{number}")
@@ -614,6 +629,24 @@ def create_forum_router(settings: CloudSettings, db: Database) -> APIRouter:
         if profile is not None:
             profile["posts"] = profile["topics"] + profile["replies"]
         return {"topics": topics, "replies": replies, "profile": profile}
+
+    @router.get("/whoami")
+    async def whoami(request: Request, response: Response) -> dict[str, Any]:
+        """Forum çubuğu için: oturum açık mı, forum adı ve rütbe sayısı (ziyaretçiye de 200)."""
+        response.headers["Cache-Control"] = "no-store"
+        customer_id = await session_customer_id(db, request)
+        if customer_id is None:
+            return {"logged_in": False, "profile": None}
+        async with db.connection() as conn:
+            cur = await conn.execute(
+                f"SELECT p.nickname::text AS nickname, {PROFILE_STATS} "  # noqa: S608
+                "FROM forum_profiles p WHERE p.customer_id = %s",
+                (customer_id,),
+            )
+            profile = await cur.fetchone()
+        if profile is not None:
+            profile["posts"] = profile["topics"] + profile["replies"]
+        return {"logged_in": True, "profile": profile}
 
     @router.get("/me/topics/{number}/state")
     async def my_state(number: int, customer: dict[str, Any] = customer_dep) -> dict[str, Any]:

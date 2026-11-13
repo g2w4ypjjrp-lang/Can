@@ -62,8 +62,9 @@ export function ReplyForm({ number }: { number: number }) {
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="space-y-4 rounded-3xl border border-border bg-surface p-5 shadow-sm" data-testid="reply-form">
-      <h2 className="font-semibold text-fg">Hızlı yanıt</h2>
+    <form onSubmit={(e) => void submit(e)} className="fb-box" data-testid="reply-form">
+      <h2 className="fb-thead">Hızlı yanıt</h2>
+      <div className="space-y-3 p-4 text-[13px]">
       <Field
         id="yanit-ad"
         label="Forumda görünecek adınız"
@@ -85,7 +86,7 @@ export function ReplyForm({ number }: { number: number }) {
           required
           minLength={2}
           maxLength={3000}
-          rows={4}
+          rows={5}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           className={`mt-1.5 ${inputBase}`}
@@ -102,9 +103,10 @@ export function ReplyForm({ number }: { number: number }) {
           {done}
         </Notice>
       ) : null}
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" size="sm" disabled={pending}>
         <Send aria-hidden="true" className="h-4 w-4" /> Onaya gönder
       </Button>
+      </div>
     </form>
   );
 }

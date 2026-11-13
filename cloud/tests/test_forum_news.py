@@ -127,6 +127,7 @@ async def test_customer_topic_needs_approval(
     strateji = next(c for c in overview["categories"] if c["code"] == "strateji")
     assert strateji["topics"] == 1 and strateji["last"]["number"] == number
     assert overview["trending"] == [{"symbol": "SOL", "topics": 1}]
+    assert overview["newest_member"] == "Kripto Ayşe" and overview["posts_24h"] == 1
     assert detail["author_posts"] == 1
 
     # Yanıt: onaya düşer, onaylanınca görünür; kilitli konuya yanıt yazılamaz.
@@ -739,6 +740,10 @@ async def test_profiles_likes_sentiment_and_leaderboard(
         ("Kripto Ayşe", 2, 1),
         ("Okur", 1, 1),
     ]
+    assert (await public.get("/v1/forum/whoami")).json() == {"logged_in": False, "profile": None}
+    who = (await okur.get("/v1/forum/whoami")).json()
+    assert who["logged_in"] is True and who["profile"]["nickname"] == "Okur"
+    assert who["profile"]["posts"] == 1
     mine = (await okur.get("/v1/forum/me")).json()
     assert mine["profile"]["nickname"] == "Okur" and mine["profile"]["posts"] == 1
 

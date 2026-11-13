@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 
-import { ChevronRight, MessageSquarePlus, ShieldCheck, TrendingUp } from "lucide-react";
-import Link from "next/link";
+import { MessageSquarePlus, ShieldCheck, TrendingUp, Trophy } from "lucide-react";
 
+import { ForumHeader } from "@/components/forum/ForumHeader";
 import { Leaderboard } from "@/components/forum/Leaderboard";
 import { RankBanner } from "@/components/forum/Ranks";
-import { CandleBackdrop } from "@/components/forum/Visuals";
 import { Container } from "@/components/ui";
 import { fetchLeaderboard } from "@/lib/forum";
 import { RANKS, TEAM_RANK } from "@/lib/ranks";
@@ -24,69 +23,66 @@ const STEPS = [
 export default async function RanksPage() {
   const leaders = await fetchLeaderboard();
   return (
-    <div className="stage">
-      <header className="relative overflow-hidden border-b border-border">
-        <CandleBackdrop className="pointer-events-none absolute inset-0 h-full w-full" />
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-bg/90 via-bg/60 to-transparent" />
-        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(60%_80%_at_80%_0%,rgba(251,191,36,0.22),transparent_60%)]" />
-        <Container className="relative py-12 sm:py-16">
-          <nav aria-label="Konum" className="flex items-center gap-1.5 text-sm text-muted">
-            <Link href="/forum" className="underline-offset-4 hover:text-fg hover:underline">
-              Forum
-            </Link>
-            <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
-            <span className="text-fg">Rütbe sistemi</span>
-          </nav>
-          <h1 className="mt-4 text-4xl font-black uppercase tracking-tight text-fg sm:text-6xl">
-            Zirveye <span className="text-gradient">tırman</span>
-          </h1>
-          <p className="mt-4 max-w-2xl text-lg text-muted">
-            Forumdaki her yayımlanmış mesajınız sizi bir üst rütbeye taşır. Seviye 10 Sui ile başlarsınız; zirve Seviye 1 Bitcoin.
-          </p>
-        </Container>
-      </header>
-
-      <Container className="py-12">
-        <ol className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5" aria-label="Rütbeler (en yüksekten başlayarak)">
-          {RANKS.map((rank) => (
-            <li key={rank.level}>
-              <RankBanner rank={rank} />
-            </li>
-          ))}
-        </ol>
-
-        <section aria-labelledby="liderler" className="mt-12">
-          <h2 id="liderler" className="flex items-center gap-2 text-2xl font-bold text-fg">
-            <span aria-hidden="true">🏆</span> Liderlik tablosu
+    <div className="stage pb-12">
+      <ForumHeader
+        title="Rütbe sistemi"
+        subtitle="Yayımlanan her mesajınız sizi bir üst rütbeye taşır: Seviye 10 Sui ile başlarsınız, zirve Seviye 1 Bitcoin."
+        active="ranks"
+        crumbs={[{ label: "Rütbeler ve liderlik" }]}
+      />
+      <Container className="fb mt-4 space-y-4">
+        <section aria-labelledby="rutbeler" className="fb-box">
+          <h2 id="rutbeler" className="fb-thead">
+            Rütbeler (en yüksekten)
           </h2>
-          <p className="mt-1 text-sm text-muted">En çok yayımlanmış mesajı olan üyeler (eşitlikte alınan “Faydalı” sayısı).</p>
-          <div className="mt-4">
-            <Leaderboard entries={leaders} />
-          </div>
+          <ol className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 md:grid-cols-5" aria-label="Rütbeler (en yüksekten başlayarak)">
+            {RANKS.map((rank) => (
+              <li key={rank.level}>
+                <RankBanner rank={rank} />
+              </li>
+            ))}
+          </ol>
         </section>
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-[1fr_16rem]">
-          <section aria-labelledby="nasil" className="rounded-2xl border border-border bg-surface p-6">
-            <h2 id="nasil" className="text-lg font-semibold text-fg">
-              Nasıl yükselirim?
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_14rem]">
+          <section aria-labelledby="liderler-baslik" id="liderler" className="fb-box">
+            <h2 id="liderler-baslik" className="fb-thead">
+              <Trophy aria-hidden="true" className="h-4 w-4" /> Liderlik tablosu
+              <span className="ml-auto text-[12px] font-normal text-white/85">mesaj · faydalı</span>
             </h2>
-            <ul className="mt-4 grid gap-4 sm:grid-cols-3">
-              {STEPS.map(({ icon: Icon, title, text }) => (
-                <li key={title} className="rounded-xl border border-border bg-surface-2 p-4">
-                  <Icon aria-hidden="true" className="h-5 w-5 text-accent-text" />
-                  <p className="mt-2 font-semibold text-fg">{title}</p>
-                  <p className="mt-1 text-sm text-muted">{text}</p>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-5 text-xs text-muted">
-              Rütbe adları en büyük kripto paralardan esinlenmiştir; yalnızca forum etkinliğini gösterir, yatırım önerisi değildir.
-            </p>
+            <div className="[&_ol]:rounded-none [&_ol]:border-0">
+              <Leaderboard entries={leaders} />
+            </div>
           </section>
-          <div className="max-w-[16rem]">
-            <RankBanner rank={TEAM_RANK} />
+          <div className="space-y-4">
+            <section aria-labelledby="ekip-rutbe" className="fb-box">
+              <h2 id="ekip-rutbe" className="fb-thead">
+                Ekip rütbesi
+              </h2>
+              <div className="p-3">
+                <RankBanner rank={TEAM_RANK} />
+              </div>
+            </section>
           </div>
         </div>
+
+        <section aria-labelledby="nasil" className="fb-box">
+          <h2 id="nasil" className="fb-thead">
+            Nasıl yükselirim?
+          </h2>
+          <ul className="grid gap-3 p-4 sm:grid-cols-3">
+            {STEPS.map(({ icon: Icon, title, text }) => (
+              <li key={title} className="rounded-lg border border-border bg-surface-2 p-3.5">
+                <Icon aria-hidden="true" className="h-4 w-4 text-accent-text" />
+                <p className="mt-1.5 text-[14px] font-semibold text-fg">{title}</p>
+                <p className="mt-1 text-[13px] text-muted">{text}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="border-t border-border px-4 py-2.5 text-[12px] text-muted">
+            Rütbe adları en büyük kripto paralardan esinlenmiştir; yalnızca forum etkinliğini gösterir, yatırım önerisi değildir.
+          </p>
+        </section>
       </Container>
     </div>
   );

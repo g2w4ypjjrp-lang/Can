@@ -167,7 +167,7 @@ export function SentimentPoll({ number, coin, initial }: { number: number; coin:
         onClick={() => void vote(choice)}
         aria-pressed={active}
         disabled={!state.ready}
-        className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-accent-text ${
+        className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-accent-text ${
           active ? (bull ? "border-up bg-up/20 text-fg" : "border-down bg-down/20 text-fg") : "border-border bg-surface-2 text-fg hover:border-accent-text/50"
         }`}
         data-testid={`vote-${choice}`}
@@ -180,11 +180,12 @@ export function SentimentPoll({ number, coin, initial }: { number: number; coin:
   };
 
   return (
-    <section aria-labelledby="beklenti" className="rounded-2xl border border-border bg-surface p-4" data-testid="sentiment">
-      <h2 id="beklenti" className="text-sm font-semibold text-fg">
+    <section aria-labelledby="beklenti" className="fb-box" data-testid="sentiment">
+      <h2 id="beklenti" className="fb-thead">
         Topluluk beklentisi: ${coin}
       </h2>
-      <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
+      <div className="p-3">
+      <div className="flex h-2.5 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
         <div className={`bg-up ${WIDTHS[Math.round(bullPct / 10)] ?? "w-1/2"}`} />
         <div className="flex-1 bg-down" />
       </div>
@@ -212,6 +213,7 @@ export function SentimentPoll({ number, coin, initial }: { number: number; coin:
         </p>
       ) : null}
       <p className="mt-2 text-[11px] text-muted">Topluluk görüşüdür; yatırım tavsiyesi değildir.</p>
+      </div>
     </section>
   );
 }

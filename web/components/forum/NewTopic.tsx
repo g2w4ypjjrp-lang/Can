@@ -40,7 +40,7 @@ function MyPostsList({ mine }: { mine: MyPosts }) {
       {mine.topics.length ? (
         <ul className="space-y-2" aria-label="Konularım">
           {mine.topics.map((t) => (
-            <li key={t.number} className="rounded-2xl border border-border bg-bg/60 px-4 py-3" data-testid={`my-topic-${t.number}`}>
+            <li key={t.number} className="rounded-lg border border-border bg-surface-2 px-3.5 py-2.5" data-testid={`my-topic-${t.number}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 {t.status === "approved" ? (
                   <Link href={`/forum/${t.number}`} prefetch={false} className="font-semibold text-fg underline-offset-4 hover:underline">
@@ -63,7 +63,7 @@ function MyPostsList({ mine }: { mine: MyPosts }) {
           <h3 className="text-sm font-semibold text-fg">Yanıtlarım</h3>
           <ul className="mt-2 space-y-2" aria-label="Yanıtlarım">
             {mine.replies.map((r, i) => (
-              <li key={i} className="rounded-2xl border border-border bg-bg/60 px-4 py-3 text-sm">
+              <li key={i} className="rounded-lg border border-border bg-surface-2 px-3.5 py-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-muted">
                     “{r.title}” konusuna: <span className="text-fg">{r.body}</span>
@@ -137,8 +137,10 @@ export function NewTopic() {
   const symbol = coin.trim().toUpperCase().replace(/USDT$/, "");
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <form onSubmit={(e) => void submit(e)} className="space-y-6 rounded-3xl border border-border bg-surface p-6 shadow-sm sm:p-8" data-testid="topic-form">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
+      <form onSubmit={(e) => void submit(e)} className="fb-box" data-testid="topic-form">
+        <h2 className="fb-thead">Konu bilgileri</h2>
+        <div className="space-y-4 p-4 text-[13px] sm:p-5">
         <fieldset>
           <legend className="text-sm font-medium text-fg">Kategori</legend>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -149,16 +151,16 @@ export function NewTopic() {
               return (
                 <label
                   key={code}
-                  className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent-text ${
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-lg border p-2.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent-text ${
                     active ? "border-accent-text bg-surface-2" : "border-border hover:bg-surface-2"
                   }`}
                 >
                   <input type="radio" name="kategori" value={code} checked={active} onChange={() => setCategory(code)} className="visually-hidden" />
-                  <span aria-hidden="true" className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-white ${meta.gradient}`}>
-                    <Icon className="h-5 w-5" />
+                  <span aria-hidden="true" className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br text-white ${meta.gradient}`}>
+                    <Icon className="h-4 w-4" />
                   </span>
                   <span>
-                    <span className="block text-sm font-semibold text-fg">{meta.label}</span>
+                    <span className="block text-[13px] font-semibold text-fg">{meta.label}</span>
                     <span className="block text-xs text-muted">{meta.hint}</span>
                   </span>
                 </label>
@@ -201,7 +203,7 @@ export function NewTopic() {
             required
             minLength={10}
             maxLength={5000}
-            rows={9}
+            rows={8}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             className={`mt-1.5 ${inputBase}`}
@@ -222,15 +224,17 @@ export function NewTopic() {
             {done}
           </Notice>
         ) : null}
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" size="sm" disabled={pending}>
           <Send aria-hidden="true" className="h-4 w-4" /> Onaya gönder
         </Button>
+        </div>
       </form>
 
-      <aside className="space-y-4">
+      <aside className="space-y-4 text-[13px]">
         {account.mine?.profile ? (
-          <div className="rounded-3xl border border-border bg-surface p-5 shadow-sm" data-testid="my-profile">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted">Forum profiliniz</p>
+          <div className="fb-box" data-testid="my-profile">
+            <p className="fb-thead">Forum profiliniz</p>
+            <div className="p-3">
             <p className="mt-2 flex flex-wrap items-center gap-2 font-semibold text-fg">
               {account.mine.profile.nickname} <RankPill posts={account.mine.profile.posts} team={false} />
             </p>
@@ -243,11 +247,12 @@ export function NewTopic() {
             >
               Profilim ve rütbem →
             </Link>
+            </div>
           </div>
         ) : null}
-        <div className="rounded-3xl border border-border bg-surface p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted">Önizleme</p>
-          <div className="mt-3 flex items-start gap-3">
+        <div className="fb-box">
+          <p className="fb-thead">Önizleme</p>
+          <div className="flex items-start gap-3 p-3">
             {symbol.length >= 2 ? (
               <CoinToken symbol={symbol} />
             ) : (
@@ -266,9 +271,9 @@ export function NewTopic() {
             </div>
           </div>
         </div>
-        <div className="rounded-3xl border border-border bg-surface p-5 text-sm shadow-sm">
-          <p className="font-semibold text-fg">Yayın kuralları</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
+        <div className="fb-box">
+          <p className="fb-thead">Yayın kuralları</p>
+          <ul className="list-disc space-y-1 p-3 pl-7 text-muted">
             <li>Konular ekip onayından sonra yayımlanır (genelde aynı gün).</li>
             <li>Kazanç vaadi, reklam ve yönlendirme bağlantısı içeren gönderiler yayımlanmaz.</li>
             <li>Telefon, e-posta gibi kişisel bilgilerinizi paylaşmayın.</li>
@@ -278,11 +283,11 @@ export function NewTopic() {
       </aside>
 
       <section aria-labelledby="gonderilerim-baslik" className="lg:col-span-2" id="gonderilerim">
-        <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm">
-          <h2 id="gonderilerim-baslik" className="text-lg font-semibold text-fg">
+        <div className="fb-box">
+          <h2 id="gonderilerim-baslik" className="fb-thead">
             Gönderilerim
           </h2>
-          <div className="mt-4">{account.mine ? <MyPostsList mine={account.mine} /> : null}</div>
+          <div className="p-4 text-[13px]">{account.mine ? <MyPostsList mine={account.mine} /> : null}</div>
         </div>
       </section>
     </div>

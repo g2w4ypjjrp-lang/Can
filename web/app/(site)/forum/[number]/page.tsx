@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 
-import { ChevronRight, ExternalLink, Eye, Lock, MessageCircle, Pin, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+import { ExternalLink, Eye, Lock, MessageCircle, Pin, ShieldCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 
-import { CoinPriceCard, MarketBoard, MarketTicker, QuotesProvider } from "@/components/forum/Market";
+import { ForumHeader } from "@/components/forum/ForumHeader";
 import { SentimentPoll, TopicStateProvider } from "@/components/forum/Interactions";
+import { CoinPriceCard, MarketBoard, MarketTicker, QuotesProvider } from "@/components/forum/Market";
 import { Post } from "@/components/forum/Post";
 import { ReplyForm } from "@/components/forum/ReplyForm";
-import { CATEGORY_META, CategoryChip, CoinToken } from "@/components/forum/Visuals";
+import { CATEGORY_META, CategoryChip } from "@/components/forum/Visuals";
 import { Container, Notice } from "@/components/ui";
 import { fetchTopic, postDate } from "@/lib/forum";
 import { TICKER_SYMBOLS, fetchQuotes } from "@/lib/market";
@@ -51,67 +51,45 @@ export default async function TopicPage({ params }: Props) {
   return (
     <QuotesProvider initial={quotes} extra={extra}>
       <TopicStateProvider number={topic.number}>
-      <div className="stage">
-        <MarketTicker />
-        <Container className="py-8">
-          <nav aria-label="Konum" className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
-            <Link href="/forum" className="underline-offset-4 hover:text-fg hover:underline">
-              Forum
-            </Link>
-            <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
-            <Link href={`/forum?kategori=${topic.category}`} className="underline-offset-4 hover:text-fg hover:underline">
-              {meta.label}
-            </Link>
-            <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
-            <span className="text-fg">#{topic.number}</span>
-          </nav>
-
-          <header className="relative mt-4 overflow-hidden rounded-2xl border border-border bg-surface">
-            <div aria-hidden="true" className={`h-1.5 bg-gradient-to-r ${meta.gradient}`} />
-            <div className="flex items-start gap-5 p-5 sm:p-6">
-              {topic.coin_symbol ? (
-                <span className="hidden sm:block">
-                  <CoinToken symbol={topic.coin_symbol} size="lg" />
+        <div className="stage pb-12">
+          <MarketTicker />
+          <ForumHeader
+            title={topic.title}
+            subtitle={
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <CategoryChip category={topic.category} />
+                {topic.coin_symbol ? <span className="font-mono font-bold text-accent-text">${topic.coin_symbol}</span> : null}
+                {topic.pinned ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-accent-text/15 px-1.5 py-px text-[11px] font-bold uppercase text-accent-text">
+                    <Pin aria-hidden="true" className="h-3 w-3" /> Sabit
+                  </span>
+                ) : null}
+                {team ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-success-bg px-1.5 py-px text-[11px] font-bold uppercase text-success-fg">
+                    <ShieldCheck aria-hidden="true" className="h-3 w-3" /> Resmî paylaşım
+                  </span>
+                ) : null}
+                {topic.locked ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Lock aria-hidden="true" className="h-3 w-3" /> Yanıtlara kapalı
+                  </span>
+                ) : null}
+                <span>
+                  {topic.author_name} · {postDate(topic.published_at)}
                 </span>
-              ) : null}
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CategoryChip category={topic.category} />
-                  {topic.coin_symbol ? <span className="font-mono text-sm font-bold text-accent-text">${topic.coin_symbol}</span> : null}
-                  {topic.pinned ? (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-accent-text/15 px-1.5 py-0.5 text-[11px] font-bold uppercase text-accent-text">
-                      <Pin aria-hidden="true" className="h-3 w-3" /> Sabit
-                    </span>
-                  ) : null}
-                  {team ? (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-success-bg px-1.5 py-0.5 text-[11px] font-bold uppercase text-success-fg">
-                      <ShieldCheck aria-hidden="true" className="h-3 w-3" /> Resmî paylaşım
-                    </span>
-                  ) : null}
-                  {topic.locked ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-muted">
-                      <Lock aria-hidden="true" className="h-3 w-3" /> Yanıtlara kapalı
-                    </span>
-                  ) : null}
-                </div>
-                <h1 className="mt-3 text-2xl font-bold tracking-tight text-fg sm:text-4xl">{topic.title}</h1>
-                <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-                  <span>
-                    {topic.author_name} · {postDate(topic.published_at)}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <MessageCircle aria-hidden="true" className="h-4 w-4" /> {topic.reply_count} yanıt
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Eye aria-hidden="true" className="h-4 w-4" /> {topic.view_count} görüntüleme
-                  </span>
-                </p>
-              </div>
-            </div>
-          </header>
+                <span className="inline-flex items-center gap-1">
+                  <MessageCircle aria-hidden="true" className="h-3.5 w-3.5" /> {topic.reply_count} yanıt
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Eye aria-hidden="true" className="h-3.5 w-3.5" /> {topic.view_count} görüntüleme
+                </span>
+              </span>
+            }
+            crumbs={[{ href: `/forum?kategori=${topic.category}`, label: meta.label }, { label: topic.title }]}
+          />
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="min-w-0 space-y-4">
+          <Container className="fb mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_16.5rem]">
+            <div className="min-w-0 space-y-3">
               <Post
                 index={1}
                 number={topic.number}
@@ -130,21 +108,21 @@ export default async function TopicPage({ params }: Props) {
                     href={topic.source_url}
                     target="_blank"
                     rel="noopener noreferrer nofollow"
-                    className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-border bg-surface-2 p-3.5 hover:border-accent-text/50 focus-visible:outline-2 focus-visible:outline-accent-text"
+                    className="mt-4 flex items-center justify-between gap-4 rounded-lg border border-border bg-surface-2 px-3.5 py-2.5 hover:border-accent-text/50 focus-visible:outline-2 focus-visible:outline-accent-text"
                     data-testid="topic-source"
                   >
-                    <span>
+                    <span className="text-[13px]">
                       <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">Kaynak</span>
-                      <span className="mt-0.5 block font-semibold text-fg">{topic.source_name ?? "Haber kaynağı"}</span>
-                      <span className="block text-sm text-muted">Haberin tamamını kaynağında okuyun</span>
+                      <span className="block font-semibold text-fg">{topic.source_name ?? "Haber kaynağı"}</span>
+                      <span className="block text-[12px] text-muted">Haberin tamamını kaynağında okuyun</span>
                     </span>
-                    <ExternalLink aria-hidden="true" className="h-5 w-5 shrink-0 text-accent-text" />
+                    <ExternalLink aria-hidden="true" className="h-4 w-4 shrink-0 text-accent-text" />
                   </a>
                 ) : null}
               </Post>
 
               {topic.replies.length ? (
-                <section aria-label={`Yanıtlar (${topic.replies.length})`} className="space-y-4" data-testid="replies">
+                <section aria-label={`Yanıtlar (${topic.replies.length})`} className="space-y-3" data-testid="replies">
                   {topic.replies.map((reply, i) => (
                     <Post
                       key={reply.id}
@@ -162,7 +140,7 @@ export default async function TopicPage({ params }: Props) {
                   ))}
                 </section>
               ) : (
-                <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted">
+                <p className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-[13px] text-muted">
                   Henüz yanıt yok. İlk yanıtı siz yazın.
                 </p>
               )}
@@ -176,25 +154,24 @@ export default async function TopicPage({ params }: Props) {
               )}
             </div>
 
-            <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start" aria-label="Konu kenar çubuğu">
+            <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start" aria-label="Konu kenar çubuğu">
               {topic.coin_symbol ? <CoinPriceCard symbol={topic.coin_symbol} /> : null}
               {topic.coin_symbol && topic.sentiment ? (
                 <SentimentPoll number={topic.number} coin={topic.coin_symbol} initial={topic.sentiment} />
               ) : null}
               <MarketBoard limit={6} />
-              <section className="rounded-2xl border border-border bg-surface p-4 text-sm" aria-labelledby="hatirlatma">
-                <h2 id="hatirlatma" className="font-semibold text-fg">
+              <section className="fb-box" aria-labelledby="hatirlatma">
+                <h2 id="hatirlatma" className="fb-thead">
                   Hatırlatma
                 </h2>
-                <p className="mt-1 leading-relaxed text-muted">
+                <p className="p-3 text-[12.5px] leading-relaxed text-muted">
                   Forumdaki paylaşımlar yatırım tavsiyesi değildir. Kripto para işlemleri kayıpla sonuçlanabilir; kararlarınızı kendi
                   araştırmanızla verin.
                 </p>
               </section>
             </aside>
-          </div>
-        </Container>
-      </div>
+          </Container>
+        </div>
       </TopicStateProvider>
     </QuotesProvider>
   );

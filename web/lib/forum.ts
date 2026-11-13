@@ -124,6 +124,8 @@ export interface ForumOverview {
   }[];
   trending: { symbol: string; topics: number }[];
   listings: { number: number; title: string; coin_symbol: string | null; author_name: string; published_at: string }[];
+  newest_member?: string | null;
+  posts_24h?: number;
 }
 
 export async function fetchOverview(): Promise<ForumOverview | null> {
