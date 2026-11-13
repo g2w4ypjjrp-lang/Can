@@ -2,12 +2,14 @@
 
 Sağlık uç noktaları (Aşama 1), müşteri hesapları ve iletişim formu (Aşama 14), lisans
 (Aşama 15), yönetici API'si (Aşama 16, ``/admin/v1``: ayrı oturum, zorunlu 2FA, rol bazlı
-yetki), ödeme/teslim (Aşama 17) ve indirme sayfasının sürüm bilgisi (``releases``).
+yetki), ödeme/teslim (Aşama 17), indirme sayfasının sürüm bilgisi (``releases``), forum ve
+coin haberleri (``forum``, ``news``).
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -28,9 +30,11 @@ from ati_cloud.config import CloudSettings
 from ati_cloud.contact import create_contact_router
 from ati_cloud.crash import create_admin_crash_router, create_crash_router
 from ati_cloud.db.migrate import load_migrations, pending
+from ati_cloud.forum import create_admin_forum_router, create_forum_router
 from ati_cloud.guards import RequestGuard
 from ati_cloud.licensing.api import create_license_router
 from ati_cloud.licensing.service import Licensing
+from ati_cloud.news import create_admin_news_router, run_loop
 from ati_cloud.payments.api import create_admin_payments_router, create_payments_router
 from ati_cloud.payments.service import Payments
 from ati_cloud.releases import create_admin_releases_router, create_releases_router
@@ -58,7 +62,15 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        # Coin haberleri arka planda çekilir (test ortamında kapalı).
+        news_task = None
+        if cfg.news_interval_s > 0 and cfg.environment != "test":
+            news_task = asyncio.create_task(run_loop(db, cfg.news_interval_s))
         yield
+        if news_task is not None:
+            news_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await news_task
         await db.close()
 
     app = FastAPI(
@@ -100,6 +112,9 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
     app.include_router(create_admin_releases_router(admin))
     app.include_router(create_crash_router(db))
     app.include_router(create_admin_crash_router(admin))
+    app.include_router(create_forum_router(cfg, db))
+    app.include_router(create_admin_forum_router(admin))
+    app.include_router(create_admin_news_router(admin))
 
     @app.get("/health")
     async def health() -> dict[str, str]:

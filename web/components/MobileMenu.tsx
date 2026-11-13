@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CircleHelp, Download, LifeBuoy, LogIn, Mail, Menu, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
+import { ArrowRight, CircleHelp, Download, LifeBuoy, LogIn, Mail, Menu, MessagesSquare, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
@@ -12,6 +12,7 @@ const ICONS: Record<string, [LucideIcon, string]> = {
   "/ozellikler": [Sparkles, "Neler yapabilir"],
   "/paketler": [Tag, "Fiyatlar ve deneme"],
   "/indir": [Download, "Windows uygulaması"],
+  "/forum": [MessagesSquare, "Topluluk ve haberler"],
   "/yardim": [LifeBuoy, "Kurulum ve kullanım"],
   "/sss": [CircleHelp, "Sık sorulanlar"],
   "/iletisim": [Mail, "Bize yazın"],

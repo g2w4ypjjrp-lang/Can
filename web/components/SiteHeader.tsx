@@ -10,6 +10,7 @@ const NAV: NavItem[] = [
   { href: "/ozellikler", label: "Özellikler" },
   { href: "/paketler", label: "Paketler" },
   { href: "/indir", label: "İndir" },
+  { href: "/forum", label: "Forum" },
   { href: "/yardim", label: "Yardım" },
   { href: "/sss", label: "SSS" },
   { href: "/iletisim", label: "İletişim" },

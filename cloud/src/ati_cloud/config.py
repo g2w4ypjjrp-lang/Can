@@ -83,6 +83,9 @@ class CloudSettings(BaseSettings):
     admin_secret_kek: SecretStr | None = (
         None  # TOTP sırları ve ödeme anahtarları (AES-256), 32 bayt
     )
+    # Coin haberleri (panel → Coin haberleri): açık kaynaklardan çekme aralığı (sn).
+    # 0: kapalı. Test ortamında hiç çalışmaz.
+    news_interval_s: int = Field(default=900, ge=0, le=86_400)
     # Canlı ödeme yalnızca bu dağıtım ayarı açıkken (G3 onayı) ve panelde açık onayla açılabilir.
     payments_live_allowed: bool = False
     # Ödeme (Aşama 17): sağlayıcının tarayıcıyı geri gönderdiği ve bildirim yolladığı API adresi.

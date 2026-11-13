@@ -31,6 +31,8 @@ export default defineConfig({
         ATI_PUBLIC_API_URL: API_ORIGIN,
         ATI_PUBLIC_WEB_URL: WEB_ORIGIN,
         ATI_PLANS_REVALIDATE_S: "0",
+        // Canlı fiyat bandı testlerde kapalı (dış kaynağa bağlanılmaz; sonuçlar sabit kalır).
+        ATI_MARKET_DATA_URL: process.env.ATI_MARKET_DATA_URL ?? "",
         NEXT_TELEMETRY_DISABLED: "1",
       },
     },

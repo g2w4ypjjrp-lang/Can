@@ -13,6 +13,7 @@ const GROUPS = [
       { href: "/ozellikler", label: "Özellikler" },
       { href: "/paketler", label: "Paketler" },
       { href: "/indir", label: "İndir" },
+      { href: "/forum", label: "Forum" },
       { href: "/yardim", label: "Yardım merkezi" },
       { href: "/sss", label: "Sık sorulan sorular" },
     ],

@@ -1,0 +1,203 @@
+// Forum uçtan uca: müşteri konu açar (onaya düşer, onaysız görünmez), yönetici onaylar ya da
+// nedenle reddeder, yanıt onayla görünür; coin haberi panelden "Paylaş" ile ekip konusu olur.
+// Haberler veritabanına doğrudan eklenir (testler dış kaynaklara bağlanmaz). Erişilebilirlik.
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+
+import { randomBytes } from "node:crypto";
+
+import { inviteAdmin, sql } from "./db";
+import { TotpDevice } from "./totp";
+
+const PASSWORD = "Yonetici-Parolasi-2026!";
+const EMAIL = "forumcu@example.com";
+
+test.describe.configure({ mode: "serial" });
+test.setTimeout(180_000);
+
+async function noAxeViolations(target: Page) {
+  const result = await new AxeBuilder({ page: target }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+  expect(result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+}
+
+let customerContext: BrowserContext;
+let adminContext: BrowserContext;
+let page: Page;
+let admin: Page;
+
+test.beforeAll(async ({ browser }) => {
+  const options = { locale: "tr-TR", timezoneId: "Europe/Istanbul", baseURL: "http://127.0.0.1:3100" };
+  customerContext = await browser.newContext(options);
+  adminContext = await browser.newContext(options);
+  page = await customerContext.newPage();
+  admin = await adminContext.newPage();
+});
+
+test.afterAll(async () => {
+  await customerContext.close();
+  await adminContext.close();
+});
+
+test("müşteri konu açar; onaydan önce forumda görünmez", async () => {
+  await page.goto("/forum/yeni");
+  await expect(page.getByTestId("forum-login")).toContainText("Konu açmak için giriş yapın");
+  await noAxeViolations(page);
+
+  // Kayıt akışı account.spec'te sınanır; burada IP başına kayıt sınırına takılmamak için müşteri ve
+  // oturumu doğrudan oluşturulur (çerez API'nin koyduğu oturum çereziyle aynıdır).
+  const token = randomBytes(32).toString("base64url");
+  await sql(
+    "WITH c AS (INSERT INTO customers (email, password_hash, email_verified_at) VALUES ($1, '$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA', now()) RETURNING id) " +
+      "INSERT INTO customer_sessions (customer_id, refresh_token_hash, client_kind, expires_at) " +
+      "SELECT id, sha256(convert_to($2, 'UTF8')), 'web', now() + interval '1 day' FROM c",
+    [EMAIL, token],
+  );
+  await customerContext.addCookies([{ name: "ati_session", value: token, domain: "127.0.0.1", path: "/", httpOnly: true, sameSite: "Strict" }]);
+
+  await page.goto("/forum/yeni");
+  const form = page.getByTestId("topic-form");
+  await form.getByText("Strateji ve analiz").click();
+  await form.getByLabel("Forumda görünecek adınız").fill("Deneme Yatırımcı");
+  await form.getByLabel("İlgili coin").fill("solusdt");
+  await form.getByLabel("Başlık").fill("SOL için destek seviyeleri");
+  await form.getByLabel("Metin").fill("Merhaba,\n\n4 saatlik grafikte 170 seviyesi destek gibi duruyor.\nSizce?");
+  await noAxeViolations(page);
+  await form.getByRole("button", { name: "Onaya gönder" }).click();
+  await expect(form.getByRole("status")).toContainText("Yönetici onayından sonra");
+  await expect(page.getByTestId(/^my-topic-/)).toContainText("Onay bekliyor");
+
+  // Kazanç vaadi içeren ikinci konu (yönetici reddedecek).
+  await form.getByLabel("Başlık").fill("Herkes katılsın");
+  await form.getByLabel("Metin").fill("Bu grupta garanti kâr var, t.me/sahte adresine yazın.");
+  await form.getByRole("button", { name: "Onaya gönder" }).click();
+  await expect(page.getByTestId(/^my-topic-/)).toHaveCount(2);
+
+  await page.goto("/forum");
+  await expect(page.getByTestId("forum-empty")).toBeVisible();
+});
+
+test("yönetici onaylar ve reddeder; yanıt onaydan sonra görünür", async () => {
+  const path = inviteAdmin("forum-yonetici@example.com", "Forum Yöneticisi");
+  await admin.goto(path);
+  const secret = (await admin.getByTestId("totp-secret").textContent())!.trim();
+  const device = new TotpDevice(secret);
+  await admin.getByLabel("Parola", { exact: true }).fill(PASSWORD);
+  await admin.getByLabel("Parola (tekrar)").fill(PASSWORD);
+  await admin.getByLabel("Doğrulama kodu").fill(await device.next());
+  await admin.getByRole("button", { name: "Hesabı etkinleştir" }).click();
+  await admin.getByLabel("Kodları güvenli bir yere kaydettim").check();
+  await admin.getByRole("button", { name: "Panele geç" }).click();
+
+  await admin.getByRole("link", { name: "Forum onayları" }).click();
+  await expect(admin.getByRole("heading", { level: 1, name: "Forum onayları" })).toBeVisible();
+  const good = admin.getByTestId(/^queue-topic-/).filter({ hasText: "SOL için destek seviyeleri" });
+  const spam = admin.getByTestId(/^queue-topic-/).filter({ hasText: "Herkes katılsın" });
+  await expect(good).toContainText("İlk konusu");
+  await expect(good).toContainText(EMAIL);
+  await expect(spam).toContainText("kazanç vaadi");
+  await expect(spam).toContainText("iletişim / reklam");
+  await noAxeViolations(admin);
+
+  await spam.getByRole("button", { name: "Reddet…" }).click();
+  await spam.getByLabel("Reddetme nedeni (müşteri görür)").fill("Kazanç vaadi ve reklam içeriyor");
+  await spam.getByRole("button", { name: "Reddet", exact: true }).click();
+  await expect(admin.getByRole("status").filter({ hasText: "Reddedildi" })).toBeVisible();
+  await good.getByRole("button", { name: /onayla$/ }).click();
+  await expect(admin.getByRole("status").filter({ hasText: "Onaylandı ve yayımlandı" })).toBeVisible();
+  await expect(admin.getByTestId(/^queue-topic-/)).toHaveCount(0);
+
+  // Müşteri: konu yayında, coin jetonu ve içerik görünür; reddedilen konunun nedeni görünür.
+  await page.goto("/forum");
+  const card = page.getByTestId(/^topic-\d+$/).filter({ hasText: "SOL için destek seviyeleri" });
+  await expect(card).toContainText("Strateji ve analiz");
+  await expect(card).toContainText("Deneme Yatırımcı");
+  await noAxeViolations(page);
+  await card.getByRole("link").click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("SOL için destek seviyeleri");
+  await expect(page.getByTestId("topic-body")).toContainText("170 seviyesi destek");
+  await noAxeViolations(page);
+
+  const reply = page.getByTestId("reply-form");
+  await expect(reply.getByLabel("Forumda görünecek adınız")).toHaveValue("Deneme Yatırımcı"); // hatırlanır
+  await reply.getByLabel("Yanıtınız").fill("Güncelleme: 165 altına stop koydum.");
+  await reply.getByRole("button", { name: "Onaya gönder" }).click();
+  await expect(reply.getByRole("status")).toContainText("onayından sonra");
+  await expect(page.getByTestId("replies")).toHaveCount(0);
+
+  await admin.reload();
+  const pending = admin.getByTestId("queue-reply").filter({ hasText: "165 altına stop" });
+  await expect(pending).toContainText("SOL için destek seviyeleri");
+  await pending.getByRole("button", { name: /onayla$/ }).click();
+  await expect(admin.getByTestId("queue-reply")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("replies")).toContainText("165 altına stop koydum.");
+
+  await page.goto("/forum/yeni");
+  const mine = page.getByTestId(/^my-topic-/).filter({ hasText: "Herkes katılsın" });
+  await expect(mine).toContainText("Reddedildi");
+  await expect(mine).toContainText("Yönetici notu: Kazanç vaadi ve reklam içeriyor");
+});
+
+test("coin haberi panelden paylaşılır, forumda sabit ekip konusu olur", async () => {
+  await sql(
+    "INSERT INTO coin_news (source, external_id, kind, title, summary, url, symbols, published_at) VALUES " +
+      "('binance', 'e2e-1', 'listing', 'Binance Will List Testcoin (TST) with Seed Tag Applied', " +
+      "'Binance resmî duyurusu (yeni listeleme kategorisi).', 'https://www.binance.com/en/support/announcement/detail/abc', " +
+      "'{TST}', now() - interval '5 minutes'), " +
+      "('btchaber', 'e2e-2', 'news', 'Bitcoin haftaya yatay başladı', 'Piyasa sakin seyrediyor.', " +
+      "'https://www.btchaber.com/bitcoin-yatay/', '{}', now() - interval '1 hour')",
+  );
+  await admin.getByRole("link", { name: "Coin haberleri" }).click();
+  await expect(admin.getByRole("heading", { level: 1, name: "Coin haberleri" })).toBeVisible();
+  const card = admin.getByTestId(/^news-/).filter({ hasText: "Testcoin" });
+  await expect(card).toContainText("Yeni coin");
+  await expect(card).toContainText("Binance duyuruları");
+  await expect(admin.getByTestId(/^news-/).filter({ hasText: "Bitcoin haftaya" })).toHaveCount(0); // yeni coin sekmesi
+  await expect(admin.getByTestId("news-sources")).toContainText("Binance yeni işlem çiftleri");
+  await noAxeViolations(admin);
+
+  await card.getByRole("button", { name: /paylaş$/ }).click();
+  const form = card.getByTestId("share-form");
+  await expect(form.getByLabel("Coin", { exact: true })).toHaveValue("TST");
+  await expect(form.getByRole("combobox")).toHaveValue("yeni-coin");
+  await form.getByLabel("Başlık").fill("Binance Testcoin (TST) listeliyor");
+  await form.getByLabel("Üstte sabitle").check();
+  await noAxeViolations(admin);
+  await form.getByRole("button", { name: "Forumda paylaş" }).click();
+  await expect(admin.getByRole("status").filter({ hasText: /Paylaşıldı: forum konusu #\d+/ })).toBeVisible();
+  await expect(admin.getByTestId(/^news-/).filter({ hasText: "Testcoin" })).toHaveCount(0);
+
+  await admin.getByRole("tab", { name: /Tüm yeni haberler/ }).click();
+  const other = admin.getByTestId(/^news-/).filter({ hasText: "Bitcoin haftaya" });
+  await other.getByRole("button", { name: "Gizle" }).click();
+  await expect(other).toHaveCount(0);
+  await admin.getByRole("tab", { name: "Gizlenenler" }).click();
+  await expect(admin.getByTestId(/^news-/).filter({ hasText: "Bitcoin haftaya" })).toBeVisible();
+  await admin.getByRole("tab", { name: "Paylaşılanlar" }).click();
+  await expect(admin.getByTestId(/^news-/).filter({ hasText: "Testcoin" })).toContainText(/Forumda: konu #\d+/);
+
+  // Forumda: sabit, resmî, kaynak bağlantılı.
+  await page.goto("/forum");
+  const first = page.getByTestId(/^topic-\d+$/).first();
+  await expect(first).toContainText("Binance Testcoin (TST) listeliyor");
+  await expect(first).toContainText("Resmî");
+  await expect(first).toContainText("Sabit");
+  await first.getByRole("link").click();
+  await expect(page.getByTestId("topic-source")).toHaveAttribute("href", "https://www.binance.com/en/support/announcement/detail/abc");
+  await expect(page.getByTestId("topic-source")).toContainText("Binance duyuruları");
+  await noAxeViolations(page);
+  await page.goto("/forum?kategori=yeni-coin");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Yeni coinler");
+  await expect(page.getByTestId("forum-total")).toHaveText("1 konu");
+  await page.goto("/forum?ara=destek");
+  await expect(page.getByTestId("forum-total")).toContainText("1 konu");
+
+  // Yönetici konuyu gizler → forumdan kalkar.
+  await admin.getByRole("link", { name: "Forum onayları" }).click();
+  await admin.getByRole("tab", { name: "Bütün konular" }).click();
+  const row = admin.getByTestId(/^admin-topic-/).filter({ hasText: "SOL için destek seviyeleri" });
+  await row.getByRole("button", { name: /Gizle$/ }).click();
+  await expect(row).toContainText("Gizli");
+  await page.goto("/forum");
+  await expect(page.getByTestId(/^topic-\d+$/)).toHaveCount(1);
+});

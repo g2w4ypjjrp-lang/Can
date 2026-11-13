@@ -186,7 +186,7 @@ def test_effective_permissions_only_for_active_admins(
         "WHERE id = %s",
         (secrets.token_bytes(40), admin[0]),
     )
-    assert scalar(count_sql, (admin[0],)) == 5
+    assert scalar(count_sql, (admin[0],)) == 6  # destek: 5 temel + forum onayı (0014)
     assert (
         scalar(
             "SELECT count(*) FROM admin_effective_permissions WHERE admin_id = %s "

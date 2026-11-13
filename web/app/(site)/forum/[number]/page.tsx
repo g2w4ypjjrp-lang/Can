@@ -1,0 +1,188 @@
+import type { Metadata } from "next";
+
+import { ChevronRight, ExternalLink, Eye, Lock, MessageCircle, Pin, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import { CoinPriceCard, MarketBoard, MarketTicker, QuotesProvider } from "@/components/forum/Market";
+import { Post } from "@/components/forum/Post";
+import { ReplyForm } from "@/components/forum/ReplyForm";
+import { CATEGORY_META, CategoryChip, CoinToken } from "@/components/forum/Visuals";
+import { Container, Notice } from "@/components/ui";
+import { fetchTopic, postDate } from "@/lib/forum";
+import { TICKER_SYMBOLS, fetchQuotes } from "@/lib/market";
+
+type Props = { params: Promise<{ number: string }> };
+
+function parseNumber(value: string): number | null {
+  return /^\d{1,15}$/.test(value) ? Number(value) : null;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const number = parseNumber((await params).number);
+  const topic = number ? await fetchTopic(number) : null;
+  if (!topic || topic === "error") return { title: "Forum" };
+  return { title: `${topic.title} · Forum`, description: topic.body.slice(0, 160) };
+}
+
+export default async function TopicPage({ params }: Props) {
+  const number = parseNumber((await params).number);
+  if (number === null) notFound();
+  const topic = await fetchTopic(number);
+  if (topic === null) notFound();
+  if (topic === "error") {
+    return (
+      <Container className="py-16">
+        <h1 className="text-2xl font-semibold text-fg">Forum</h1>
+        <div className="mt-4">
+          <Notice tone="warning" title="Konu şu anda yüklenemedi" role="status">
+            Lütfen biraz sonra tekrar deneyin.
+          </Notice>
+        </div>
+      </Container>
+    );
+  }
+  const meta = CATEGORY_META[topic.category];
+  const team = topic.author_kind === "team";
+  const extra = topic.coin_symbol && !TICKER_SYMBOLS.includes(topic.coin_symbol) ? [topic.coin_symbol] : [];
+  const quotes = await fetchQuotes([...TICKER_SYMBOLS, ...extra]);
+
+  return (
+    <QuotesProvider initial={quotes} extra={extra}>
+      <div className="stage">
+        <MarketTicker />
+        <Container className="py-8">
+          <nav aria-label="Konum" className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
+            <Link href="/forum" className="underline-offset-4 hover:text-fg hover:underline">
+              Forum
+            </Link>
+            <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
+            <Link href={`/forum?kategori=${topic.category}`} className="underline-offset-4 hover:text-fg hover:underline">
+              {meta.label}
+            </Link>
+            <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
+            <span className="text-fg">#{topic.number}</span>
+          </nav>
+
+          <header className="relative mt-4 overflow-hidden rounded-2xl border border-border bg-surface">
+            <div aria-hidden="true" className={`h-1.5 bg-gradient-to-r ${meta.gradient}`} />
+            <div className="flex items-start gap-5 p-5 sm:p-6">
+              {topic.coin_symbol ? (
+                <span className="hidden sm:block">
+                  <CoinToken symbol={topic.coin_symbol} size="lg" />
+                </span>
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CategoryChip category={topic.category} />
+                  {topic.coin_symbol ? <span className="font-mono text-sm font-bold text-accent-text">${topic.coin_symbol}</span> : null}
+                  {topic.pinned ? (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-accent-text/15 px-1.5 py-0.5 text-[11px] font-bold uppercase text-accent-text">
+                      <Pin aria-hidden="true" className="h-3 w-3" /> Sabit
+                    </span>
+                  ) : null}
+                  {team ? (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-success-bg px-1.5 py-0.5 text-[11px] font-bold uppercase text-success-fg">
+                      <ShieldCheck aria-hidden="true" className="h-3 w-3" /> Resmî paylaşım
+                    </span>
+                  ) : null}
+                  {topic.locked ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted">
+                      <Lock aria-hidden="true" className="h-3 w-3" /> Yanıtlara kapalı
+                    </span>
+                  ) : null}
+                </div>
+                <h1 className="mt-3 text-2xl font-bold tracking-tight text-fg sm:text-4xl">{topic.title}</h1>
+                <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+                  <span>
+                    {topic.author_name} · {postDate(topic.published_at)}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <MessageCircle aria-hidden="true" className="h-4 w-4" /> {topic.reply_count} yanıt
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Eye aria-hidden="true" className="h-4 w-4" /> {topic.view_count} görüntüleme
+                  </span>
+                </p>
+              </div>
+            </div>
+          </header>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="min-w-0 space-y-4">
+              <Post
+                index={1}
+                author={topic.author_name}
+                team={team}
+                posts={topic.author_posts}
+                at={topic.published_at}
+                body={topic.body}
+                opener
+                bodyTestId="topic-body"
+              >
+                {topic.source_url ? (
+                  <a
+                    href={topic.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-border bg-surface-2 p-3.5 hover:border-accent-text/50 focus-visible:outline-2 focus-visible:outline-accent-text"
+                    data-testid="topic-source"
+                  >
+                    <span>
+                      <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">Kaynak</span>
+                      <span className="mt-0.5 block font-semibold text-fg">{topic.source_name ?? "Haber kaynağı"}</span>
+                      <span className="block text-sm text-muted">Haberin tamamını kaynağında okuyun</span>
+                    </span>
+                    <ExternalLink aria-hidden="true" className="h-5 w-5 shrink-0 text-accent-text" />
+                  </a>
+                ) : null}
+              </Post>
+
+              {topic.replies.length ? (
+                <section aria-label={`Yanıtlar (${topic.replies.length})`} className="space-y-4" data-testid="replies">
+                  {topic.replies.map((reply, i) => (
+                    <Post
+                      key={i}
+                      index={i + 2}
+                      author={reply.author_name}
+                      team={reply.author_kind === "team"}
+                      posts={reply.author_posts}
+                      at={reply.published_at}
+                      body={reply.body}
+                    />
+                  ))}
+                </section>
+              ) : (
+                <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted">
+                  Henüz yanıt yok. İlk yanıtı siz yazın.
+                </p>
+              )}
+
+              {topic.locked ? (
+                <Notice tone="info" title="Bu konu yanıtlara kapatıldı">
+                  Yeni yanıt yazılamaz.
+                </Notice>
+              ) : (
+                <ReplyForm number={topic.number} />
+              )}
+            </div>
+
+            <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start" aria-label="Konu kenar çubuğu">
+              {topic.coin_symbol ? <CoinPriceCard symbol={topic.coin_symbol} /> : null}
+              <MarketBoard limit={6} />
+              <section className="rounded-2xl border border-border bg-surface p-4 text-sm" aria-labelledby="hatirlatma">
+                <h2 id="hatirlatma" className="font-semibold text-fg">
+                  Hatırlatma
+                </h2>
+                <p className="mt-1 leading-relaxed text-muted">
+                  Forumdaki paylaşımlar yatırım tavsiyesi değildir. Kripto para işlemleri kayıpla sonuçlanabilir; kararlarınızı kendi
+                  araştırmanızla verin.
+                </p>
+              </section>
+            </aside>
+          </div>
+        </Container>
+      </div>
+    </QuotesProvider>
+  );
+}

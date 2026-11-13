@@ -163,6 +163,21 @@ belirtilmelidir (hukukçu onayı).
   siparişler yasal saklama için kalır.
 * **Site görünümü:** panel → **Ayarlar → Site görünümü**: Okyanus, Zümrüt, Gün batımı, Altın,
   Grafit. Değişiklik ~30 saniyede sitede görünür.
+* **Kampanya ve duyuru şeridi:** panel → **Paketler ve fiyatlar → Genel kampanya** (yüzde indirim,
+  bitiş tarihi). Paketler sayfasında hareketli indirim afişi, geri sayım ve kartlarda "%X İNDİRİM"
+  etiketi çıkar. **Ayarlar → Duyuru şeridi** sitenin en üstüne ince bir duyuru koyar; duyuru yokken
+  şerit yürürlükteki kampanyayı gösterir.
+* **Toplu lisans işlemi:** panel → **Lisanslar**: durum süzgeci, satır başındaki kutular ya da "tümünü
+  seç" → alttaki çubuktan dondur / dondurmayı kaldır / iptal / sil (iptal ve silme doğrulama kodu ister).
+* **Forum:** site → **Forum** (canarslan.net.tr/forum). Müşterinin açtığı konu ve yanıt, panel →
+  **Topluluk → Forum onayları**'nda onaylanmadan görünmez; reddederken yazdığınız neden müşteriye
+  görünür. Kazanç vaadi, bağlantı ve iletişim bilgisi içeren gönderiler otomatik işaretlenir.
+* **Coin haberleri:** panel → **Topluluk → Coin haberleri**. Sunucu 15 dakikada bir herkese açık
+  kaynaklardan (Binance duyuruları ve yeni işlem çiftleri, Cointelegraph, BTCHaber, Uzmancoin,
+  Investing.com Türkiye) başlık ve kısa özet çeker; "Şimdi yenile" ile hemen çekilir. Beğendiğiniz
+  haberde **Paylaş** → metni düzenleyip forumda ekip konusu olarak yayımlayın. Aralık `bulut.env`
+  içinde `ATI_NEWS_INTERVAL_S` ile değişir (0 kapatır). Forum sayfalarındaki canlı fiyat bandı
+  Binance'in herkese açık piyasa verisidir (`ATI_MARKET_DATA_URL=` boş bırakılırsa kapanır).
 
 ## Günlük kullanım
 

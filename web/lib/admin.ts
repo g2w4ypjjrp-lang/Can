@@ -14,7 +14,7 @@ export interface NavEntry {
   href: string;
   label: string;
   permission: string | null;
-  group: "Genel" | "Satış" | "Müşteriler" | "Sistem";
+  group: "Genel" | "Satış" | "Müşteriler" | "Topluluk" | "Sistem";
 }
 
 export const ADMIN_NAV: NavEntry[] = [
@@ -26,6 +26,8 @@ export const ADMIN_NAV: NavEntry[] = [
   { href: "/yonetim/musteriler", label: "Müşteriler", permission: "customer.read", group: "Müşteriler" },
   { href: "/yonetim/lisanslar", label: "Lisanslar", permission: "license.read", group: "Müşteriler" },
   { href: "/yonetim/mesajlar", label: "Mesajlar", permission: "customer.read", group: "Müşteriler" },
+  { href: "/yonetim/forum", label: "Forum onayları", permission: "forum.moderate", group: "Topluluk" },
+  { href: "/yonetim/haberler", label: "Coin haberleri", permission: "forum.moderate", group: "Topluluk" },
   { href: "/yonetim/surumler", label: "Sürümler (indirme)", permission: "release.manage", group: "Sistem" },
   { href: "/yonetim/hatalar", label: "Hata raporları", permission: "crash.manage", group: "Sistem" },
   { href: "/yonetim/yoneticiler", label: "Yöneticiler", permission: "admin.manage", group: "Sistem" },
@@ -33,7 +35,7 @@ export const ADMIN_NAV: NavEntry[] = [
   { href: "/yonetim/ayarlar", label: "Ayarlar", permission: null, group: "Sistem" },
 ];
 
-export const NAV_GROUPS = ["Genel", "Satış", "Müşteriler", "Sistem"] as const;
+export const NAV_GROUPS = ["Genel", "Satış", "Müşteriler", "Topluluk", "Sistem"] as const;
 
 export function can(me: AdminMe | null, permission: string | null): boolean {
   return permission === null || Boolean(me?.permissions.includes(permission));

@@ -878,6 +878,56 @@
     }
   }
 
+  /* Forum konu kapağı: renk geçişinin üstünde ince ızgara ve süzülen yumuşak ışık. */
+  .forum-cover {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .forum-cover::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+    background-size: 28px 28px;
+    -webkit-mask-image: radial-gradient(ellipse at 80% 15%, #000 10%, transparent 72%);
+    mask-image: radial-gradient(ellipse at 80% 15%, #000 10%, transparent 72%);
+  }
+  .forum-cover::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    right: -90px;
+    top: -150px;
+    width: 360px;
+    height: 360px;
+    border-radius: 9999px;
+    pointer-events: none;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.3), transparent 65%);
+    animation: float 9s ease-in-out infinite;
+  }
+
+  /* Fiyat değişince bir kez yanıp sönen hücre (canlı piyasa bandı). */
+  .flash-up {
+    animation: tick-up 1.4s ease-out 1;
+  }
+  .flash-down {
+    animation: tick-down 1.4s ease-out 1;
+  }
+  /* Neon çerçeve: forum istatistik kartları. */
+  .neon-card {
+    position: relative;
+    border: 1px solid color-mix(in srgb, var(--accent-text) 30%, var(--border));
+    background:
+      radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--accent-text) 14%, transparent), transparent 60%),
+      var(--surface);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 18px 50px -24px color-mix(in srgb, var(--accent-text) 55%, transparent);
+  }
+
   /* Geri sayım kutuları: saniye değişince hafif sıçrama. */
   .count-box {
     min-width: 3.1rem;
@@ -922,7 +972,10 @@
   .sale-pop,
   .tag-swing,
   .wiggle,
-  .count-flip {
+  .count-flip,
+  .forum-cover::after,
+  .flash-up,
+  .flash-down {
     animation: none;
   }
   .confetti {
