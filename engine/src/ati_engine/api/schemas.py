@@ -907,6 +907,10 @@ class AutoTradeRequest(BaseModel):
     enabled: bool
 
 
+class TwoFactorCode(BaseModel):
+    code: str = Field(min_length=6, max_length=12)
+
+
 class ReleaseDayRequest(BaseModel):
     """Hatalı okumayla oluşmuş günlük kilidi kaldırma onayı."""
 

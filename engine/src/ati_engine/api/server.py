@@ -107,6 +107,7 @@ from ati_engine.api.schemas import (
     TrendBreakInfo,
     TrendLineInfo,
     TrendResponse,
+    TwoFactorCode,
     UiError,
     WhaleAlertInfo,
     WhaleStatsInfo,
@@ -151,6 +152,7 @@ from ati_engine.safety.trading_mode import PREFERRED_MODE_KEY
 from ati_engine.scanner.scanner import MarketScanner, row_dict
 from ati_engine.scoring.live import OpportunityEngine, top_reasons
 from ati_engine.scoring.score import Opportunity
+from ati_engine.security.two_factor import ACTIONS, TwoFactor, VerificationError
 from ati_engine.storage.settings_store import SettingsStore
 from ati_engine.strategies.library import ALL_STRATEGIES
 from ati_engine.whales.radar import WhaleRadar
@@ -160,6 +162,8 @@ WS_AUTH_TIMEOUT_S = 5.0
 WS_CLOSE_UNAUTHORIZED = 4401
 WS_CLOSE_FORBIDDEN_ORIGIN = 4403
 LOCAL_ACTOR = "local_api"
+# Uygulama doğrulaması açıkken kritik işlemlerde 6 haneli kod (ya da kurtarma kodu) bu başlıkta.
+VERIFICATION_HEADER = "X-ATI-Verification"
 
 _ws_ids = itertools.count(1)
 
@@ -240,8 +244,55 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         CORSMiddleware,
         allow_origins=runtime.settings.api.allowed_origins,
         allow_methods=["GET", "POST"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", VERIFICATION_HEADER],
     )
+
+    # Uygulama doğrulaması (isteğe bağlı 2FA): açıkken kritik işlemler kod ister.
+    two_factor = TwoFactor(runtime.vault, SettingsStore(runtime.db))
+
+    async def verify(request: Request, action: str) -> None:
+        try:
+            await two_factor.verify(request.headers.get(VERIFICATION_HEADER), action=action)
+        except VerificationError as exc:
+            if exc.reason == "locked":
+                raise HTTPException(status_code=429, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=428,
+                detail={
+                    "code": "verification_required",
+                    "reason": exc.reason,
+                    "action": action,
+                    "label": ACTIONS.get(action, action),
+                    "message": str(exc),
+                },
+            ) from exc
+
+    @app.get("/v1/security/2fa")
+    async def two_factor_status(_: Auth) -> dict[str, Any]:
+        return await two_factor.status()
+
+    @app.post("/v1/security/2fa/setup")
+    async def two_factor_setup(_: Auth) -> dict[str, str]:
+        try:
+            return await two_factor.begin_setup()
+        except VerificationError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.post("/v1/security/2fa/enable")
+    async def two_factor_enable(body: TwoFactorCode, _: Auth) -> dict[str, Any]:
+        try:
+            codes = await two_factor.enable(body.code)
+        except VerificationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        await runtime.audit.record(actor=LOCAL_ACTOR, action="security.2fa_enabled", details={})
+        return {"enabled": True, "recovery_codes": codes}
+
+    @app.post("/v1/security/2fa/disable")
+    async def two_factor_disable(request: Request, _: Auth) -> dict[str, Any]:
+        await verify(request, "two_factor_disable")
+        await two_factor.disable(request.headers.get(VERIFICATION_HEADER), verified=True)
+        await runtime.audit.record(actor=LOCAL_ACTOR, action="security.2fa_disabled", details={})
+        return {"enabled": False}
 
     def kill_switch_info() -> KillSwitchInfo:
         ks = runtime.safety.kill_switch.status
@@ -293,7 +344,10 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         response_model=KillSwitchResponse,
         responses={400: {"model": ErrorResponse}},
     )
-    async def release_kill_switch(body: KillSwitchReleaseRequest, _: Auth) -> KillSwitchResponse:
+    async def release_kill_switch(
+        body: KillSwitchReleaseRequest, request: Request, _: Auth
+    ) -> KillSwitchResponse:
+        await verify(request, "kill_switch_release")
         try:
             changed = await runtime.safety.release_kill_switch(
                 actor=LOCAL_ACTOR, confirmation=body.confirmation
@@ -313,7 +367,9 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         response_model=TradingModeResponse,
         responses={409: {"model": TradingModeResponse}},
     )
-    async def set_trading_mode(body: TradingModeRequest, _: Auth) -> JSONResponse:
+    async def set_trading_mode(body: TradingModeRequest, request: Request, _: Auth) -> JSONResponse:
+        if body.mode is TradingMode.LIVE:
+            await verify(request, "live_mode")
         result = await runtime.trading_mode.request_mode(
             body.mode, actor=LOCAL_ACTOR, acknowledgement=body.acknowledgement
         )
@@ -1188,12 +1244,18 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         return {"removed": removed}
 
     @app.post("/v1/execution/live-key", response_model=TestnetKeyResponse)
-    async def execution_live_key(body: TestnetKeyRequest, _: Auth) -> TestnetKeyResponse:
+    async def execution_live_key(
+        body: TestnetKeyRequest, request: Request, _: Auth
+    ) -> TestnetKeyResponse:
         """Gerçek hesap anahtarı: para çekme/transfer yetkisi açıksa reddedilir, saklanmaz."""
+        await verify(request, "live_key")
         return await store_key(service_for("live"), body)
 
     @app.post("/v1/execution/live-key/delete")
-    async def execution_delete_live_key(market: Market, _: Auth) -> dict[str, Any]:
+    async def execution_delete_live_key(
+        market: Market, request: Request, _: Auth
+    ) -> dict[str, Any]:
+        await verify(request, "live_key")
         if (
             runtime.trading_mode.mode is TradingMode.LIVE
             and runtime.execution_live is not None
@@ -1324,9 +1386,12 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         }
 
     @app.post("/v1/risk/release-day")
-    async def risk_release_day(body: ReleaseDayRequest, _: Auth) -> dict[str, Any]:
+    async def risk_release_day(
+        body: ReleaseDayRequest, request: Request, _: Auth
+    ) -> dict[str, Any]:
         """Günlük kilidi kaldırır. Yalnızca güncel günlük zarar sınırın altındayken (ör. aktarım
         ya da anlık hatalı okumayla oluşmuş kilit) ve onay ifadesiyle; denetim kaydına yazılır."""
+        await verify(request, "risk_release_day")
         if body.confirmation.strip().upper() != RELEASE_DAY_PHRASE:
             raise HTTPException(status_code=422, detail=f"Onay için '{RELEASE_DAY_PHRASE}' yazın")
         service = execution_or_404()
@@ -1523,8 +1588,10 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         return await autotrade_view(autotrader_or_404())
 
     @app.post("/v1/autotrade")
-    async def autotrade_toggle(body: AutoTradeRequest, _: Auth) -> dict[str, Any]:
+    async def autotrade_toggle(body: AutoTradeRequest, request: Request, _: Auth) -> dict[str, Any]:
         trader = autotrader_or_404()
+        if body.enabled and runtime.trading_mode.mode is TradingMode.LIVE:
+            await verify(request, "live_bot")
         was = trader.enabled
         trader.enabled = body.enabled
         await SettingsStore(runtime.db).set(AUTOTRADE_ENABLED_KEY, body.enabled)
@@ -1695,8 +1762,9 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         return await service.status()
 
     @app.post("/v1/remote/pairing")
-    async def remote_pairing(_: Auth) -> dict[str, Any]:
+    async def remote_pairing(request: Request, _: Auth) -> dict[str, Any]:
         service = remote_or_404()
+        await verify(request, "phone_pairing")
         if not service.enabled or not service.relay_url:
             raise HTTPException(status_code=409, detail="Önce telefondan kontrolü açın")
         if not service.connected:
@@ -1768,8 +1836,9 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
         return await license_or_404().refresh()
 
     @app.post("/v1/license/deactivate", response_model=LicenseStatusResponse)
-    async def license_deactivate(_: Auth) -> dict[str, Any]:
+    async def license_deactivate(request: Request, _: Auth) -> dict[str, Any]:
         manager = license_or_404()
+        await verify(request, "license_deactivate")
         try:
             status = await manager.deactivate()
         except LicenseRejected as exc:

@@ -219,3 +219,50 @@ async def test_key_verification_has_an_upper_time_limit(
     assert "yanıt vermedi" in body["message"] and "api.binance.com" in body["message"]
     status = (await client.get("/v1/execution/status?environment=testnet")).json()
     assert status["markets"]["usdm_futures"]["key_stored"] is False
+
+
+async def test_critical_actions_require_verification_code_when_enabled(
+    client: httpx.AsyncClient,
+) -> None:
+    """Uygulama doğrulaması açıkken gerçek para, lisans kaldırma ve doğrulamayı kapatma
+    6 haneli kod (ya da kurtarma kodu) ister; Sanal / Demo seçimi istemez."""
+    import base64
+    import time
+
+    from ati_engine.security.two_factor import totp
+
+    assert (await client.get("/v1/security/2fa")).json()["enabled"] is False
+    setup = (await client.post("/v1/security/2fa/setup")).json()
+    secret = base64.b32decode(setup["secret"] + "=" * (-len(setup["secret"]) % 8))
+    enabled = await client.post(
+        "/v1/security/2fa/enable", json={"code": totp(secret, int(time.time() // 30))}
+    )
+    assert enabled.status_code == 200, enabled.text
+    codes = enabled.json()["recovery_codes"]
+    status = (await client.get("/v1/security/2fa")).json()
+    assert status["enabled"] is True and status["recovery_left"] == 8
+    assert {"live_mode", "license_deactivate", "phone_pairing"} <= {
+        a["key"] for a in status["protected"]
+    }
+
+    ack = "GERCEK PARA ILE ISLEM YAPILMASINI ONAYLIYORUM"
+    live = await client.post("/v1/trading-mode", json={"mode": "live", "acknowledgement": ack})
+    assert live.status_code == 428
+    detail = live.json()["detail"]
+    assert detail["code"] == "verification_required" and detail["reason"] == "required"
+    assert detail["label"] == "Gerçek para moduna geçiş"
+    assert (await client.post("/v1/trading-mode", json={"mode": "testnet"})).status_code == 200
+    # Kurtarma koduyla doğrulama geçer; gerçek hesap anahtarı olmadığından mod denetimi reddeder.
+    live = await client.post(
+        "/v1/trading-mode",
+        json={"mode": "live", "acknowledgement": ack},
+        headers={"X-ATI-Verification": codes[0]},
+    )
+    assert live.status_code == 409
+    wrong = await client.post("/v1/security/2fa/disable", headers={"X-ATI-Verification": "999999"})
+    assert wrong.status_code == 428 and wrong.json()["detail"]["reason"] == "invalid"
+    off = await client.post("/v1/security/2fa/disable", headers={"X-ATI-Verification": codes[1]})
+    assert off.status_code == 200 and off.json() == {"enabled": False}
+    # Kapalıyken kod istenmez.
+    live = await client.post("/v1/trading-mode", json={"mode": "live", "acknowledgement": ack})
+    assert live.status_code == 409

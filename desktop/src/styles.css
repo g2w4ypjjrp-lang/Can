@@ -2469,3 +2469,28 @@ table thead th {
 .brand .wordmark .wm-bottom {
   font-weight: 700;
 }
+
+/* Onay kutusu satırı ve kurtarma kodları (Ayarlar → Doğrulama, doğrulama penceresi). */
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+.recovery-codes code {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-align: center;
+}

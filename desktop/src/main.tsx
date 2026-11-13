@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { EngineClient } from "./api/client";
 import { ClientProvider, EventsProvider } from "./api/hooks";
+import { VerificationHost } from "./components/Verification";
 import { App } from "./App";
 import { resolveConnection } from "./lib/connection";
 import "./styles.css";
@@ -51,6 +52,7 @@ function Root() {
     <ClientProvider client={client}>
       <EventsProvider client={client}>
         <App />
+        <VerificationHost />
       </EventsProvider>
     </ClientProvider>
   );

@@ -6,6 +6,7 @@ import { Badge, Card, DataTable, ErrorBox, Field } from "../components/ui";
 import { MARKET_LABELS, time } from "../lib/format";
 import { CrashReportsSection } from "./CrashReports";
 import { LicenseSection } from "./License";
+import { TwoFactorSection } from "./Security";
 import { TelegramSection } from "./Telegram";
 
 interface ExecutionStatus {
@@ -21,6 +22,7 @@ export function Settings() {
   return (
     <div className="page" data-testid="page-settings">
       <LicenseSection />
+      <TwoFactorSection />
 
       <Card title="İşlem modu" testId="trading-mode-card">
         <ModeSwitch onChanged={() => void execution.refresh()} />

@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import { expect, type Page, test } from "@playwright/test";
 import { ENGINE_PORT, ENGINE_TOKEN } from "../playwright.config";
 
@@ -402,4 +404,57 @@ test("gerçek para: anahtar (para çekme kapalı) bağlanınca onayla açılır,
   await open(page, "settings");
   await page.getByTestId("live-key-usdm_futures").getByRole("button", { name: "Anahtarı sil" }).click();
   await expect(page.getByTestId("live-key-usdm_futures-state")).toHaveText("Anahtar yok");
+});
+
+function totpNow(secret: string, offset = 0): string {
+  // RFC 6238 (SHA1, 6 hane), testte doğrulama uygulamasının yerine.
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const ch of secret.toUpperCase()) bits += alphabet.indexOf(ch).toString(2).padStart(5, "0");
+  const bytes: number[] = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000) + offset));
+  const digest = createHmac("sha1", Buffer.from(bytes)).update(counter).digest();
+  const off = digest[digest.length - 1]! & 0x0f;
+  return String((digest.readUInt32BE(off) & 0x7fffffff) % 1_000_000).padStart(6, "0");
+}
+
+test("doğrulama: açılır, kritik işlem kod ve onay ister, kurtarma koduyla kapatılır", async ({ page }) => {
+  await open(page, "settings");
+  const card = page.getByTestId("two-factor");
+  await expect(card).toContainText("Kapalı");
+  await card.getByTestId("two-factor-begin").click();
+  await expect(card.getByAltText("Doğrulama uygulaması için QR kod")).toBeVisible();
+  const secret = (await card.getByTestId("two-factor-secret").textContent())!.trim();
+  await card.getByTestId("two-factor-code").fill(totpNow(secret));
+  await card.getByRole("button", { name: "Etkinleştir" }).click();
+  const codes = await card.getByTestId("two-factor-recovery").locator("code").allTextContents();
+  expect(codes).toHaveLength(8);
+  await expect(card.getByRole("button", { name: "Tamam" })).toBeDisabled(); // önce "kaydettim"
+  await card.getByLabel("Kodları güvenli bir yere kaydettim").check();
+  await card.getByRole("button", { name: "Tamam" }).click();
+  await expect(card).toContainText("Açık");
+  await expect(card.getByTestId("two-factor-actions")).toContainText("Gerçek para moduna geçiş");
+
+  // Kritik işlem: kod penceresi açılır; vazgeçilirse işlem yapılmaz.
+  await card.getByTestId("two-factor-disable").click();
+  const dialog = page.getByTestId("verify-dialog");
+  await expect(dialog).toContainText("Doğrulamayı kapatma");
+  await dialog.getByRole("button", { name: "Vazgeç" }).click();
+  await expect(card).toContainText("İşlem doğrulanmadığı için yapılmadı");
+  await expect(card).toContainText("Açık");
+
+  // Hatalı kod: pencere hata ile yeniden sorar; kurtarma koduyla geçer.
+  await card.getByTestId("two-factor-disable").click();
+  await dialog.getByTestId("verify-code").fill("000000");
+  await expect(dialog.getByTestId("verify-submit")).toBeDisabled(); // onay kutusu işaretlenmeden
+  await dialog.getByTestId("verify-sure").check();
+  await dialog.getByTestId("verify-submit").click();
+  await expect(dialog.getByTestId("verify-error")).toContainText("hatalı");
+  await dialog.getByTestId("verify-code").fill(codes[0]!);
+  await dialog.getByTestId("verify-sure").check();
+  await dialog.getByTestId("verify-submit").click();
+  await expect(dialog).toHaveCount(0);
+  await expect(card).toContainText("Kapalı");
 });

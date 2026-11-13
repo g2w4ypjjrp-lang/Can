@@ -1,4 +1,19 @@
-# En son sürümü yükleme (0.14.7)
+# En son sürümü yükleme (0.14.8)
+
+0.14.8'de düzeltildi: **bot hiç işlem açmıyordu.** Uygulama her açılışta güvenlik için Sanal modda
+başlıyor, bot ise Sanal modda işlem açmıyordu. Artık Sanal modda bot **sanal hesapta** çalışır:
+borsaya hiç emir gitmeden, canlı Binance fiyatlarıyla, 10.000 USDT sanal bakiyeyle (Futures ve Spot'a
+eşit bölünür) işlem açar; zarar durdur, hedef ve iz süren stop canlı fiyatla tetiklenir. Anahtar
+gerekmez; uygulama yeniden açılınca sanal hesap baştan başlar. Demo para seçtiyseniz uygulama artık
+açılışta Demo'da başlar (Gerçek para asla kendiliğinden açılmaz, her seferinde onay ister).
+
+0.14.8'de yeni: **uygulama doğrulaması** (Ayarlar → Doğrulama, isteğe bağlı). Google / Microsoft
+Authenticator ile QR okutulur; açıkken şu işlemler yönetim panelindeki lisans silmede olduğu gibi
+6 haneli kod ve onay ister: Gerçek para moduna geçiş, gerçek parayla botu başlatma, gerçek hesap
+anahtarı ekleme/silme, acil durdurmayı kaldırma, günlük zarar kilidini kaldırma, lisansı bu
+bilgisayardan kaldırma, telefon eşleme ve doğrulamayı kapatma. Telefon yanınızda değilse 8 kurtarma
+kodundan biri kullanılır (her biri bir kez).
+
 
 0.14.7'de yeni: **telefon kilitliyken bildirim (uygulama indirmeden)**. Telefon sayfasında
 "Bildirimleri aç" → işlem açılış/kapanışları, acil durdurma ve önemli uyarılar kilit ekranına gelir.

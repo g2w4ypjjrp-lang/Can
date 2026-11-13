@@ -46,14 +46,63 @@ export function buildQuery(params?: Query): string {
   return text ? `?${text}` : "";
 }
 
+/** Motorun "doğrulama kodu gerekli" yanıtı (HTTP 428): uygulama doğrulaması açıkken kritik işlemler. */
+export interface VerificationRequest {
+  code: "verification_required";
+  reason: "required" | "invalid";
+  action: string;
+  label: string;
+  message: string;
+}
+
+/** Kod sorar; vazgeçilirse null döner. */
+export type Verifier = (request: VerificationRequest) => Promise<string | null>;
+
+export const VERIFICATION_HEADER = "X-ATI-Verification";
+
+function isVerification(error: unknown): error is ApiError & { detail: VerificationRequest } {
+  return (
+    error instanceof ApiError &&
+    error.status === 428 &&
+    typeof error.detail === "object" &&
+    error.detail !== null &&
+    (error.detail as { code?: unknown }).code === "verification_required"
+  );
+}
+
 export class EngineClient {
+  /** Kritik işlemde kod sormak için (uygulama doğrulaması); arayüz kurar. */
+  verifier: Verifier | null = null;
+
   constructor(
     readonly connection: Connection,
     private readonly fetchImpl: typeof fetch = (...args) => fetch(...args),
   ) {}
 
   async request<T>(method: "GET" | "POST", path: string, body?: unknown, params?: Query): Promise<T> {
+    let code: string | undefined;
+    // Kod istenirse sorulur ve aynı istek kodla yinelenir (hatalı kodda yeniden sorulur, en çok 3 kez).
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.send<T>(method, path, body, params, code);
+      } catch (error) {
+        if (!isVerification(error) || !this.verifier || attempt >= 3) throw error;
+        const entered = await this.verifier(error.detail);
+        if (!entered) throw new ApiError(428, "İşlem doğrulanmadığı için yapılmadı", error.detail);
+        code = entered;
+      }
+    }
+  }
+
+  private async send<T>(
+    method: "GET" | "POST",
+    path: string,
+    body: unknown,
+    params: Query | undefined,
+    code: string | undefined,
+  ): Promise<T> {
     const headers: Record<string, string> = { Authorization: `Bearer ${this.connection.token}` };
+    if (code) headers[VERIFICATION_HEADER] = code;
     let payload: string | undefined;
     if (body !== undefined) {
       headers["Content-Type"] = "application/json";
