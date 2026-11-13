@@ -65,13 +65,13 @@ test("istemci tarafı gezinme ve mobil menü çalışır", async ({ page }) => {
   const problems = collectProblems(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await page.getByText("Menü", { exact: true }).click();
+  await page.getByLabel("Menü", { exact: true }).click();
   await page.getByRole("navigation", { name: "Mobil menü" }).getByRole("link", { name: "SSS" }).click();
   await expect(page).toHaveURL(/\/sss$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sık sorulan sorular");
   // Sayfa değişince menü kapanır; içerik örtülmez. Escape ile de kapanır.
   await expect(page.getByRole("navigation", { name: "Mobil menü" })).toBeHidden();
-  await page.getByText("Menü", { exact: true }).click();
+  await page.getByLabel("Menü", { exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Mobil menü" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Mobil menü" }).getByRole("link", { name: "SSS" })).toHaveAttribute("aria-current", "page");
   await page.keyboard.press("Escape");

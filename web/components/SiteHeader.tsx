@@ -42,7 +42,7 @@ export function SiteHeader() {
             Hesap oluştur
           </LinkButton>
         </div>
-        <MobileMenu items={[...NAV, { href: "/giris", label: "Giriş yap" }, { href: "/kayit", label: "Hesap oluştur" }]} />
+        <MobileMenu items={NAV} />
       </Container>
     </header>
   );

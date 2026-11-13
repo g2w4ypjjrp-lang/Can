@@ -1,6 +1,9 @@
 import {
+  Activity,
   ArrowRight,
   Ban,
+  BellRing,
+  Bot,
   BrainCircuit,
   ChartCandlestick,
   Check,
@@ -8,40 +11,56 @@ import {
   Download,
   FlaskConical,
   Gauge,
+  History,
   KeyRound,
+  Languages,
+  Layers,
   LockKeyhole,
   Monitor,
   OctagonX,
   Radar,
+  ScanFace,
+  Send,
   ShieldCheck,
   Smartphone,
-  Sparkles,
+  Waves,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 
 import { Architecture } from "@/components/home/Architecture";
 import { DesktopViz, EquityViz, HeroVisual, PhoneViz, RadarViz, RiskViz, ScannerViz, ScoreRing } from "@/components/home/Visuals";
+import { LiveShowcase } from "@/components/home/LiveShowcase";
 import { PriceTag } from "@/components/PriceTag";
 import { RiskNotice } from "@/components/RiskNotice";
 import { Backdrop, Badge, Container, IconTile, LinkButton, SectionTitle } from "@/components/ui";
 import { FAQ } from "@/lib/faq";
 import { fetchPlans } from "@/lib/plans";
 
-const HIGHLIGHTS = [
-  "Binance Spot",
-  "USDⓈ-M vadeli",
-  "14 hazır strateji",
-  "Balina radarı",
-  "Gerekçeli fırsat puanı",
-  "Backtest",
-  "Sanal işlem",
-  "Demo Trading",
-  "Risk kapısı",
-  "Acil durdurma",
-  "iPhone ile kontrol",
-  "Face ID onayı",
-  "Uçtan uca şifreleme",
-  "Türkçe arayüz",
+// Akan şerit: iki satır, ters yönlere kayar. Her özelliğin kendi simgesi vardır.
+const HIGHLIGHTS: { label: string; icon: LucideIcon }[][] = [
+  [
+    { label: "Anlık Binance fiyatları", icon: Zap },
+    { label: "Binance Spot", icon: ChartCandlestick },
+    { label: "Futures (USDT-M)", icon: Layers },
+    { label: "14 hazır strateji", icon: BrainCircuit },
+    { label: "Balina radarı", icon: Waves },
+    { label: "Gerekçeli fırsat puanı", icon: Gauge },
+    { label: "Otomatik bot", icon: Bot },
+    { label: "Backtest", icon: History },
+    { label: "Sanal işlem", icon: FlaskConical },
+  ],
+  [
+    { label: "Kilit ekranına bildirim", icon: BellRing },
+    { label: "Demo para / Gerçek para", icon: Activity },
+    { label: "Risk kapısı", icon: ShieldCheck },
+    { label: "Acil durdurma", icon: OctagonX },
+    { label: "Telefondan izleme", icon: Smartphone },
+    { label: "Face ID onayı", icon: ScanFace },
+    { label: "Telegram bildirimi", icon: Send },
+    { label: "Uçtan uca şifreleme", icon: LockKeyhole },
+    { label: "Türkçe arayüz", icon: Languages },
+  ],
 ];
 
 const NUMBERS = [
@@ -150,22 +169,33 @@ export default async function HomePage() {
       </section>
 
       {/* --- Akan şerit -------------------------------------------------------------------------- */}
-      <section aria-label="Öne çıkanlar" className="border-b border-border bg-surface/60 py-5">
-        <div className="marquee-mask overflow-hidden">
-          <div className="marquee">
-            {[0, 1].map((copy) => (
-              <ul key={copy} aria-hidden={copy === 1 ? true : undefined} className="flex shrink-0 gap-3 pr-3">
-                {HIGHLIGHTS.map((item) => (
-                  <li key={item} className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-border bg-bg/70 px-4 py-2 text-sm font-medium text-fg">
-                    <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-accent-text" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            ))}
-          </div>
+      <section aria-label="Öne çıkanlar" className="relative overflow-hidden border-b border-border bg-surface/60 py-7">
+        <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.2em] text-muted">Tek uygulamada</p>
+        <div className="marquee-mask space-y-3 overflow-hidden">
+          {HIGHLIGHTS.map((row, index) => (
+            <div key={index} className={`marquee ${index === 1 ? "marquee-reverse" : ""}`}>
+              {[0, 1].map((copy) => (
+                <ul key={copy} aria-hidden={copy === 1 ? true : undefined} className="flex shrink-0 gap-3 pr-3">
+                  {row.map(({ label, icon: Icon }) => (
+                    <li
+                      key={label}
+                      className="inline-flex items-center gap-2.5 whitespace-nowrap rounded-2xl border border-border bg-surface py-1.5 pl-1.5 pr-4 text-sm font-semibold text-fg shadow-sm"
+                    >
+                      <span className="grid h-8 w-8 place-items-center rounded-xl bg-brand text-white shadow-glow" aria-hidden="true">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+              ))}
+            </div>
+          ))}
         </div>
       </section>
+
+      {/* --- Yenilikler: anlık fiyat ve kilit ekranı bildirimleri ------------------------------- */}
+      <LiveShowcase />
 
       {/* --- Rakamlar --------------------------------------------------------------------------- */}
       <section aria-label="Rakamlarla" className="border-b border-border">
