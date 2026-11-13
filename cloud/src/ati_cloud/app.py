@@ -65,7 +65,9 @@ def create_app(settings: CloudSettings | None = None) -> FastAPI:
         # Coin haberleri arka planda çekilir (test ortamında kapalı).
         news_task = None
         if cfg.news_interval_s > 0 and cfg.environment != "test":
-            news_task = asyncio.create_task(run_loop(db, cfg.news_interval_s))
+            news_task = asyncio.create_task(
+                run_loop(db, cfg.news_interval_s, box=lambda: app.state.admin.box)
+            )
         yield
         if news_task is not None:
             news_task.cancel()

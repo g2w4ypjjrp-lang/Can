@@ -31,6 +31,7 @@ Yönetici (``forum.moderate``):
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import html
 import json
@@ -51,6 +52,7 @@ from pydantic import BaseModel, Field
 
 from ati_cloud.accounts import Database
 from ati_cloud.admin.context import Admin, AdminContext
+from ati_cloud.admin.security import SecretBox
 from ati_cloud.forum import (
     TEAM_NAME,
     CoinSymbol,
@@ -59,6 +61,15 @@ from ati_cloud.forum import (
     TopicBody,
     create_team_topic,
 )
+from ati_cloud.translate import (
+    SECRET_AAD,
+    Translator,
+    public_view,
+    translator_from,
+)
+from ati_cloud.translate import SETTINGS_KEY as TRANSLATION_KEY
+from ati_cloud.translate import describe as describe_translation
+from ati_cloud.translate import load_settings as load_translation
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +101,7 @@ class Source:
     kind: Literal["binance_cms", "binance_pairs", "rss"]
     url: str
     hosts: tuple[str, ...]
+    lang: str = "tr"  # haberlerin dili (Türkçe değilse çevrilir)
 
 
 SOURCES: dict[str, Source] = {
@@ -102,6 +114,7 @@ SOURCES: dict[str, Source] = {
             "https://www.binance.com/bapi/composite/v1/public/cms/article/list/query"
             "?type=1&catalogId=48&pageNo=1&pageSize=30",
             ("www.binance.com",),
+            "en",
         ),
         Source(
             "binance_pairs",
@@ -116,6 +129,7 @@ SOURCES: dict[str, Source] = {
             "rss",
             "https://cointelegraph.com/rss",
             ("cointelegraph.com",),
+            "en",
         ),
         Source(
             "btchaber",
@@ -152,6 +166,13 @@ class Item:
     published_at: datetime
     summary: str = ""
     symbols: list[str] = field(default_factory=list)
+    title_tr: str | None = None
+    summary_tr: str | None = None
+
+    @property
+    def lang(self) -> str:
+        source = SOURCES.get(self.source)
+        return source.lang if source else "tr"
 
 
 # --- Ayrıştırma ----------------------------------------------------------------------------------
@@ -377,9 +398,10 @@ def _shorten(text: str, limit: int) -> str:
 
 
 def draft_title(item: Item) -> str:
-    """Taslak başlığı: Binance listeleme başlıkları Türkçeleştirilir, diğerleri olduğu gibi."""
+    """Taslak başlığı: Türkçe çeviri varsa o; yoksa Binance listeleme başlıkları kalıpla
+    Türkçeleştirilir, diğerleri olduğu gibi."""
     match = _BINANCE_LIST.match(item.title)
-    title = f"Binance {match.group(1)} listeliyor" if match else item.title
+    title = item.title_tr or (f"Binance {match.group(1)} listeliyor" if match else item.title)
     if item.symbols and not any(sym in title for sym in item.symbols):
         title = f"{item.symbols[0]}: {title}"
     title = _shorten(title, 120)
@@ -387,9 +409,13 @@ def draft_title(item: Item) -> str:
 
 
 def draft_body(item: Item, source_name: str) -> str:
-    parts = [f"Yeni coin haberi: “{item.title}”"]
-    if item.summary and item.summary != item.title:
-        parts.append(item.summary)
+    title = item.title_tr or item.title
+    summary = item.summary_tr or item.summary
+    parts = [f"Yeni coin haberi: “{title}”"]
+    if summary and summary not in (item.title, title):
+        parts.append(summary)
+    if item.title_tr and item.title_tr != item.title:
+        parts.append(f"Orijinal başlık: “{item.title}” (Türkçe çeviri otomatiktir)")
     parts.append(
         f"Kaynak: {source_name}. Ayrıntılar ve kesin tarihler için kaynak bağlantısına bakın."
     )
@@ -454,7 +480,36 @@ async def create_drafts(conn: Any, fresh: list[tuple[Any, Item]]) -> int:
     return drafted
 
 
-async def fetch_all(db: Database, fetch: Fetcher) -> dict[str, Any]:
+TRANSLATE_PER_RUN = 40
+
+
+async def translate_items(
+    conn: Any, translator: Translator, pending: list[tuple[Any, Item]]
+) -> tuple[int, str | None]:
+    """Türkçe olmayan haberlerin başlık ve özetini çevirir ve kaydeder. Hata olursa durur
+    (kota dolmuş olabilir); kalanlar sonraki turda ya da panelden çevrilir."""
+    done = 0
+    for news_id, item in pending[:TRANSLATE_PER_RUN]:
+        if item.lang == "tr" or item.title_tr:
+            continue
+        texts = [item.title] + ([item.summary] if item.summary else [])
+        try:
+            out = await translator.translate(texts, item.lang)
+        except Exception as exc:
+            return done, describe_translation(exc)
+        item.title_tr = out[0][:400] if out and out[0] else None
+        item.summary_tr = out[1][:800] if len(out) > 1 and out[1] else None
+        await conn.execute(
+            "UPDATE coin_news SET title_tr = %s, summary_tr = %s WHERE id = %s",
+            (item.title_tr, item.summary_tr, news_id),
+        )
+        done += 1
+    return done, None
+
+
+async def fetch_all(
+    db: Database, fetch: Fetcher, translator: Translator | None = None
+) -> dict[str, Any]:
     """Açık kaynakların hepsinden çeker, yenileri kaydeder; kaynak başına durum döner."""
     async with db.connection() as conn:
         keys = await enabled_sources(conn)
@@ -486,7 +541,7 @@ async def fetch_all(db: Database, fetch: Fetcher) -> dict[str, Any]:
         for item in collected:
             cur = await conn.execute(
                 "INSERT INTO coin_news (source, external_id, kind, title, summary, url, symbols, "
-                "published_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                "published_at, lang) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (source, external_id) DO NOTHING RETURNING id",
                 (
                     item.source,
@@ -497,11 +552,17 @@ async def fetch_all(db: Database, fetch: Fetcher) -> dict[str, Any]:
                     item.url,
                     item.symbols,
                     item.published_at,
+                    item.lang,
                 ),
             )
             row = await cur.fetchone()
             if row is not None:
                 fresh.append((row["id"], item))
+        translated, translation_error = 0, None
+        if translator is not None:
+            # Yeni coin haberleri önce çevrilir (taslak başlıkları Türkçe olsun).
+            ordered = sorted(fresh, key=lambda pair: pair[1].kind != "listing")
+            translated, translation_error = await translate_items(conn, translator, ordered)
         drafted = await create_drafts(conn, fresh) if await auto_draft_enabled(conn) else 0
         # Eski ve paylaşılmamış haberler temizlenir (tablo sınırlı kalır).
         await conn.execute(
@@ -514,6 +575,8 @@ async def fetch_all(db: Database, fetch: Fetcher) -> dict[str, Any]:
             "at": datetime.now(UTC).isoformat(),
             "added": len(fresh),
             "drafted": drafted,
+            "translated": translated,
+            "translation_error": translation_error,
             "sources": status,
         }
         await _store(conn, "news_status", summary)
@@ -535,7 +598,9 @@ def _describe(exc: Exception) -> str:
     return type(exc).__name__
 
 
-async def run_loop(db: Database, interval_s: int) -> None:
+async def run_loop(
+    db: Database, interval_s: int, box: Callable[[], SecretBox | None] = lambda: None
+) -> None:
     """API süreciyle birlikte çalışır: açılıştan kısa süre sonra ve sonra her ``interval_s``."""
     await asyncio.sleep(20)
     async with httpx.AsyncClient(timeout=12, follow_redirects=False) as client:
@@ -543,7 +608,10 @@ async def run_loop(db: Database, interval_s: int) -> None:
         while True:
             try:
                 if await claim(db, interval_s):
-                    await fetch_all(db, fetch)
+                    async with db.connection() as conn:
+                        settings = await load_translation(conn)
+                    async with translator_from(settings, box()) as translator:
+                        await fetch_all(db, fetch, translator)
             except Exception:  # veritabanı geçici olarak yoksa bir sonraki turda denenir
                 logger.warning("Haber çekme turu başarısız", exc_info=True)
             await asyncio.sleep(interval_s)
@@ -568,6 +636,17 @@ class AutoDraft(BaseModel):
     enabled: bool
 
 
+class TranslationUpdate(BaseModel):
+    enabled: bool
+    provider: Literal["mymemory", "deepl"] = "mymemory"
+    # MyMemory günlük kotası e-posta yazılınca artar (isteğe bağlı).
+    email: str | None = Field(
+        default=None, max_length=200, pattern=r"^$|^[^@\s]+@[^@\s]+\.[^@\s]+$"
+    )
+    # DeepL API anahtarı: boş bırakılırsa kayıtlı olan korunur; "sil" yazılırsa silinir.
+    deepl_key: str | None = Field(default=None, max_length=200)
+
+
 class SourcesUpdate(BaseModel):
     enabled: list[str] = Field(max_length=len(SOURCES))
 
@@ -580,6 +659,18 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
     moderate = ctx.depends("forum.moderate")
     refresh_lock = asyncio.Lock()
 
+    @contextlib.asynccontextmanager
+    async def translator_for(request: Request) -> AsyncIterator[Translator | None]:
+        # Testler sahte çevirmen verir (app.state.news_translator); üretimde ayarlardaki servis.
+        override = getattr(request.app.state, "news_translator", None)
+        if override is not None or ctx.settings.environment == "test":
+            yield override  # test ortamında dış çeviri servisine bağlanılmaz
+            return
+        async with ctx.db.connection() as conn:
+            settings = await load_translation(conn)
+        async with translator_from(settings, ctx.box) as translator:
+            yield translator
+
     @router.get("")
     async def list_news(
         admin: Admin = moderate,
@@ -589,12 +680,14 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
     ) -> dict[str, Any]:
         async with ctx.db.connection() as conn:
             cur = await conn.execute(
-                "SELECT n.id, n.source, n.kind, n.title, n.summary, n.url, n.symbols, "
-                "n.published_at, n.fetched_at, n.status, t.number AS topic_number "
+                "SELECT n.id, n.source, n.kind, n.title, n.summary, n.title_tr, n.summary_tr, "
+                "n.lang, n.url, n.symbols, n.published_at, n.fetched_at, n.status, "
+                "t.number AS topic_number "
                 "FROM coin_news n LEFT JOIN forum_topics t ON t.id = n.topic_id "
                 "WHERE (%(kind)s::text IS NULL OR n.kind = %(kind)s) "
                 "AND (%(status)s::text IS NULL OR n.status = %(status)s) "
-                "AND (%(q)s::text IS NULL OR n.title ILIKE %(q)s OR %(sym)s = ANY(n.symbols)) "
+                "AND (%(q)s::text IS NULL OR n.title ILIKE %(q)s OR n.title_tr ILIKE %(q)s "
+                "OR %(sym)s = ANY(n.symbols)) "
                 "ORDER BY n.published_at DESC LIMIT 150",
                 {
                     "kind": kind,
@@ -614,6 +707,7 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
             )
             drafts = (await cur.fetchone() or {"n": 0})["n"]
             auto = await auto_draft_enabled(conn)
+            translation = public_view(await load_translation(conn))
             last = await _setting(conn, "news_status")
             enabled = await enabled_sources(conn)
         for item in items:
@@ -625,6 +719,12 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
             "new_counts": {"listing": fresh.get("listing", 0), "news": fresh.get("news", 0)},
             "pending_drafts": drafts,
             "auto_draft": auto,
+            "translation": {
+                **translation,
+                "last_error": (last or {}).get("translation_error")
+                if isinstance(last, dict)
+                else None,
+            },
             "last_run": (last or {}).get("at") if isinstance(last, dict) else None,
             "interval_s": ctx.settings.news_interval_s,
             "sources": [
@@ -646,8 +746,8 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
         factory: FetcherFactory = (
             getattr(request.app.state, "news_fetcher", None) or default_fetcher
         )
-        async with refresh_lock, factory() as fetch:
-            summary = await fetch_all(ctx.db, fetch)
+        async with refresh_lock, factory() as fetch, translator_for(request) as translator:
+            summary = await fetch_all(ctx.db, fetch, translator)
         async with ctx.db.connection() as conn:
             await ctx.audit(
                 conn, request, actor_id=admin.id, action="admin.news_refreshed",
@@ -668,6 +768,62 @@ def create_admin_news_router(ctx: AdminContext) -> APIRouter:
                 details={"enabled": enabled},
             )  # fmt: skip
         return {"enabled": enabled}
+
+    @router.put("/translation")
+    async def translation(
+        body: TranslationUpdate, request: Request, admin: Admin = moderate
+    ) -> Any:
+        async with ctx.db.connection() as conn:
+            current = await load_translation(conn)
+            deepl = current.get("deepl")
+            key = (body.deepl_key or "").strip()
+            if key.lower() == "sil":
+                deepl = None
+            elif key:
+                box = ctx.secret_box()
+                deepl = {
+                    "enc": base64.b64encode(box.seal(key.encode(), SECRET_AAD)).decode(),
+                    "hint": f"…{key[-4:]}",
+                }
+            if body.provider == "deepl" and not deepl:
+                raise HTTPException(status_code=422, detail="DeepL için API anahtarı girin")
+            value = {
+                "enabled": body.enabled,
+                "provider": body.provider,
+                "email": (body.email or "").strip() or None,
+                "deepl": deepl,
+            }
+            await _store(conn, TRANSLATION_KEY, value)
+            await ctx.audit(
+                conn, request, actor_id=admin.id, action="admin.news_translation",
+                details={"enabled": body.enabled, "provider": body.provider,
+                         "deepl_key_changed": bool(key)},
+            )  # fmt: skip
+        return public_view({**value})
+
+    @router.post("/{news_id}/translate")
+    async def translate_one(news_id: str, request: Request, admin: Admin = moderate) -> Any:
+        if not re.fullmatch(r"[0-9a-fA-F-]{36}", news_id):
+            raise HTTPException(status_code=404, detail="Haber bulunamadı")
+        async with ctx.db.connection() as conn:
+            cur = await conn.execute(
+                "SELECT source, external_id, kind, title, summary, url, published_at "
+                "FROM coin_news WHERE id = %s",
+                (news_id,),
+            )
+            row = await cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Haber bulunamadı")
+        item = Item(**row)
+        if item.lang == "tr":
+            return {"title_tr": None, "summary_tr": None, "message": "Haber zaten Türkçe"}
+        async with translator_for(request) as translator, ctx.db.connection() as conn:
+            if translator is None:
+                raise HTTPException(status_code=409, detail="Çeviri kapalı (Çeviri ayarları)")
+            done, error = await translate_items(conn, translator, [(news_id, item)])
+        if error:
+            raise HTTPException(status_code=502, detail=error)
+        return {"title_tr": item.title_tr, "summary_tr": item.summary_tr, "translated": done}
 
     @router.put("/auto-draft")
     async def auto_draft(body: AutoDraft, request: Request, admin: Admin = moderate) -> Any:

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Clock3, ExternalLink, EyeOff, Newspaper, RefreshCw, Rocket, Share2, Undo2 } from "lucide-react";
+import { Bot, Clock3, ExternalLink, EyeOff, Languages, Newspaper, RefreshCw, Rocket, Share2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
@@ -18,6 +18,9 @@ interface NewsItem {
   kind: "listing" | "news";
   title: string;
   summary: string;
+  title_tr: string | null;
+  summary_tr: string | null;
+  lang: string;
   url: string;
   symbols: string[];
   published_at: string;
@@ -39,6 +42,13 @@ interface NewsData {
   new_counts: { listing: number; news: number };
   pending_drafts: number;
   auto_draft: boolean;
+  translation: {
+    enabled: boolean;
+    provider: "mymemory" | "deepl";
+    email: string | null;
+    deepl_key_hint: string | null;
+    last_error: string | null;
+  };
   last_run: string | null;
   interval_s: number;
   sources: SourceState[];
@@ -52,8 +62,11 @@ function shortTitle(text: string): string {
 }
 
 function defaultBody(item: NewsItem): string {
-  const parts = [`“${item.title}”`];
-  if (item.summary && item.summary !== item.title) parts.push(item.summary);
+  const title = item.title_tr || item.title;
+  const summary = item.summary_tr || item.summary;
+  const parts = [`“${title}”`];
+  if (summary && summary !== item.title && summary !== title) parts.push(summary);
+  if (item.title_tr && item.title_tr !== item.title) parts.push(`Orijinal başlık: “${item.title}” (Türkçe çeviri otomatiktir)`);
   parts.push(
     `Kaynak: ${item.source_name}. Ayrıntılar için kaynak bağlantısına bakın. Bu paylaşım bilgilendirme amaçlıdır; yatırım tavsiyesi değildir.`,
   );
@@ -100,7 +113,7 @@ function ShareForm({ item, onShared }: { item: NewsItem; onShared: (number: numb
       </div>
       <label className="block text-sm text-fg">
         Başlık
-        <input name="title" required minLength={5} maxLength={120} defaultValue={shortTitle(item.title)} className={`mt-1 ${inputClass}`} />
+        <input name="title" required minLength={5} maxLength={120} defaultValue={shortTitle(item.title_tr || item.title)} className={`mt-1 ${inputClass}`} />
       </label>
       <label className="block text-sm text-fg">
         Metin
@@ -119,6 +132,11 @@ function NewsCard({ item, onChanged }: { item: NewsItem; onChanged: (note?: stri
   const action = useAdminAction();
   const [sharing, setSharing] = useState(false);
   const listing = item.kind === "listing";
+
+  async function translate() {
+    const ok = await action.run(() => api.post(`/admin/v1/news/${item.id}/translate`));
+    if (ok) onChanged("Türkçeye çevrildi");
+  }
 
   async function setStatus(status: "new" | "dismissed") {
     const ok = await action.run(() => api.post(`/admin/v1/news/${item.id}/status`, { status }));
@@ -155,12 +173,27 @@ function NewsCard({ item, onChanged }: { item: NewsItem; onChanged: (note?: stri
               </span>
             ))}
           </p>
-          <h3 className="mt-2 font-semibold leading-snug text-fg">{item.title}</h3>
-          {item.summary && item.summary !== item.title ? <p className="mt-1 text-sm leading-relaxed text-muted">{item.summary}</p> : null}
+          <h3 className="mt-2 font-semibold leading-snug text-fg" data-testid="news-title">
+            {item.title_tr || item.title}
+          </h3>
+          {item.title_tr ? (
+            <p className="mt-0.5 text-xs text-muted">
+              <span className="mr-1 rounded border border-border px-1 font-mono uppercase">{item.lang} → tr</span>
+              Orijinal: {item.title}
+            </p>
+          ) : null}
+          {(item.summary_tr || item.summary) && (item.summary_tr || item.summary) !== item.title ? (
+            <p className="mt-1 text-sm leading-relaxed text-muted">{item.summary_tr || item.summary}</p>
+          ) : null}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <a href={item.url} target="_blank" rel="noopener noreferrer nofollow" className={smallButton}>
               <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" /> Kaynakta aç
             </a>
+            {item.lang !== "tr" && !item.title_tr ? (
+              <button type="button" className={smallButton} onClick={() => void translate()} disabled={action.pending}>
+                <Languages aria-hidden="true" className="h-3.5 w-3.5" /> Türkçeye çevir
+              </button>
+            ) : null}
             {item.status === "new" ? (
               <>
                 <Button type="button" size="sm" onClick={() => setSharing((v) => !v)} aria-expanded={sharing} aria-label={`${shortTitle(item.title)} paylaş`}>
@@ -236,6 +269,67 @@ function AutoDraft({ data, onSaved }: { data: NewsData; onSaved: () => void }) {
   );
 }
 
+/** Çeviri: yabancı kaynakların başlık ve özeti Türkçeye çevrilir (haberin tamamı kaynağındadır). */
+function Translation({ data, onSaved }: { data: NewsData; onSaved: () => void }) {
+  const api = useApi();
+  const action = useAdminAction();
+  const t = data.translation;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const ok = await action.run(
+      () =>
+        api.put("/admin/v1/news/translation", {
+          enabled: values.get("enabled") === "on",
+          provider: values.get("provider"),
+          email: String(values.get("email") ?? "").trim() || null,
+          deepl_key: String(values.get("deepl_key") ?? "").trim() || null,
+        }),
+      "Çeviri ayarları kaydedildi",
+    );
+    if (ok) {
+      (form.elements.namedItem("deepl_key") as HTMLInputElement | null)?.form?.reset();
+      onSaved();
+    }
+  }
+
+  return (
+    <AdminCard title="Türkçe çeviri" description="İngilizce kaynakların başlık ve özeti çekilirken Türkçeye çevrilir. Haberin tamamı kopyalanmaz (telif hakkı); tamamı kaynak bağlantısındadır.">
+      <form key={`${t.enabled}-${t.provider}-${t.email}-${t.deepl_key_hint}`} onSubmit={(e) => void submit(e)} className="space-y-3 text-sm" data-testid="news-translation">
+        <label className="flex items-center gap-2 font-medium text-fg">
+          <input type="checkbox" name="enabled" defaultChecked={t.enabled} className="h-4 w-4" /> Haberleri Türkçeye çevir
+        </label>
+        <label className="block text-fg">
+          Çeviri servisi
+          <select name="provider" defaultValue={t.provider} className={`mt-1 ${inputClass}`}>
+            <option value="mymemory">MyMemory (ücretsiz, anahtar gerekmez)</option>
+            <option value="deepl">DeepL (ücretsiz anahtarla, daha kaliteli)</option>
+          </select>
+        </label>
+        <label className="block text-fg">
+          E-posta (isteğe bağlı; MyMemory günlük kotasını ~50.000 karaktere çıkarır)
+          <input name="email" type="email" defaultValue={t.email ?? ""} className={`mt-1 ${inputClass}`} />
+        </label>
+        <label className="block text-fg">
+          DeepL API anahtarı {t.deepl_key_hint ? `(kayıtlı: ${t.deepl_key_hint}; değiştirmek için yazın, silmek için "sil")` : "(isteğe bağlı)"}
+          <input name="deepl_key" type="password" autoComplete="off" className={`mt-1 ${inputClass}`} />
+        </label>
+        {t.last_error ? (
+          <p className="text-danger-fg" role="status">
+            Son çeviri hatası: {t.last_error}
+          </p>
+        ) : null}
+        <Button type="submit" size="sm" variant="secondary" disabled={action.pending}>
+          Çeviri ayarlarını kaydet
+        </Button>
+        <Feedback error={action.error} message={action.message} />
+      </form>
+    </AdminCard>
+  );
+}
+
 function Sources({ data, onSaved }: { data: NewsData; onSaved: () => void }) {
   const api = useApi();
   const action = useAdminAction();
@@ -289,10 +383,14 @@ export function CoinNews() {
 
   async function onRefresh() {
     setNote(null);
-    const result = await refresh.run(() => api.post<{ added: number; drafted: number }>("/admin/v1/news/refresh"));
+    const result = await refresh.run(() =>
+      api.post<{ added: number; drafted: number; translated: number; translation_error: string | null }>("/admin/v1/news/refresh"),
+    );
     if (result) {
       const drafted = result.drafted ? `, ${result.drafted} otomatik taslak onaya düştü` : "";
-      setNote(result.added ? `${result.added} yeni haber eklendi${drafted}` : "Yeni haber yok");
+      const translated = result.translated ? `, ${result.translated} haber Türkçeye çevrildi` : "";
+      const failed = result.translation_error ? ` (çeviri: ${result.translation_error})` : "";
+      setNote(result.added ? `${result.added} yeni haber eklendi${translated}${drafted}${failed}` : "Yeni haber yok");
       view.reload();
     }
   }
@@ -380,6 +478,7 @@ export function CoinNews() {
         {data ? (
           <div className="space-y-6">
             <AutoDraft data={data} onSaved={view.reload} />
+            <Translation data={data} onSaved={view.reload} />
             <Sources data={data} onSaved={view.reload} />
           </div>
         ) : null}

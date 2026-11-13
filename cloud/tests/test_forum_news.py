@@ -534,3 +534,106 @@ async def test_new_coin_news_creates_draft_for_approval(
     assert third["added"] == 1 and third["drafted"] == 0
     assert "admin.news_auto_draft" in audit_actions(db)
     await public.aclose()
+
+
+class FakeTranslator:
+    name = "sahte"
+
+    def __init__(self, fail: str | None = None) -> None:
+        self.calls: list[tuple[list[str], str]] = []
+        self.fail = fail
+
+    async def translate(self, texts: Any, source: str) -> list[str]:
+        if self.fail:
+            from ati_cloud.translate import TranslationError
+
+            raise TranslationError(self.fail)
+        self.calls.append((list(texts), source))
+        return [f"[TR] {t}" for t in texts]
+
+
+async def test_foreign_news_is_translated_to_turkish(
+    app: Any, clock: Clock, db: psycopg.Connection[Any]
+) -> None:
+    admin = await activate_admin(app, clock, "kurucu@example.com", ["super_admin"])
+    now = datetime.now(UTC)
+    cms = {"data": {"catalogs": [{"articles": [{
+        "code": "d" * 32,
+        "title": "Binance Will List Testcoin (TST) with Seed Tag Applied",
+        "releaseDate": int((now - timedelta(hours=1)).timestamp() * 1000),
+    }]}]}}  # fmt: skip
+    rss = _rss([("Bitcoin haftaya yatay başladı", "btc", now - timedelta(hours=1))])
+    app.state.news_fetcher = _sources(cms, rss, [["BTCUSDT"]])
+    translator = FakeTranslator()
+    app.state.news_translator = translator
+
+    summary = (await admin.http.post("/admin/v1/news/refresh")).json()
+    assert summary["translated"] == 1 and summary["translation_error"] is None
+    # Yalnızca İngilizce kaynak çevrilir (başlık + özet); Türkçe kaynak olduğu gibi kalır.
+    assert translator.calls == [
+        (
+            [
+                "Binance Will List Testcoin (TST) with Seed Tag Applied",
+                "Binance resmî duyurusu (yeni listeleme kategorisi).",
+            ],
+            "en",
+        )
+    ]
+    items = (await admin.http.get("/admin/v1/news", params={"status": None})).json()
+    listing = (await admin.http.get("/admin/v1/news", params={"status": "drafted"})).json()
+    tst = listing["items"][0]
+    assert tst["lang"] == "en" and tst["title_tr"].startswith("[TR] Binance Will List")
+    # Otomatik taslak Türkçe başlıkla, orijinal başlık metinde.
+    draft = (await admin.http.get("/admin/v1/forum/queue")).json()["topics"][0]
+    assert draft["title"].startswith("[TR] Binance Will List Testcoin")
+    assert "Orijinal başlık: “Binance Will List Testcoin (TST)" in draft["body"]
+    del items
+
+    # Çeviri ayarları: DeepL anahtarsız seçilemez; anahtar şifreli saklanır, yalnızca ipucu döner.
+    bad = await admin.http.put(
+        "/admin/v1/news/translation", json={"enabled": True, "provider": "deepl"}
+    )
+    assert bad.status_code == 422
+    saved = await admin.http.put(
+        "/admin/v1/news/translation",
+        json={"enabled": True, "provider": "deepl", "deepl_key": "gizli-anahtar-1234:fx"},
+    )
+    assert saved.json() == {"enabled": True, "provider": "deepl", "email": None,
+                            "deepl_key_hint": "…4:fx"}  # fmt: skip
+    stored = db.execute("SELECT value::text FROM system_settings WHERE key = 'news_translation'")
+    assert "gizli-anahtar" not in stored.fetchone()[0]  # type: ignore[index]
+    view = (await admin.http.get("/admin/v1/news")).json()["translation"]
+    assert view["provider"] == "deepl" and view["deepl_key_hint"] == "…4:fx"
+
+    # Tek haberi elle çevirme; servis hata verirse neden yazılır.
+    row = db.execute(
+        "INSERT INTO coin_news (source, external_id, kind, title, url, published_at, lang) "
+        "VALUES ('cointelegraph', 'x1', 'news', 'Bitcoin rallies', "
+        "'https://cointelegraph.com/news/x', now(), 'en') RETURNING id"
+    ).fetchone()
+    assert row
+    done = await admin.http.post(f"/admin/v1/news/{row[0]}/translate")
+    assert done.json()["title_tr"] == "[TR] Bitcoin rallies"
+    app.state.news_translator = FakeTranslator(fail="MyMemory günlük çeviri kotası doldu")
+    db.execute("UPDATE coin_news SET title_tr = NULL WHERE id = %s", (row[0],))
+    failed = await admin.http.post(f"/admin/v1/news/{row[0]}/translate")
+    assert failed.status_code == 502 and "kotası doldu" in failed.json()["detail"]
+
+
+async def test_mymemory_client_parses_and_reports_quota() -> None:
+    from ati_cloud.translate import MyMemory, TranslationError
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "quota" in request.url.params["q"]:
+            return httpx.Response(200, json={"quotaFinished": True, "responseStatus": 429})
+        assert request.url.params["langpair"] == "en|tr"
+        return httpx.Response(
+            200,
+            json={"responseStatus": 200, "responseData": {"translatedText": "Bitcoin &amp; Ether"}},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        mm = MyMemory(client, email=None)
+        assert await mm.translate(["Bitcoin and Ether", ""], "en") == ["Bitcoin & Ether", ""]
+        with pytest.raises(TranslationError, match="kotası"):
+            await mm.translate(["quota"], "en")

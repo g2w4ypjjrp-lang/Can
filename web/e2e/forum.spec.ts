@@ -152,6 +152,12 @@ test("coin haberi panelden paylaşılır, forumda sabit ekip konusu olur", async
       "('btchaber', 'e2e-2', 'news', 'Bitcoin haftaya yatay başladı', 'Piyasa sakin seyrediyor.', " +
       "'https://www.btchaber.com/bitcoin-yatay/', '{}', now() - interval '1 hour')",
   );
+  // İngilizce kaynak: Türkçe çevirisiyle (çeviri bulut testlerinde sınanır).
+  await sql(
+    "INSERT INTO coin_news (source, external_id, kind, title, url, published_at, lang, title_tr) VALUES " +
+      "('cointelegraph', 'e2e-3', 'news', 'Bitcoin rallies past 70k', 'https://cointelegraph.com/news/x', " +
+      "now() - interval '2 hours', 'en', 'Bitcoin 70 bini aştı')",
+  );
   await admin.getByRole("link", { name: "Coin haberleri" }).click();
   await expect(admin.getByRole("heading", { level: 1, name: "Coin haberleri" })).toBeVisible();
   const card = admin.getByTestId(/^news-/).filter({ hasText: "Testcoin" });
@@ -173,6 +179,10 @@ test("coin haberi panelden paylaşılır, forumda sabit ekip konusu olur", async
   await expect(admin.getByTestId(/^news-/).filter({ hasText: "Testcoin" })).toHaveCount(0);
 
   await admin.getByRole("tab", { name: /Tüm yeni haberler/ }).click();
+  const english = admin.getByTestId(/^news-/).filter({ hasText: "Bitcoin 70 bini aştı" });
+  await expect(english.getByTestId("news-title")).toHaveText("Bitcoin 70 bini aştı");
+  await expect(english).toContainText("Orijinal: Bitcoin rallies past 70k");
+  await expect(admin.getByTestId("news-translation")).toContainText("MyMemory");
   const other = admin.getByTestId(/^news-/).filter({ hasText: "Bitcoin haftaya" });
   await other.getByRole("button", { name: "Gizle" }).click();
   await expect(other).toHaveCount(0);
