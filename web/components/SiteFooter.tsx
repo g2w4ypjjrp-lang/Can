@@ -93,6 +93,9 @@ export function SiteFooter() {
           </p>
           <ThemeToggle />
         </div>
+        <p aria-hidden="true" className="footer-mark pointer-events-none mt-6 select-none whitespace-nowrap text-center text-[17vw] font-bold leading-[0.8] tracking-[-0.06em] lg:text-[13.5rem]">
+          AI Trading
+        </p>
       </Container>
     </footer>
   );

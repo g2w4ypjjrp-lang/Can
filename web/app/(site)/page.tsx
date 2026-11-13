@@ -124,45 +124,67 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* --- Kahraman -------------------------------------------------------------------------- */}
-      <section className="relative overflow-hidden border-b border-border">
-        <Backdrop />
-        <Container className="relative grid items-center gap-16 pb-20 pt-14 sm:pt-20 lg:grid-cols-[1.02fr_1fr] lg:gap-14 lg:pb-28">
-          <div>
-            <Badge tone="accent" className="py-1.5 pl-1.5">
-              <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-white">Yeni</span>
-              iPhone ile uzaktan kontrol ve Face ID onayı
-            </Badge>
-            <h1 className="mt-7 text-[2.6rem] font-semibold leading-[1.04] tracking-[-0.035em] text-fg sm:text-6xl xl:text-[4.05rem]">
-              Kripto piyasasını <span className="text-gradient">yapay zekâyla</span> analiz edin. Kontrol sizde kalsın.
-            </h1>
-            <p className="mt-7 max-w-xl text-lg leading-relaxed text-muted sm:text-xl">
-              Canlı Binance verisi, balina radarı, gerekçeli fırsat puanı, backtest ve risk kapısı tek bir Windows
-              uygulamasında. İşlem motoru kendi bilgisayarınızda çalışır; API anahtarlarınız sizden çıkmaz.
-            </p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              <LinkButton href="/kayit" size="lg">
-                Hesap oluşturun <ArrowRight aria-hidden="true" className="h-4 w-4" />
-              </LinkButton>
-              <LinkButton href="/indir" variant="secondary" size="lg">
-                <Download aria-hidden="true" className="h-4 w-4" /> Uygulamayı indirin
-              </LinkButton>
-            </div>
-            <ul className="mt-9 grid max-w-lg grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-fg">
-              {["Önce sanal işlem", "Binance Demo Trading desteği", "Çekim yetkili anahtar reddedilir", "Tamamen Türkçe arayüz"].map((item) => (
-                <li key={item} className="flex items-center gap-2">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-success-bg text-success-fg">
-                    <Check aria-hidden="true" className="h-3 w-3" strokeWidth={3} />
-                  </span>
-                  {item}
-                </li>
-              ))}
-            </ul>
+      {/* --- Kahraman: koyu sahne, ortalanmış başlık, 3 boyutlu ürün penceresi ----------------- */}
+      <section className="stage relative isolate overflow-hidden">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+          <div className="stage-light absolute inset-0" />
+          <div className="stage-cone absolute inset-x-0 top-0 h-[38rem]" />
+          <div className="horizon-grid absolute inset-x-[-25%] top-[46%] h-[60rem]" />
+          <div className="noise absolute inset-0" />
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-text to-transparent opacity-70" />
+        </div>
+        <Container className="relative pb-16 pt-16 text-center sm:pt-24">
+          <a
+            href="#yenilikler"
+            className="glass mx-auto inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-4 text-sm font-medium text-fg transition-colors hover:border-accent-text focus-visible:outline-2 focus-visible:outline-accent-text"
+          >
+            <span className="rounded-full bg-brand px-2.5 py-0.5 text-[11px] font-semibold text-white">Yeni</span>
+            Anlık fiyatlar ve kilit ekranı bildirimleri
+            <ArrowRight aria-hidden="true" className="h-3.5 w-3.5 text-accent-text" />
+          </a>
+          <h1 className="mx-auto mt-8 max-w-5xl text-[2.7rem] font-semibold leading-[1.02] tracking-[-0.04em] text-fg sm:text-7xl xl:text-[5.4rem]">
+            Kripto piyasasını <span className="text-shimmer">yapay zekâyla</span> analiz edin.
+            <span className="block text-muted">Kontrol sizde kalsın.</span>
+          </h1>
+          <p className="mx-auto mt-7 max-w-2xl text-lg leading-relaxed text-muted sm:text-xl">
+            Canlı Binance verisi, balina radarı, gerekçeli fırsat puanı, backtest ve risk kapısı tek bir Windows uygulamasında.
+            İşlem motoru kendi bilgisayarınızda çalışır; API anahtarlarınız sizden çıkmaz.
+          </p>
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
+            <LinkButton href="/kayit" size="lg">
+              Hesap oluşturun <ArrowRight aria-hidden="true" className="h-4 w-4" />
+            </LinkButton>
+            <LinkButton href="/indir" variant="secondary" size="lg">
+              <Download aria-hidden="true" className="h-4 w-4" /> Uygulamayı indirin
+            </LinkButton>
           </div>
-          <HeroVisual />
-        </Container>
-        <Container className="relative pb-10">
-          <div className="max-w-3xl rounded-2xl border border-border bg-surface/70 px-4 py-3 backdrop-blur">
+          <ul className="mx-auto mt-8 flex max-w-3xl flex-wrap justify-center gap-2 text-sm text-fg">
+            {["Önce sanal işlem", "Binance Demo Trading", "Çekim yetkili anahtar reddedilir", "Tamamen Türkçe"].map((item) => (
+              <li key={item} className="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5">
+                <Check aria-hidden="true" className="h-3.5 w-3.5 text-up" strokeWidth={3} />
+                {item}
+              </li>
+            ))}
+          </ul>
+
+          <div className="hero-perspective relative mx-auto mt-16 max-w-5xl text-left">
+            <div aria-hidden="true" className="absolute -inset-x-10 -top-10 bottom-10 rounded-[4rem] bg-[radial-gradient(closest-side,var(--glow),transparent)]" />
+            <div className="hero-tilt">
+              <HeroVisual />
+            </div>
+          </div>
+
+          {/* Rakamlar: cam kartlar */}
+          <ul aria-label="Rakamlarla" className="relative mx-auto mt-14 grid max-w-5xl grid-cols-2 gap-3 text-left lg:grid-cols-4">
+            {NUMBERS.map((n) => (
+              <li key={n.label} className="glass beam-border rounded-3xl p-4 sm:p-6">
+                <p className="text-shimmer text-3xl font-semibold tracking-tight sm:text-4xl">{n.value}</p>
+                <p className="mt-2 text-sm font-semibold text-fg sm:text-base">{n.label}</p>
+                <p className="mt-1 text-xs text-muted sm:text-sm">{n.text}</p>
+              </li>
+            ))}
+          </ul>
+          <div className="mx-auto mt-8 max-w-3xl rounded-2xl border border-border bg-surface/70 px-4 py-3 text-left">
             <RiskNotice compact />
           </div>
         </Container>
@@ -197,21 +219,6 @@ export default async function HomePage() {
       {/* --- Yenilikler: anlık fiyat ve kilit ekranı bildirimleri ------------------------------- */}
       <LiveShowcase />
 
-      {/* --- Rakamlar --------------------------------------------------------------------------- */}
-      <section aria-label="Rakamlarla" className="border-b border-border">
-        <Container className="py-14">
-          <ul className="grid gap-px overflow-hidden rounded-3xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
-            {NUMBERS.map((n) => (
-              <li key={n.label} className="bg-surface p-7">
-                <p className="text-gradient text-4xl font-semibold tracking-tight sm:text-5xl">{n.value}</p>
-                <p className="mt-3 font-semibold text-fg">{n.label}</p>
-                <p className="mt-1 text-sm text-muted">{n.text}</p>
-              </li>
-            ))}
-          </ul>
-        </Container>
-      </section>
-
       {/* --- Özellikler (bento) ------------------------------------------------------------------ */}
       <section aria-labelledby="ozellikler" className="relative">
         <Container className="py-24">
@@ -223,7 +230,7 @@ export default async function HomePage() {
           />
           <div className="reveal">
           <ul className="mt-14 grid gap-5 lg:grid-cols-6">
-            <li className="card-lift flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7 lg:col-span-4">
+            <li className="glow-card scroll-rise flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7 lg:col-span-4">
               <div className="flex items-start gap-4">
                 <IconTile icon={ChartCandlestick} />
                 <div>
@@ -236,7 +243,7 @@ export default async function HomePage() {
               </div>
               <ScannerViz />
             </li>
-            <li className="card-lift flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7 lg:col-span-2">
+            <li className="glow-card scroll-rise flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7 lg:col-span-2">
               <div>
                 <IconTile icon={Radar} tone="violet" />
                 <h3 className="mt-4 text-xl font-semibold text-fg">Balina radarı</h3>
@@ -244,7 +251,7 @@ export default async function HomePage() {
               </div>
               <RadarViz />
             </li>
-            <li className="card-lift flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7 lg:col-span-2">
+            <li className="glow-card scroll-rise flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7 lg:col-span-2">
               <div>
                 <IconTile icon={BrainCircuit} tone="cyan" />
                 <h3 className="mt-4 text-xl font-semibold text-fg">Gerekçeli yapay zekâ analizi</h3>
@@ -252,7 +259,7 @@ export default async function HomePage() {
               </div>
               <ScoreRing />
             </li>
-            <li className="card-lift flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7 lg:col-span-2">
+            <li className="glow-card scroll-rise flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7 lg:col-span-2">
               <div>
                 <IconTile icon={FlaskConical} />
                 <h3 className="mt-4 text-xl font-semibold text-fg">Backtest ve sanal işlem</h3>
@@ -260,7 +267,7 @@ export default async function HomePage() {
               </div>
               <EquityViz />
             </li>
-            <li className="card-lift flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7 lg:col-span-2">
+            <li className="glow-card scroll-rise flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7 lg:col-span-2">
               <div>
                 <IconTile icon={Gauge} tone="success" />
                 <h3 className="mt-4 text-xl font-semibold text-fg">Risk yönetimi</h3>
@@ -283,18 +290,18 @@ export default async function HomePage() {
         <div aria-hidden="true" className="bg-dots absolute inset-0" />
         <Container className="relative py-24">
           <SectionTitle id="nasil-calisir" eyebrow="Başlangıç" title="Üç adımda başlayın" center />
-          <ol className="reveal relative mt-16 grid gap-8 md:grid-cols-3">
-            <li aria-hidden="true" className="absolute left-[16%] right-[16%] top-7 hidden h-px bg-gradient-to-r from-transparent via-border-strong to-transparent md:block" />
+          <ol className="relative mt-16 grid gap-5 md:grid-cols-3">
             {STEPS.map((step, index) => (
-              <li key={step.title} className="relative text-center">
-                <span className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-white shadow-glow">
-                  <step.icon aria-hidden="true" className="h-6 w-6" />
-                  <span className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface text-xs font-bold text-fg">
-                    {index + 1}
-                  </span>
+              <li key={step.title} className="glow-card scroll-rise relative overflow-hidden rounded-3xl border border-border bg-bg/70 p-7 backdrop-blur">
+                <span aria-hidden="true" className="step-number pointer-events-none absolute right-5 top-4 select-none text-7xl font-bold leading-none">
+                  {String(index + 1).padStart(2, "0")}
                 </span>
-                <h3 className="mt-6 text-lg font-semibold text-fg">{step.title}</h3>
-                <p className="mx-auto mt-2 max-w-xs text-muted">{step.text}</p>
+                <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-white shadow-glow">
+                  <step.icon aria-hidden="true" className="h-6 w-6" />
+                </span>
+                <p className="relative mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-accent-text">Adım {index + 1}</p>
+                <h3 className="relative mt-1 text-lg font-semibold text-fg">{step.title}</h3>
+                <p className="relative mt-2 text-muted">{step.text}</p>
               </li>
             ))}
           </ol>
@@ -495,29 +502,29 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      {/* --- Son çağrı ---------------------------------------------------------------------------- */}
+      {/* --- Son çağrı: koyu sahne ------------------------------------------------------------- */}
       <section aria-labelledby="baslayin">
         <Container className="pb-24">
-          <div className="relative overflow-hidden rounded-[2.25rem] bg-brand px-8 py-14 text-white shadow-lift sm:px-14">
-            <div aria-hidden="true" className="bg-dots absolute inset-0 opacity-50" />
-            <div aria-hidden="true" className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-white/10" />
-            <div className="relative flex flex-col items-start justify-between gap-8 lg:flex-row lg:items-center">
-              <div>
-                <h2 id="baslayin" className="text-3xl font-semibold tracking-tight sm:text-5xl">
-                  Önce sanal ortamda deneyin.
-                </h2>
-                <p className="mt-4 max-w-xl text-lg text-white">
-                  Hesabınızı oluşturun, uygulamayı kurun, stratejilerinizi gerçek para riske atmadan ölçün.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <LinkButton href="/kayit" variant="light" size="lg">
-                  Hesap oluştur <ArrowRight aria-hidden="true" className="h-4 w-4" />
-                </LinkButton>
-                <LinkButton href="/iletisim" variant="outlineLight" size="lg">
-                  Bize yazın
-                </LinkButton>
-              </div>
+          <div className="stage beam-border relative isolate overflow-hidden rounded-[2.5rem] px-6 py-20 text-center shadow-lift sm:px-14">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+              <div className="stage-light absolute inset-0" />
+              <div className="horizon-grid absolute inset-x-[-30%] top-[55%] h-[40rem] opacity-70" />
+              <div className="noise absolute inset-0" />
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-text">Ücretsiz deneme · önce sanal işlem</p>
+            <h2 id="baslayin" className="mx-auto mt-4 max-w-3xl text-4xl font-semibold tracking-[-0.03em] text-fg sm:text-6xl">
+              Önce <span className="text-shimmer">sanal ortamda</span> deneyin.
+            </h2>
+            <p className="mx-auto mt-5 max-w-xl text-lg text-muted">
+              Hesabınızı oluşturun, uygulamayı kurun, stratejilerinizi gerçek para riske atmadan ölçün.
+            </p>
+            <div className="mt-9 flex flex-wrap justify-center gap-3">
+              <LinkButton href="/kayit" size="lg">
+                Hesap oluştur <ArrowRight aria-hidden="true" className="h-4 w-4" />
+              </LinkButton>
+              <LinkButton href="/iletisim" variant="secondary" size="lg">
+                Bize yazın
+              </LinkButton>
             </div>
           </div>
         </Container>
