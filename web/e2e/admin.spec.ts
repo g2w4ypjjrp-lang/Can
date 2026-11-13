@@ -77,6 +77,7 @@ test("genel kampanya: yüzde indirim sitede üstü çizili fiyatla görünür, k
   await form.getByLabel("Kampanya açık (bütün ücretli paketlere uygulanır)").check();
   await form.getByLabel("İndirim (%)").fill("20");
   await form.getByLabel("Kampanya adı (sitede görünür, isteğe bağlı)").fill("Kasım indirimi");
+  await form.getByLabel("Bitiş (boş: siz kapatana kadar)").fill("2030-12-31T23:30");
   await expect(form).toContainText("1.000 ₺ olan paket 800 ₺ olur");
   await noAxeViolations(page);
   await form.getByRole("button", { name: "Kampanyayı kaydet" }).click();
@@ -87,7 +88,20 @@ test("genel kampanya: yüzde indirim sitede üstü çizili fiyatla görünür, k
   await expect(page.getByTestId("price-d30_1dev-list")).toContainText("₺1.499,90");
   await expect(page.getByTestId("price-d30_1dev")).toContainText("₺1.199,92");
   await expect(page.getByTestId("price-d30_1dev")).toContainText("%20 indirim");
+  // Hareketli görseller: paket kartında asılı indirim etiketi, afişte geri sayım.
+  await expect(page.getByTestId("sale-ribbon").first()).toContainText("%20 İNDİRİM");
+  await expect(page.getByTestId("campaign-countdown")).toContainText("Kampanya bitişi");
+  await expect(page.getByTestId("campaign-countdown").locator(".count-box").first()).not.toContainText("--");
   await noAxeViolations(page);
+  // Duyuru yokken sitenin üst şeridi kampanyayı gösterir.
+  await page.goto("/");
+  const strip = page.getByTestId("announcement-bar");
+  await expect(strip).toHaveAttribute("data-tone", "campaign");
+  await expect(strip).toContainText("Kasım indirimi: bütün paketlerde %20 indirim!");
+  await expect(page.getByTestId("announcement-countdown")).not.toContainText("--:--");
+  await noAxeViolations(page);
+  await strip.getByRole("link", { name: "Fırsatı gör" }).click();
+  await expect(page).toHaveURL(/\/paketler$/);
   await page.goto("/satin-al?paket=d30_1dev");
   await expect(page.getByTestId("order-total")).toContainText("₺1.199,92");
 
@@ -97,7 +111,9 @@ test("genel kampanya: yüzde indirim sitede üstü çizili fiyatla görünür, k
   await expect(page.getByTestId("campaign-state")).toHaveText("Kapalı");
   await page.goto("/paketler");
   await expect(page.getByTestId("campaign-banner")).toHaveCount(0);
+  await expect(page.getByTestId("sale-ribbon")).toHaveCount(0);
   await expect(page.getByTestId("price-d30_1dev-list")).toHaveCount(0);
+  await expect(page.getByTestId("announcement-bar")).toHaveCount(0);
 });
 
 test("indirim kuponu oluşturulur, listelenir ve kapatılır", async () => {
@@ -218,6 +234,50 @@ test("lisans TOTP ve onayla silinir; listeden kalkar", async () => {
   expect(rows).toEqual([{ status: "cancelled", deleted: true }]);
 });
 
+test("toplu lisans işlemi: seçilenler dondurulur, sonra TOTP ve onayla toplu silinir", async () => {
+  await sql("INSERT INTO customers (email, password_hash, email_verified_at) VALUES ('toplu@example.com', $1, now())", [ARGON2]);
+  await page.goto("/yonetim/lisanslar");
+  let previous = "";
+  for (let i = 0; i < 3; i += 1) {
+    await page.getByLabel("Müşteri e-postası (boşsa satış havuzuna)").fill("toplu@example.com");
+    await page.getByRole("button", { name: "Üret", exact: true }).click();
+    const issued = page.getByTestId("issued-key");
+    if (previous) await expect(issued).not.toHaveText(previous);
+    else await expect(issued).toHaveText(/^ATI-/);
+    previous = (await issued.textContent())!.trim();
+  }
+  await page.getByLabel("Lisans ara").fill("toplu@example.com");
+  await page.getByRole("button", { name: "Ara" }).click();
+  await expect(page.getByTestId("license-total")).toHaveText("3 lisans");
+
+  await page.getByTestId("license-select-all").check();
+  const bar = page.getByTestId("bulk-bar");
+  await expect(bar).toContainText("3 lisans seçili");
+  await bar.getByLabel("İşlem").selectOption("freeze");
+  await bar.getByLabel("Neden").fill("toplu inceleme");
+  await noAxeViolations(page);
+  await bar.getByRole("button", { name: "Uygula" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Dondur: 3 lisans tamam" })).toBeVisible();
+  await expect(bar).toHaveCount(0);
+
+  await page.getByTestId("license-status-filter").selectOption("frozen");
+  await expect(page.getByTestId("license-total")).toHaveText("3 lisans");
+  await page.getByTestId("license-select-all").check();
+  await bar.getByLabel("İşlem").selectOption("delete");
+  await bar.getByLabel("Neden").fill("test temizliği");
+  await bar.getByLabel("Doğrulama kodu (TOTP)").fill(await root.next());
+  await bar.getByRole("button", { name: "Uygula" }).click();
+  await expect(bar).toBeVisible(); // onay kutusu işaretlenmeden gönderilmez
+  await bar.getByLabel("3 lisans kalıcı olarak silinsin").check();
+  await bar.getByRole("button", { name: "Uygula" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Sil: 3 lisans tamam" })).toBeVisible();
+  await expect(page.getByTestId("license-total")).toHaveText("0 lisans");
+  const rows = await sql<{ status: string; deleted: boolean }>(
+    "SELECT l.status::text AS status, l.deleted_at IS NOT NULL AS deleted FROM licenses l JOIN customers c ON c.id = l.customer_id WHERE c.email = 'toplu@example.com'",
+  );
+  expect(rows).toEqual(Array(3).fill({ status: "cancelled", deleted: true }));
+});
+
 test("mesajlar, denetim zinciri ve yönetici daveti", async () => {
   await sql("INSERT INTO contact_messages (name, email, topic, message) VALUES ('Ayşe', 'ayse.yonetim@example.com', 'license', 'Lisansımı taşımak istiyorum, yardım eder misiniz?')");
   await page.goto("/yonetim/mesajlar");
@@ -300,6 +360,39 @@ test("site tasarımı panelden seçilir; her tasarım açık ve koyu temada eri�
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/yonetim/ayarlar");
   await noAxeViolations(page);
+});
+
+test("duyuru şeridi panelden yayımlanır, sitede görünür ve ziyaretçi kapatabilir", async () => {
+  await page.goto("/yonetim/ayarlar");
+  const form = page.getByTestId("announcement-form");
+  await expect(page.getByTestId("announcement-state")).toHaveText("Kapalı");
+  await form.getByLabel("Şeridi göster").check();
+  await form.getByLabel("Metin (en çok 160 karakter)").fill("Yeni sürüm yayında: anlık fiyatlar");
+  await form.getByLabel("Bağlantı (isteğe bağlı)").fill("javascript:alert(1)");
+  await form.getByRole("button", { name: "Şeridi kaydet" }).click();
+  await expect(form.getByRole("alert")).toBeVisible(); // yalnızca site içi yol ya da https
+  await form.getByLabel("Bağlantı (isteğe bağlı)").fill("/indir");
+  await form.getByLabel("Görünüm").selectOption("success");
+  await form.getByRole("button", { name: "Şeridi kaydet" }).click();
+  await expect(page.getByTestId("announcement-state")).toHaveText("Yayında");
+  await noAxeViolations(page);
+
+  await page.goto("/");
+  const bar = page.getByTestId("announcement-bar");
+  await expect(bar).toHaveAttribute("data-tone", "success");
+  await expect(bar).toContainText("Yeni sürüm yayında: anlık fiyatlar");
+  await noAxeViolations(page);
+  await bar.getByRole("link", { name: "Ayrıntılar" }).click();
+  await expect(page).toHaveURL(/\/indir$/);
+  await page.getByTestId("announcement-bar").getByRole("button", { name: "Duyuruyu kapat" }).click();
+  await expect(page.getByTestId("announcement-bar")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("announcement-bar")).toHaveCount(0); // bu tarayıcıda kapalı kalır
+
+  await page.goto("/yonetim/ayarlar");
+  await page.getByTestId("announcement-form").getByLabel("Şeridi göster").uncheck();
+  await page.getByTestId("announcement-form").getByRole("button", { name: "Şeridi kaydet" }).click();
+  await expect(page.getByTestId("announcement-state")).toHaveText("Kapalı");
 });
 
 test("sürüm eklenir, TOTP ile yayınlanır ve İndir sayfasında görünür", async () => {

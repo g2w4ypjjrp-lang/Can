@@ -22,7 +22,13 @@ from pydantic import BaseModel, EmailStr, Field
 
 from ati_cloud.admin.context import Admin, AdminContext, Conn
 from ati_cloud.admin.security import SecretBox
-from ati_cloud.site import DESIGNS, load_appearance
+from ati_cloud.site import (
+    ANNOUNCEMENT_TONES,
+    DESIGNS,
+    announcement_active,
+    load_announcement,
+    load_appearance,
+)
 
 LIVE_PHRASE = "CANLI ÖDEMEYİ AÇ"
 
@@ -40,6 +46,16 @@ Provider = Literal["none", "paytr", "iyzico", "simulator"]
 
 class AppearanceUpdate(BaseModel):
     design: Literal["okyanus", "zumrut", "gunbatimi", "altin", "grafit"]
+
+
+class AnnouncementUpdate(BaseModel):
+    """Sitenin en üstündeki duyuru şeridi."""
+
+    enabled: bool
+    text: str = Field(default="", max_length=160)
+    link: str = Field(default="", max_length=300, pattern=r"^(|/[^\s]*|https://[^\s]+)$")
+    tone: Literal["info", "success", "warning", "campaign"] = "info"
+    ends_at: datetime | None = None
 
 
 class PaymentUpdate(BaseModel):
@@ -243,6 +259,41 @@ def create_admin_settings_router(ctx: AdminContext) -> APIRouter:
             "design": body.design,
             "designs": [{"code": k, "name": v} for k, v in DESIGNS.items()],
         }
+
+    @router.get("/announcement")
+    async def get_announcement(admin: Admin = manage) -> dict[str, Any]:
+        async with ctx.db.connection() as conn:
+            stored = await load_announcement(conn)
+        value = stored or {
+            "enabled": False,
+            "text": "",
+            "link": "",
+            "tone": "info",
+            "ends_at": None,
+        }
+        return {**value, "active": announcement_active(stored), "tones": list(ANNOUNCEMENT_TONES)}
+
+    @router.put("/announcement")
+    async def put_announcement(
+        body: AnnouncementUpdate, request: Request, admin: Admin = manage
+    ) -> dict[str, Any]:
+        text = body.text.strip()
+        if body.enabled and len(text) < 3:
+            raise HTTPException(status_code=422, detail="Duyuru metni en az 3 karakter olmalı")
+        value = {
+            "enabled": body.enabled,
+            "text": text,
+            "link": body.link.strip(),
+            "tone": body.tone,
+            "ends_at": body.ends_at.isoformat() if body.ends_at else None,
+        }
+        async with ctx.db.connection() as conn, conn.transaction():
+            await _store(conn, "announcement", value, admin.id)
+            await ctx.audit(
+                conn, request, actor_id=admin.id, action="admin.announcement_updated",
+                target_type="settings", target_id="announcement", details=value,
+            )  # fmt: skip
+        return {**value, "active": announcement_active(value), "tones": list(ANNOUNCEMENT_TONES)}
 
     @router.get("/company")
     async def get_company(admin: Admin = manage) -> dict[str, Any]:

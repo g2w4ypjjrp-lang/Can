@@ -214,15 +214,112 @@ function Detail({ id, onChanged, onDeleted }: { id: string; onChanged: () => voi
   );
 }
 
+const STATUSES = ["generated", "ready_for_sale", "sold", "active", "frozen", "expired", "cancelled"];
+
+interface BulkResult {
+  done: number;
+  failed: number;
+  results: { id: string; ok: boolean; status?: string; error?: string }[];
+}
+
+/** Seçili lisanslarda toplu işlem: dondur, dondurmayı kaldır, iptal et, sil. İptal ve silme
+ * doğrulama kodu ister; silme ayrıca onay kutusu ister. Sonuç lisans başına raporlanır. */
+function BulkBar({ ids, onDone, onClear }: { ids: string[]; onDone: (note: string) => void; onClear: () => void }) {
+  const api = useApi();
+  const { me } = useAdmin();
+  const action = useAdminAction();
+  const actions = [
+    ...(can(me, "license.freeze") ? [["freeze", "Dondur"], ["unfreeze", "Dondurmayı kaldır"]] : []),
+    ...(can(me, "license.cancel") ? [["cancel", "İptal et"], ["delete", "Sil"]] : []),
+  ] as [string, string][];
+  const [kind, setKind] = useState(actions[0]?.[0] ?? "");
+  if (!actions.length) return null;
+  const sensitive = kind === "cancel" || kind === "delete";
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const path = sensitive ? "/admin/v1/bulk/licenses/cancel" : "/admin/v1/bulk/licenses/freeze";
+    const result = await action.run(() =>
+      api.post<BulkResult>(path, {
+        ids,
+        action: kind,
+        reason: String(data.get("reason") ?? "").trim(),
+        code: sensitive ? data.get("code") : undefined,
+      }),
+    );
+    if (result) {
+      const label = actions.find(([k]) => k === kind)?.[1] ?? kind;
+      const reasons = [...new Set(result.results.filter((r) => !r.ok).map((r) => r.error))].join(", ");
+      onDone(`${label}: ${result.done} lisans tamam${result.failed ? `, ${result.failed} lisans atlandı (${reasons})` : ""}`);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => void submit(e)}
+      className="sticky bottom-4 z-20 flex flex-wrap items-end gap-3 rounded-3xl border border-accent-text/40 bg-surface p-4 shadow-lift"
+      data-testid="bulk-bar"
+      aria-label="Toplu işlem"
+    >
+      <p className="w-full text-sm font-semibold text-fg sm:w-auto sm:self-center">{ids.length} lisans seçili</p>
+      <label className="text-sm text-fg">
+        İşlem
+        <select value={kind} onChange={(e) => setKind(e.target.value)} className={`mt-1 ${inputClass} w-44`} data-testid="bulk-action">
+          {actions.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {kind !== "unfreeze" ? (
+        <label className="min-w-48 flex-1 text-sm text-fg">
+          Neden
+          <input name="reason" required minLength={3} maxLength={300} className={`mt-1 ${inputClass}`} />
+        </label>
+      ) : null}
+      {sensitive ? <TotpInput id="toplu-kod" /> : null}
+      {kind === "delete" ? (
+        <label className="flex items-center gap-2 self-center text-sm text-danger-fg">
+          <input type="checkbox" required className="h-4 w-4" /> {ids.length} lisans kalıcı olarak silinsin
+        </label>
+      ) : null}
+      <div className="flex gap-2">
+        <Button type="submit" variant={kind === "delete" || kind === "cancel" ? "danger" : "primary"} disabled={action.pending}>
+          Uygula
+        </Button>
+        <Button type="button" variant="secondary" onClick={onClear}>
+          Seçimi temizle
+        </Button>
+      </div>
+      <div className="w-full">
+        <Feedback error={action.error} />
+      </div>
+    </form>
+  );
+}
+
 export function Licenses() {
   const api = useApi();
   const { me } = useAdmin();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [deletedNote, setDeletedNote] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
+  const [checked, setChecked] = useState<Set<string>>(new Set());
   const list = useAdminQuery<{ items: LicenseRow[]; total: number }>(
-    `/admin/v1/licenses?limit=50${query ? `&q=${encodeURIComponent(query)}` : ""}`,
+    `/admin/v1/licenses?limit=100${query ? `&q=${encodeURIComponent(query)}` : ""}${status ? `&status=${status}` : ""}`,
   );
+  const pageIds = list.data?.items.map((l) => l.id) ?? [];
+  const allChecked = pageIds.length > 0 && pageIds.every((id) => checked.has(id));
+  const toggle = (id: string) =>
+    setChecked((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const plans = useAdminQuery<PlanLite[]>(can(me, "plan.manage") ? "/admin/v1/plans" : null);
   const generate = useAdminAction();
   const [issued, setIssued] = useState<string | null>(null);
@@ -334,10 +431,52 @@ export function Licenses() {
       <Feedback error={generate.error ?? list.error} message={generate.message} />
       {list.data ? (
         <>
-          <p className="text-sm text-muted" data-testid="license-total">{list.data.total} lisans</p>
-          <Table caption="Lisanslar" head={["Seri", "Anahtar", "Paket", "Durum", "Müşteri", "Bilgisayar", "Bitiş", ""]}>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-wrap items-end gap-4">
+              <p className="text-sm text-muted" data-testid="license-total">{list.data.total} lisans</p>
+              <label className="text-sm text-fg">
+                Durum
+                <select
+                  value={status}
+                  onChange={(e) => {
+                    setStatus(e.target.value);
+                    setChecked(new Set());
+                  }}
+                  className={`mt-1 ${inputClass} w-56`}
+                  data-testid="license-status-filter"
+                >
+                  <option value="">Tümü</option>
+                  {STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {licenseStatusLabel(s)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={allChecked}
+                onChange={() => setChecked(allChecked ? new Set() : new Set(pageIds))}
+                data-testid="license-select-all"
+              />
+              Sayfadakilerin tümünü seç
+            </label>
+          </div>
+          <Table caption="Lisanslar" head={["Seç", "Seri", "Anahtar", "Paket", "Durum", "Müşteri", "Bilgisayar", "Bitiş", ""]}>
             {list.data.items.map((l) => (
-              <tr key={l.id}>
+              <tr key={l.id} className={checked.has(l.id) ? "bg-surface-2/60" : undefined}>
+                <td className={cell}>
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={checked.has(l.id)}
+                    onChange={() => toggle(l.id)}
+                    aria-label={`Lisans ${l.serial} seç`}
+                  />
+                </td>
                 <td className={cell}>{l.serial}</td>
                 <td className={`${cell} font-mono`}>{l.key_hint}</td>
                 <td className={cell}>{l.plan_code}</td>
@@ -354,6 +493,18 @@ export function Licenses() {
             ))}
           </Table>
         </>
+      ) : null}
+      {checked.size > 0 ? (
+        <BulkBar
+          ids={[...checked]}
+          onClear={() => setChecked(new Set())}
+          onDone={(note) => {
+            setChecked(new Set());
+            setSelected(null);
+            setDeletedNote(note);
+            list.reload();
+          }}
+        />
       ) : null}
       {deletedNote ? <Feedback error={null} message={deletedNote} /> : null}
       {selected ? (

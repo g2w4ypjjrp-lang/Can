@@ -681,6 +681,225 @@
   }
 }
 
+/* --- Kampanya (indirim) görselleri: akan renk, parıltı, konfeti, çizilen eski fiyat -------------
+   Beyaz yazı kampanya renklerinin her birine ≥ 4.5:1 (#be123c 6.3, #c2410c 5.2, #a21caf 6.4).
+   Hareket azaltma tercihinde hepsi durur; içerik ve okunurluk değişmez. */
+@layer components {
+  .sale-gradient {
+    color: #fff;
+    background-color: #be123c;
+    background-image: linear-gradient(110deg, #be123c 0%, #c2410c 25%, #a21caf 50%, #c2410c 75%, #be123c 100%);
+    background-size: 200% 100%;
+    animation: sale-flow 7s linear infinite;
+  }
+  @keyframes sale-flow {
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  /* Işıltı: iki katman nokta yavaşça süzülür ve yanıp söner. */
+  .sale-sparkles {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .sale-sparkles::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle, rgba(255, 255, 255, 0.9) 0 1.5px, transparent 2px),
+      radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 1px, transparent 1.5px);
+    background-size: 46px 46px, 31px 31px;
+    background-position: 0 0, 13px 17px;
+    animation:
+      sparkle-drift 9s linear infinite,
+      twinkle 2.4s ease-in-out infinite alternate;
+  }
+  @keyframes sparkle-drift {
+    to {
+      background-position: 46px -46px, 44px -14px;
+    }
+  }
+  @keyframes twinkle {
+    from {
+      opacity: 0.25;
+    }
+    to {
+      opacity: 0.75;
+    }
+  }
+
+  /* Konfeti: düşen ve dönen küçük parçalar (yalnızca süs, ekran okuyucudan gizli). */
+  .confetti {
+    position: absolute;
+    top: -14px;
+    width: 7px;
+    height: 12px;
+    border-radius: 2px;
+    opacity: 0.9;
+    pointer-events: none;
+    animation: confetti-fall 4.6s linear infinite;
+  }
+  .confetti:nth-child(3n) {
+    width: 9px;
+    height: 9px;
+    border-radius: 9999px;
+  }
+  @keyframes confetti-fall {
+    0% {
+      transform: translateY(0) rotate(0deg);
+    }
+    100% {
+      transform: translateY(260px) rotate(540deg);
+    }
+  }
+
+  /* İndirim rozeti: ışık geçer, hafifçe nabız atar. */
+  .sale-badge {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 9999px;
+    padding: 0.18rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #fff;
+    background: linear-gradient(110deg, #be123c, #c2410c);
+    animation: sale-pulse 2.2s ease-out infinite;
+  }
+  .sale-badge::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.5) 50%, transparent 65%);
+    transform: translateX(-130%);
+    animation: sale-shine 3s ease-in-out infinite;
+  }
+  @keyframes sale-shine {
+    0%,
+    55% {
+      transform: translateX(-130%);
+    }
+    100% {
+      transform: translateX(130%);
+    }
+  }
+  @keyframes sale-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.5);
+    }
+    70%,
+    100% {
+      box-shadow: 0 0 0 8px rgba(225, 29, 72, 0);
+    }
+  }
+
+  /* Eski fiyatın üstü çizgiyle çizilir (sayfa açılınca bir kez). */
+  .sale-strike {
+    position: relative;
+    text-decoration: none;
+  }
+  .sale-strike::after {
+    content: "";
+    position: absolute;
+    left: -3px;
+    right: -3px;
+    top: 52%;
+    height: 2px;
+    border-radius: 2px;
+    background: #e11d48;
+    transform-origin: left center;
+    transform: rotate(-9deg) scaleX(0);
+    animation: strike-draw 650ms 350ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+  @keyframes strike-draw {
+    to {
+      transform: rotate(-9deg) scaleX(1);
+    }
+  }
+
+  /* Yeni fiyat bir kez zıplayarak gelir. */
+  .sale-pop {
+    display: inline-block;
+    animation: sale-pop 700ms 600ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  }
+  @keyframes sale-pop {
+    0% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.14);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  /* Sallanan etiket ve titreyen alev simgesi. */
+  .tag-swing {
+    transform-origin: 50% 8%;
+    animation: tag-swing 2.6s ease-in-out infinite;
+  }
+  @keyframes tag-swing {
+    0%,
+    100% {
+      transform: rotate(-9deg);
+    }
+    50% {
+      transform: rotate(9deg);
+    }
+  }
+  .wiggle {
+    animation: wiggle 1.8s ease-in-out infinite;
+  }
+  @keyframes wiggle {
+    0%,
+    60%,
+    100% {
+      transform: rotate(0deg) scale(1);
+    }
+    70% {
+      transform: rotate(-12deg) scale(1.12);
+    }
+    80% {
+      transform: rotate(10deg) scale(1.12);
+    }
+    90% {
+      transform: rotate(-6deg) scale(1.05);
+    }
+  }
+
+  /* Geri sayım kutuları: saniye değişince hafif sıçrama. */
+  .count-box {
+    min-width: 3.1rem;
+    border-radius: 0.9rem;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    padding: 0.35rem 0.45rem;
+    text-align: center;
+    backdrop-filter: blur(6px);
+  }
+  .count-flip {
+    display: inline-block;
+    animation: count-flip 380ms ease-out;
+  }
+  @keyframes count-flip {
+    from {
+      transform: translateY(-35%);
+      opacity: 0.35;
+    }
+  }
+}
+
 /* Hareket azaltma tercihi: geçiş ve animasyonlar kapatılır. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -694,8 +913,20 @@
   .marquee,
   .mobile-sheet,
   .notif-in,
-  .tick {
+  .tick,
+  .sale-gradient,
+  .sale-sparkles::before,
+  .confetti,
+  .sale-badge,
+  .sale-badge::after,
+  .sale-pop,
+  .tag-swing,
+  .wiggle,
+  .count-flip {
     animation: none;
+  }
+  .confetti {
+    display: none;
   }
   .draw-line {
     stroke-dashoffset: 0;

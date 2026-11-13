@@ -274,6 +274,117 @@ function SiteDesign() {
   );
 }
 
+interface Announcement {
+  enabled: boolean;
+  text: string;
+  link: string;
+  tone: "info" | "success" | "warning" | "campaign";
+  ends_at: string | null;
+  active: boolean;
+}
+
+const TONES: [Announcement["tone"], string][] = [
+  ["campaign", "Kampanya (renkli, hareketli)"],
+  ["info", "Bilgi (mavi)"],
+  ["success", "Müjde (yeşil)"],
+  ["warning", "Uyarı (sarı)"],
+];
+
+function localInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Sitenin en üstündeki duyuru şeridi. Kampanya açıkken ve duyuru yokken şerit kampanyayı geri
+ *  sayımla kendiliğinden gösterir. */
+function AnnouncementSettings() {
+  const api = useApi();
+  const view = useAdminQuery<Announcement>("/admin/v1/settings/announcement");
+  const action = useAdminAction();
+  const a = view.data;
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const ends = String(data.get("ends_at") ?? "");
+    const ok = await action.run(
+      () =>
+        api.put("/admin/v1/settings/announcement", {
+          enabled: data.get("enabled") === "on",
+          text: String(data.get("text") ?? "").trim(),
+          link: String(data.get("link") ?? "").trim(),
+          tone: data.get("tone"),
+          ends_at: ends ? new Date(ends).toISOString() : null,
+        }),
+      "Kaydedildi. Site yaklaşık 30 saniye içinde güncellenir.",
+    );
+    if (ok) view.reload();
+  }
+
+  return (
+    <Card as="section" className="space-y-4" aria-labelledby="duyuru-seridi">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="duyuru-seridi" className="text-lg font-semibold text-fg">
+            Duyuru şeridi
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            Sitenin en üstünde ince bir şerit. Yeni sürüm, bakım, kampanya gibi duyurular için. Duyuru yokken açık bir indirim
+            kampanyası varsa şerit onu geri sayımla gösterir.
+          </p>
+        </div>
+        {a ? (
+          <span
+            className={`rounded-full border px-3 py-1 text-xs font-semibold ${a.active ? "border-success-border bg-success-bg text-success-fg" : "border-border bg-surface-2 text-muted"}`}
+            data-testid="announcement-state"
+          >
+            {a.active ? "Yayında" : "Kapalı"}
+          </span>
+        ) : null}
+      </div>
+      <Feedback error={view.error} />
+      {a ? (
+        <form key={`${a.text}-${a.enabled}-${a.ends_at}`} onSubmit={(e) => void save(e)} className="space-y-3" data-testid="announcement-form">
+          <label className="flex items-center gap-2 text-sm font-medium text-fg">
+            <input type="checkbox" name="enabled" defaultChecked={a.enabled} className="h-4 w-4" /> Şeridi göster
+          </label>
+          <label className="block text-sm text-fg">
+            Metin (en çok 160 karakter)
+            <input name="text" maxLength={160} defaultValue={a.text} placeholder="Örn. Yeni sürüm 0.14.7 yayında: anlık fiyatlar" className={`mt-1 ${inputClass}`} />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block text-sm text-fg">
+              Bağlantı (isteğe bağlı)
+              <input name="link" maxLength={300} defaultValue={a.link} placeholder="/indir ya da https://…" className={`mt-1 ${inputClass}`} />
+            </label>
+            <label className="block text-sm text-fg">
+              Görünüm
+              <select name="tone" defaultValue={a.tone} className={`mt-1 ${inputClass}`}>
+                {TONES.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm text-fg">
+              Bitiş (boş: siz kapatana kadar)
+              <input name="ends_at" type="datetime-local" defaultValue={localInput(a.ends_at)} className={`mt-1 ${inputClass}`} />
+            </label>
+          </div>
+          <Button type="submit" disabled={action.pending}>
+            Şeridi kaydet
+          </Button>
+          <Feedback error={action.error} message={action.message} />
+        </form>
+      ) : null}
+    </Card>
+  );
+}
+
 export function Settings() {
   const { me } = useAdmin();
   return (
@@ -283,6 +394,7 @@ export function Settings() {
           <PaymentSettings />
           <CompanySettings />
           <SiteDesign />
+          <AnnouncementSettings />
         </>
       ) : null}
       <RecoveryCodes />

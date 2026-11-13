@@ -1,4 +1,5 @@
-// Paket fiyatı: kampanya varsa indirimsiz fiyat üstü çizili ve "%X indirim" rozetiyle.
+// Paket fiyatı: kampanya varsa indirimsiz fiyatın üstü çizgiyle çizilir, yeni fiyat zıplayarak
+// gelir ve "%X indirim" rozetinden ışık geçer (hareket azaltma tercihinde durur).
 // Sunucu ve tarayıcı bileşenlerinde kullanılabilir (durum tutmaz).
 
 import { formatPrice } from "@/lib/format";
@@ -24,19 +25,17 @@ export function PriceTag({
   return (
     <span className={`inline-flex flex-wrap items-baseline gap-x-2 gap-y-1 ${className}`} data-testid={testId}>
       {discounted ? (
-        <s className="tabular text-sm font-medium text-muted" data-testid={testId ? `${testId}-list` : undefined}>
+        <s className="sale-strike tabular text-sm font-medium text-muted" data-testid={testId ? `${testId}-list` : undefined}>
           <span className="visually-hidden">İndirimsiz fiyat: </span>
           {formatPrice(listMinor as number, currency)}
         </s>
       ) : null}
-      <span className={`tabular ${priceClassName}`}>
+      <span className={`tabular ${discounted ? "sale-pop" : ""} ${priceClassName}`}>
         {discounted ? <span className="visually-hidden">Kampanyalı fiyat: </span> : null}
         {formatPrice(minor, currency)}
       </span>
       {discounted ? (
-        <span className="rounded-full border border-success-border bg-success-bg px-2 py-0.5 text-xs font-semibold text-success-fg">
-          %{percent} indirim
-        </span>
+        <span className="sale-badge">%{percent} indirim</span>
       ) : null}
     </span>
   );

@@ -86,6 +86,64 @@ class LicenseDelete(BaseModel):
     code: str = Field(min_length=6, max_length=10)
 
 
+class LicenseBulk(BaseModel):
+    """Seçili lisanslarda toplu işlem. Silme ve iptal doğrulama kodu ister (bir kez)."""
+
+    ids: list[str] = Field(min_length=1, max_length=200)
+    action: Literal["delete", "cancel", "freeze", "unfreeze"]
+    reason: str = Field(default="", max_length=300)
+    code: str | None = Field(default=None, max_length=10)
+
+
+BULK_AUDIT = {
+    "delete": "deleted",
+    "cancel": "cancelled",
+    "freeze": "frozen",
+    "unfreeze": "unfrozen",
+}
+
+
+class _BulkSkip(Exception):
+    """Lisans bu işlem için uygun değil (sonuçta nedeniyle döner)."""
+
+
+async def _bulk_one(conn: Conn, lic: uuid.UUID, action: str, reason: str) -> str:
+    cur = await conn.execute(
+        "SELECT status::text AS status, deleted_at FROM licenses WHERE id = %s FOR UPDATE", (lic,)
+    )
+    row = await cur.fetchone()
+    if row is None or row["deleted_at"] is not None:
+        raise _BulkSkip("Lisans bulunamadı")
+    status = str(row["status"])
+    if action in ("delete", "cancel"):
+        if status == "cancelled" and action == "cancel":
+            raise _BulkSkip("Zaten iptal edilmiş")
+        if status != "cancelled":
+            prefix = "silindi: " if action == "delete" else ""
+            await conn.execute(
+                "UPDATE licenses SET status = 'cancelled', cancel_reason = %s WHERE id = %s",
+                (f"{prefix}{reason}", lic),
+            )
+        if action == "delete":
+            await conn.execute("UPDATE licenses SET deleted_at = now() WHERE id = %s", (lic,))
+        return "cancelled"
+    if action == "freeze":
+        if status not in ("ready_for_sale", "sold", "active", "expired"):
+            raise _BulkSkip("Bu durumdaki lisans dondurulamaz")
+        await conn.execute(
+            "UPDATE licenses SET status = 'frozen', frozen_reason = %s WHERE id = %s", (reason, lic)
+        )
+        return "frozen"
+    if status != "frozen":
+        raise _BulkSkip("Lisans dondurulmuş değil")
+    cur = await conn.execute(
+        "UPDATE licenses SET status = status_before_freeze WHERE id = %s RETURNING status::text",
+        (lic,),
+    )
+    after = await cur.fetchone()
+    return str(after["status"]) if after else status
+
+
 class CampaignUpdate(BaseModel):
     """Genel indirim kampanyası: bütün ücretli paketlere yüzde indirim."""
 
@@ -660,6 +718,67 @@ def create_admin_manage_router(ctx: AdminContext) -> APIRouter:
                 details={"reason": body.reason, "status_before": row["status"]},
             )  # fmt: skip
         return {"id": str(lic), "deleted": True}
+
+    async def bulk(body: LicenseBulk, request: Request, admin: Admin) -> dict[str, Any]:
+        """Seçili lisanslarda toplu işlem: her lisans ayrı işlenir (biri olmazsa diğerleri
+        etkilenmez), her biri denetim kaydına yazılır. Sonuç lisans başına döner."""
+        reason = body.reason.strip()
+        if body.action in ("delete", "cancel", "freeze") and len(reason) < 3:
+            raise HTTPException(status_code=422, detail="Neden en az 3 karakter olmalı")
+        ids = list(dict.fromkeys(body.ids))
+        results: list[dict[str, Any]] = []
+        async with ctx.db.connection() as conn:
+            if body.action in ("delete", "cancel"):
+                async with conn.transaction():
+                    await ctx.step_up(conn, admin, body.code)
+            for raw in ids:
+                try:
+                    lic = uuid.UUID(raw)
+                except ValueError:
+                    results.append({"id": raw, "ok": False, "error": "Geçersiz kimlik"})
+                    continue
+                try:
+                    async with conn.transaction():
+                        await ctx.act_as(conn, admin)
+                        status = await _bulk_one(conn, lic, body.action, reason)
+                        await ctx.audit(
+                            conn, request, actor_id=admin.id,
+                            action=f"admin.license_{BULK_AUDIT[body.action]}",
+                            target_type="license", target_id=lic,
+                            details={"bulk": True, "reason": reason},
+                        )  # fmt: skip
+                    results.append({"id": str(lic), "ok": True, "status": status})
+                except _BulkSkip as exc:
+                    results.append({"id": str(lic), "ok": False, "error": str(exc)})
+                except pg_errors.CheckViolation as exc:
+                    results.append(
+                        {"id": str(lic), "ok": False, "error": str(exc.diag.message_primary)}
+                    )
+        done = sum(1 for r in results if r["ok"])
+        return {
+            "action": body.action,
+            "done": done,
+            "failed": len(results) - done,
+            "results": results,
+        }
+
+    @router.post("/bulk/licenses/cancel")
+    async def bulk_cancel(
+        body: LicenseBulk, request: Request, admin: Admin = need["license.cancel"]
+    ) -> dict[str, Any]:
+        """Toplu silme ya da iptal (doğrulama kodu ister)."""
+        if body.action not in ("delete", "cancel"):
+            raise HTTPException(status_code=422, detail="Bu uç yalnızca silme ve iptal içindir")
+        return await bulk(body, request, admin)
+
+    @router.post("/bulk/licenses/freeze")
+    async def bulk_freeze(
+        body: LicenseBulk, request: Request, admin: Admin = need["license.freeze"]
+    ) -> dict[str, Any]:
+        """Toplu dondurma ya da dondurmayı kaldırma."""
+        if body.action not in ("freeze", "unfreeze"):
+            raise HTTPException(status_code=422, detail="Bu uç yalnızca dondurma içindir")
+        return await bulk(body, request, admin)
 
     # --- Genel indirim kampanyası -----------------------------------------------------------
 

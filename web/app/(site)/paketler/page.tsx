@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 
-import { BadgePercent, CalendarClock, Check, Infinity as InfinityIcon, Sparkles } from "lucide-react";
+import { CalendarClock, Check, Infinity as InfinityIcon, Sparkles } from "lucide-react";
 
+import { CampaignBanner, SaleRibbon } from "@/components/campaign/CampaignBanner";
 import { PriceTag } from "@/components/PriceTag";
 import { RiskNotice } from "@/components/RiskNotice";
 import { Badge, Container, IconTile, LinkButton, Notice, PageHeader } from "@/components/ui";
-import { deviceLabel, durationLabel, formatDate, formatPrice } from "@/lib/format";
+import { deviceLabel, durationLabel, formatPrice } from "@/lib/format";
 import { activeCampaign, fetchPlans, groupPlans } from "@/lib/plans";
 
 export const metadata: Metadata = {
@@ -31,19 +32,7 @@ export default async function PlansPage() {
       <Container className="py-14">
         {onSale ? (
           <>
-            {campaign ? (
-              <div
-                className="mb-8 flex flex-wrap items-center gap-4 rounded-3xl border border-success-border bg-success-bg px-6 py-4 text-success-fg"
-                role="status"
-                data-testid="campaign-banner"
-              >
-                <BadgePercent aria-hidden="true" className="h-7 w-7 shrink-0" />
-                <p className="text-base">
-                  <strong className="font-semibold">{campaign.label ?? "Kampanya"}:</strong> bütün paketlerde %{campaign.percent} indirim
-                  {campaign.endsAt ? <> · {formatDate(campaign.endsAt)} tarihine kadar</> : null}. İndirimli fiyatlar aşağıda gösterilir.
-                </p>
-              </div>
-            ) : null}
+            {campaign ? <CampaignBanner campaign={campaign} /> : null}
             {trial ? (
               <div className="gradient-border mb-10 flex flex-col justify-between gap-6 rounded-3xl p-7 shadow-lift md:flex-row md:items-center">
                 <div className="flex items-start gap-4">
@@ -61,7 +50,7 @@ export default async function PlansPage() {
                 </div>
               </div>
             ) : null}
-            <ul className="grid gap-6 md:grid-cols-2 xl:grid-cols-3" aria-label="Paket seçenekleri">
+            <ul className={`grid gap-6 md:grid-cols-2 xl:grid-cols-3 ${campaign ? "gap-y-9 pt-2" : ""}`} aria-label="Paket seçenekleri">
               {groups.map((group) => {
                 const long = group.durationDays === null || group.durationDays >= 365;
                 return (
@@ -69,6 +58,7 @@ export default async function PlansPage() {
                     key={group.key}
                     className={`card-lift relative flex flex-col rounded-3xl p-7 ${long ? "gradient-border shadow-lift" : "border border-border bg-surface shadow-sm"}`}
                   >
+                    {campaign ? <SaleRibbon percent={campaign.percent} /> : null}
                     <div className="flex items-start justify-between gap-3">
                       <IconTile icon={group.durationDays === null ? InfinityIcon : CalendarClock} tone={long ? "violet" : "accent"} />
                       {long ? (

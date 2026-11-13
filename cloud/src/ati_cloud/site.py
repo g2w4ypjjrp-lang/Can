@@ -6,11 +6,13 @@ Web sitesi her istekte değil, kısa önbellekle (``Cache-Control: max-age=30``)
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Response
 
 from ati_cloud.accounts import Database
+from ati_cloud.payments import campaign
 
 # Kod → panelde görünen ad. Renkler web/app/globals.css'te; her mod açık ve koyu temada
 # erişilebilirlik (kontrast) testinden geçer (web/e2e/designs.spec.ts).
@@ -35,6 +37,33 @@ async def load_appearance(conn: Any) -> dict[str, str]:
     return {"design": design_of(row["value"] if row else None)}
 
 
+# --- Duyuru şeridi (sitenin en üstü; yönetim paneli → Ayarlar) -----------------------------------
+
+ANNOUNCEMENT_TONES = ("info", "success", "warning", "campaign")
+
+
+def announcement_active(value: Any, now: datetime | None = None) -> bool:
+    if not isinstance(value, dict) or not value.get("enabled") or not value.get("text"):
+        return False
+    ends = value.get("ends_at")
+    if ends:
+        try:
+            end = datetime.fromisoformat(str(ends))
+        except ValueError:
+            return False
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=UTC)
+        return end > (now or datetime.now(UTC))
+    return True
+
+
+async def load_announcement(conn: Any) -> dict[str, Any] | None:
+    cur = await conn.execute("SELECT value FROM system_settings WHERE key = 'announcement'")
+    row = await cur.fetchone()
+    value = row["value"] if row else None
+    return value if isinstance(value, dict) else None
+
+
 def create_site_router(db: Database) -> APIRouter:
     router = APIRouter(prefix="/v1/site")
 
@@ -44,5 +73,24 @@ def create_site_router(db: Database) -> APIRouter:
             value = await load_appearance(conn)
         response.headers["Cache-Control"] = "public, max-age=30"
         return value
+
+    @router.get("/announcement")
+    async def announcement(response: Response) -> dict[str, Any]:
+        """Sitenin en üstündeki şerit: yönetimin duyurusu ve (varsa) yürürlükteki kampanya."""
+        async with db.connection() as conn:
+            stored = await load_announcement(conn)
+            active_campaign = await campaign.active(conn)
+        response.headers["Cache-Control"] = "public, max-age=30"
+        shown = None
+        if stored is not None and announcement_active(stored):
+            shown = {k: stored.get(k) for k in ("text", "link", "tone", "ends_at")}
+        promo = None
+        if active_campaign is not None:
+            promo = {
+                "percent": active_campaign["percent"],
+                "label": active_campaign.get("label") or None,
+                "ends_at": active_campaign.get("ends_at") or None,
+            }
+        return {"announcement": shown, "campaign": promo}
 
     return router
