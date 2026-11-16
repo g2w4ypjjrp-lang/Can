@@ -13,6 +13,11 @@ oldu ve parlaması kaldırıldı. Sürekli dönen, akan ve yanıp sönen süsler
 düğmesi düz kırmızı. Site güncellemesinde Next.js 16.4.6'ya yükseltildi (bilinen bir güvenlik açığı
 kapatıldı; eski sürümde derleme bu nedenle duruyordu).
 
+0.14.9'da yeni (site): **Lemon Squeezy ile kartla ödeme** (vergi levhası gerekmeden; satış Lemon
+Squeezy'nin şirketi üzerinden). Yönetim paneli → Ayarlar → Ödeme → *Lemon Squeezy*; kurulum adımları
+`deploy/windows-sunucu/README.md` → "Ödeme: Lemon Squeezy". Önce test modunda deneyin; canlı ödeme
+kilidi artık güvenli komutla açılıp kapanır: `yonet.ps1 canli-odeme ac | kapat | durum`.
+
 
 0.14.8'de düzeltildi: **bot hiç işlem açmıyordu.** Uygulama her açılışta güvenlik için Sanal modda
 başlıyor, bot ise Sanal modda işlem açmıyordu. Artık Sanal modda bot **sanal hesapta** çalışır:

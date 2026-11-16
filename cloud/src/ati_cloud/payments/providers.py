@@ -10,6 +10,10 @@ lisans teslimi ve idempotentlik sağlayıcıdan bağımsızdır (``service.py``)
 * **iyzico** (Ödeme Formu): istekler ``IYZWSv2`` imzalı; tarayıcı geri dönüşündeki belirteçle
   sonuç, kimliği doğrulanmış sunucu isteğiyle (``checkoutform/auth/ecom/detail``) alınır —
   doğrulama sağlayıcıya yapılan imzalı istekle sağlanır.
+* **Lemon Squeezy** (satıcı adına satış / Merchant of Record): ödeme sayfası Lemon Squeezy'de
+  açılır (kart, 3D Secure, fatura ve KDV onlarda). Oturum ``POST /v1/checkouts`` ile; bildirim
+  ``X-Signature`` = HMAC-SHA256(imza sırrı, ham gövde), onaltılık. Sipariş kimliğimiz
+  ``checkout_data.custom.order_id`` ile gider, bildirimde ``meta.custom_data`` olarak döner.
 * **Simülatör** (yalnızca geliştirme/test): sağlayıcı sayfası yerine sitedeki test sayfası;
   bildirim HMAC-SHA256 ile imzalanır. Uçtan uca testler gerçek bildirim hattından geçer.
 
@@ -462,3 +466,160 @@ class IyzicoProvider:
             str(data.get("paymentTransactionId") or data.get("paymentId") or provider_payment_id)
             + ":refund"
         )
+
+
+# --- Lemon Squeezy -------------------------------------------------------------------------------
+
+
+class LemonSqueezyProvider:
+    """Lemon Squeezy (Merchant of Record). Satış Lemon Squeezy'nin şirketi üzerinden yapılır;
+    ödeme sayfası, 3D Secure, fatura ve KDV onlarda. Mağazada tek bir "yazılım lisansı" ürünü
+    (varyant) açılır; tutar her siparişte ``custom_price`` ile gönderilir.
+
+    Mağazanın para birimi paket para birimiyle aynı olmalıdır; değilse bildirimdeki tutar/para
+    birimi siparişle eşleşmez ve sipariş otomatik teslim yerine incelemeye düşer.
+    """
+
+    name = "lemonsqueezy"
+    API = "https://api.lemonsqueezy.com"
+    JSONAPI = "application/vnd.api+json"
+    HANDLED = frozenset({"order_created", "order_refunded"})
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        signing_secret: str,
+        store_id: str,
+        variant_id: str,
+        test_mode: bool,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.api_key = api_key
+        self.signing_secret = signing_secret.encode()
+        self.store_id = store_id
+        self.variant_id = variant_id
+        self.test_mode = test_mode
+        self._transport = transport
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": self.JSONAPI,
+            "Content-Type": self.JSONAPI,
+        }
+
+    async def _request(self, method: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.API, timeout=20, transport=self._transport
+            ) as client:
+                response = await client.request(
+                    method, path, content=json.dumps(payload).encode(), headers=self._headers()
+                )
+            data: dict[str, Any] = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise ProviderError("Lemon Squeezy'ye ulaşılamadı") from exc
+        if response.status_code >= 400:
+            errors = data.get("errors") or [{}]
+            detail = str(errors[0].get("detail") or errors[0].get("title") or response.status_code)
+            raise ProviderError(f"Lemon Squeezy isteği reddetti: {detail[:200]}")
+        return data
+
+    def checkout_payload(self, req: CheckoutRequest) -> dict[str, Any]:
+        return {
+            "data": {
+                "type": "checkouts",
+                "attributes": {
+                    "custom_price": req.amount_minor,
+                    "product_options": {
+                        "name": req.item_name[:100],
+                        "redirect_url": req.success_url,
+                        "enabled_variants": [int(self.variant_id)],
+                    },
+                    "checkout_options": {"embed": False},
+                    "checkout_data": {
+                        "email": req.buyer.email,
+                        "name": req.buyer.full_name[:100],
+                        "custom": {"order_id": req.order_id, "order_no": str(req.order_no)},
+                    },
+                    "test_mode": self.test_mode,
+                },
+                "relationships": {
+                    "store": {"data": {"type": "stores", "id": str(self.store_id)}},
+                    "variant": {"data": {"type": "variants", "id": str(self.variant_id)}},
+                },
+            }
+        }
+
+    async def create_checkout(self, req: CheckoutRequest) -> CheckoutSession:
+        data = await self._request("POST", "/v1/checkouts", self.checkout_payload(req))
+        node = data.get("data") or {}
+        url = (node.get("attributes") or {}).get("url")
+        if not url or not node.get("id"):
+            raise ProviderError("Lemon Squeezy ödeme sayfası adresi dönmedi")
+        return CheckoutSession(provider_ref=str(node["id"]), redirect_url=str(url))
+
+    def parse_webhook(self, headers: dict[str, str], body: bytes) -> PaymentEvent:
+        signature = headers.get("x-signature", "")
+        expected = hmac.new(self.signing_secret, body, hashlib.sha256).hexdigest()
+        if not signature or not hmac.compare_digest(signature, expected):
+            raise InvalidSignature("Lemon Squeezy bildirimi imzası geçersiz")
+        payload = json.loads(body)
+        meta = payload.get("meta") or {}
+        event_name = str(meta.get("event_name") or "")
+        node = payload.get("data") or {}
+        attrs = node.get("attributes") or {}
+        order_ref = str((meta.get("custom_data") or {}).get("order_id") or "")
+        if attrs.get("test_mode") and not self.test_mode:
+            # Canlı modda test ödemesi asla lisans vermez.
+            raise InvalidSignature("Canlı modda test ödemesi bildirimi kabul edilmez")
+        if event_name not in self.HANDLED or node.get("type") != "orders" or not order_ref:
+            # Başka olaylar (abonelik vb.) ve bizim başlatmadığımız siparişler yok sayılır.
+            return PaymentEvent(
+                event_id=f"{event_name}:{node.get('id')}",
+                event_type="ignored",
+                order_ref=order_ref,
+                provider_payment_id=str(node.get("id") or ""),
+                amount_minor=0,
+                currency="",
+                raw={"event_name": event_name},
+            )
+        status = str(attrs.get("status") or "")
+        if event_name == "order_refunded":
+            # İade panelden başlatılır ve orada kaydedilir; bildirim yalnızca bilgi içindir.
+            event_type = "ignored"
+        elif status == "paid":
+            event_type = "payment_succeeded"
+        elif status == "failed":
+            event_type = "payment_failed"
+        else:
+            event_type = "ignored"  # bekleyen ödeme: sonuç ayrı bildirimle gelir
+        return PaymentEvent(
+            event_id=f"{event_name}:{node.get('id')}:{status}",
+            event_type=event_type,
+            order_ref=order_ref,
+            provider_payment_id=str(node.get("id") or ""),
+            amount_minor=int(attrs.get("total") or 0),
+            currency=str(attrs.get("currency") or "").upper(),
+            raw={
+                "event_name": event_name,
+                "status": status,
+                "identifier": attrs.get("identifier"),
+                "test_mode": bool(attrs.get("test_mode")),
+            },
+        )
+
+    async def refund(
+        self, *, provider_payment_id: str, amount_minor: int, currency: str, order_ref: str
+    ) -> str:
+        payload = {
+            "data": {
+                "type": "orders",
+                "id": str(provider_payment_id),
+                "attributes": {"amount": amount_minor},
+            }
+        }
+        data = await self._request("POST", f"/v1/orders/{provider_payment_id}/refund", payload)
+        status = str(((data.get("data") or {}).get("attributes") or {}).get("status") or "")
+        return f"{provider_payment_id}:refund:{amount_minor}:{status or 'requested'}"

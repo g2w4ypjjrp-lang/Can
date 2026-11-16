@@ -275,6 +275,36 @@ cd C:\ATI\uygulama\cloud
 & "C:\Program Files\PostgreSQL\16\bin\pg_restore.exe" --no-owner --clean --if-exists -d $env:ATI_DATABASE_URL ati.dump
 ```
 
+## Ödeme: Lemon Squeezy ve canlı ödeme kilidi
+
+Vergi levhası yoksa kartla (3D Secure) ödeme için **Lemon Squeezy** kullanılabilir: satışı kendi
+şirketleri üzerinden yapar, fatura ve KDV onlarda; kazanç size aktarılır. Kazancınızı Türkiye'de
+beyan etmeniz gerekebilir; bir mali müşavire danışın.
+
+1. lemonsqueezy.com → mağaza (Store) açın. Para birimi paketlerinizinkiyle aynı olsun.
+2. **Products → New product**: ad "AI Trading Intelligence lisansı", tek seferlik ödeme, herhangi bir
+   fiyat (her siparişte gerçek tutar site tarafından gönderilir). Kaydedin; ürünün **varyant numarası**
+   (Variant ID) ve **mağaza numarası** (Settings → Stores) gerekir.
+3. **Settings → API → New API key**: anahtarı kopyalayın (sohbete yapıştırmayın).
+4. **Settings → Webhooks → +**: adres yönetim panelinde gösterilir
+   (`https://api.canarslan.net.tr/v1/payments/webhooks/lemonsqueezy`); olaylardan `order_created` ve
+   `order_refunded`; bir **Signing secret** yazın (en az 8 karakter) ve not alın.
+5. Yönetim paneli → **Ayarlar → Ödeme**: Sağlayıcı *Lemon Squeezy*, Mod *Test*, mağaza ve varyant
+   numarası, API anahtarı, imza sırrı ve doğrulama kodu → **Kaydet**.
+6. Sitede bir paketi satın alın; Lemon Squeezy test kartı: `4242 4242 4242 4242`, ileri bir tarih,
+   herhangi bir CVC. Lisans müşteri paneline gelmeli.
+
+**Canlı ödeme kilidi** (gerçek para tahsilatı; yalnızca sizin kararınızla):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 canli-odeme durum
+powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 canli-odeme ac
+powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 canli-odeme kapat
+```
+
+`ac` onay ifadesi (`CANLI ODEME`) ister ve servisleri yeniden başlatır; ardından panelde Mod *Canlı*,
+canlı anahtarlar ve `CANLI ÖDEMEYİ AÇ` gerekir. `bulut.env` dosyasını elle düzenlemeyin.
+
 ## Kesinti izleme (ücretsiz)
 
 Sunucu kapanırsa haberiniz olsun: lisans yenilemeleri 72 saatten uzun aksarsa müşterilerin

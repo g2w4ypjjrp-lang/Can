@@ -2105,7 +2105,7 @@
   }
   /* Kartlar üzerine gelince yalnızca hafifçe yükselir. */
   .card-lift:hover {
-    transform: translateY(-2px);
+    transform: none;
     box-shadow: var(--shadow);
   }
   /* Degrade kenarlık: daha ince ve sakin. */
@@ -2201,7 +2201,7 @@
   }
 }
 .glow-card:hover {
-  transform: translateY(-2px);
+  transform: none;
   box-shadow: var(--shadow-lg);
 }
 .glow-card::after {

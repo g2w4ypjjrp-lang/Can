@@ -16,13 +16,26 @@ interface PaymentView {
   secrets: Record<string, { configured: boolean; hint: string | null; updated_at: string | null }>;
   live_allowed: boolean;
   providers: Record<string, { public: string[]; secrets: string[] }>;
+  webhook_urls?: Record<string, string>;
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
   none: "Seçilmedi",
   paytr: "PayTR",
   iyzico: "iyzico",
+  lemonsqueezy: "Lemon Squeezy (satıcı adına satış, vergi levhası gerekmez)",
   simulator: "Test simülatörü (gerçek tahsilat yok)",
+};
+// Alan adlarının açıklamaları (sağlayıcı panelinde nerede bulunduğu).
+const FIELD_LABELS: Record<string, string> = {
+  merchant_id: "Mağaza no (merchant_id)",
+  merchant_key: "Mağaza anahtarı (merchant_key)",
+  merchant_salt: "Mağaza gizli tuzu (merchant_salt)",
+  api_key: "API anahtarı",
+  secret_key: "Gizli anahtar",
+  store_id: "Mağaza numarası (Settings → Stores, yalnızca rakam)",
+  variant_id: "Ürün varyant numarası (Products → ürün → varyant, yalnızca rakam)",
+  signing_secret: "Webhook imza sırrı (Settings → Webhooks → Signing secret)",
 };
 const COMPANY_FIELDS: [string, string][] = [
   ["legal_name", "Ticaret unvanı"],
@@ -109,7 +122,7 @@ function PaymentSettings() {
         </div>
         {spec.public.map((name) => (
           <label key={name} className="block text-sm text-fg">
-            {name}
+            {FIELD_LABELS[name] ?? name}
             <input name={`public.${name}`} defaultValue={provider === view.data?.provider ? view.data.public[name] ?? "" : ""} className={`mt-1 ${inputClass}`} />
           </label>
         ))}
@@ -117,11 +130,20 @@ function PaymentSettings() {
           const info = provider === view.data?.provider ? view.data.secrets[name] : undefined;
           return (
             <label key={name} className="block text-sm text-fg">
-              {name} {info?.configured ? <span className="text-muted">(tanımlı {info.hint}, {dateTime(info.updated_at)} — değiştirmek için yeni değer girin)</span> : <span className="text-muted">(tanımlı değil)</span>}
+              {FIELD_LABELS[name] ?? name} {info?.configured ? <span className="text-muted">(tanımlı {info.hint}, {dateTime(info.updated_at)} — değiştirmek için yeni değer girin)</span> : <span className="text-muted">(tanımlı değil)</span>}
               <input name={`secret.${name}`} type="password" autoComplete="off" className={`mt-1 ${inputClass}`} />
             </label>
           );
         })}
+        {view.data.webhook_urls?.[provider] ? (
+          <Notice tone="info" title="Bildirim (webhook) adresi" role="note">
+            Sağlayıcının panelinde bildirim adresi olarak şunu girin:{" "}
+            <code className="break-all font-mono text-xs" data-testid="webhook-url">{view.data.webhook_urls[provider]}</code>
+            {provider === "lemonsqueezy" ? (
+              <> Olaylardan <strong>order_created</strong> ve <strong>order_refunded</strong> seçili olsun. Mağaza para birimi paketlerin para birimiyle aynı olmalı; aksi hâlde sipariş otomatik teslim edilmez, incelemeye düşer.</>
+            ) : null}
+          </Notice>
+        ) : null}
         {mode === "live" ? (
           <label className="block text-sm text-fg">
             Onay için <strong>CANLI ÖDEMEYİ AÇ</strong> yazın

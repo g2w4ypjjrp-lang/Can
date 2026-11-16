@@ -304,7 +304,15 @@ test("ödeme ayarları: canlı mod kapalı, şirket bilgileri kaydedilir", async
   await expect(page.locator("option[value=live]")).toHaveJSProperty("disabled", true);
   await page.getByLabel("Sağlayıcı").selectOption("paytr");
   await page.getByLabel("merchant_id").fill("123456");
-  await expect(page.getByText("merchant_key (tanımlı değil)")).toBeVisible();
+  await expect(page.getByText("Mağaza anahtarı (merchant_key) (tanımlı değil)")).toBeVisible();
+  // Sağlayıcı panelinde girilecek bildirim (webhook) adresi gösterilir.
+  await expect(page.getByTestId("webhook-url")).toHaveText("http://127.0.0.1:8100/v1/payments/webhooks/paytr");
+  await page.getByLabel("Sağlayıcı").selectOption("lemonsqueezy");
+  await expect(page.getByTestId("webhook-url")).toHaveText("http://127.0.0.1:8100/v1/payments/webhooks/lemonsqueezy");
+  await expect(page.getByLabel(/Varyant numarası/i)).toBeVisible();
+  await expect(page.getByText(/Webhook imza sırrı/)).toBeVisible();
+  await page.getByLabel("Sağlayıcı").selectOption("paytr");
+  await page.getByLabel("merchant_id").fill("123456");
   await page.getByRole("button", { name: "Kaydet" }).first().click();
   await expect(page.getByRole("status").filter({ hasText: "Ödeme ayarları kaydedildi" })).toBeVisible();
   await page.getByLabel("Ticaret unvanı").fill("Örnek Yazılım A.Ş.");

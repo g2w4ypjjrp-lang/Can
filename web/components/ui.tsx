@@ -16,7 +16,7 @@ const sizes = {
 };
 const variants = {
   primary:
-    "shine bg-brand text-white shadow-glow hover:-translate-y-px hover:brightness-110 active:translate-y-0 ring-1 ring-inset ring-white/15",
+    "shine bg-brand text-white shadow-glow hover:brightness-110 ring-1 ring-inset ring-white/15",
   secondary:
     "border border-border bg-surface/80 text-fg shadow-sm backdrop-blur hover:border-border-strong hover:bg-surface-2",
   ghost: "text-fg hover:bg-surface-2",

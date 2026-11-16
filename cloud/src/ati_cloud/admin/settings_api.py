@@ -39,9 +39,20 @@ PROVIDERS: dict[str, dict[str, list[str]]] = {
     "none": {"public": [], "secrets": []},
     "paytr": {"public": ["merchant_id"], "secrets": ["merchant_key", "merchant_salt"]},
     "iyzico": {"public": [], "secrets": ["api_key", "secret_key"]},
+    # Lemon Squeezy: mağaza ve "yazılım lisansı" varyantının numarası; API anahtarı ve bildirim
+    # (webhook) imza sırrı.
+    "lemonsqueezy": {
+        "public": ["store_id", "variant_id"],
+        "secrets": ["api_key", "signing_secret"],
+    },
     "simulator": {"public": [], "secrets": []},
 }
-Provider = Literal["none", "paytr", "iyzico", "simulator"]
+Provider = Literal["none", "paytr", "iyzico", "lemonsqueezy", "simulator"]
+
+
+def _phrase(text: str) -> str:
+    """Onay ifadesi karşılaştırması: büyük/küçük harf, İ/ı ve fazla boşluk fark etmez."""
+    return " ".join(text.replace("İ", "I").replace("ı", "I").replace("i", "I").upper().split())
 
 
 class AppearanceUpdate(BaseModel):
@@ -104,8 +115,18 @@ def _providers_for(environment: str) -> dict[str, dict[str, list[str]]]:
     return PROVIDERS
 
 
+# Sağlayıcı panelinde tanımlanacak bildirim (webhook) adresi; iyzico sonucu tarayıcı dönüşüyle
+# sorgulandığından bildirim adresi gerekmez.
+WEBHOOK_PROVIDERS_VIEW = ("paytr", "lemonsqueezy")
+
+
+def _webhook_urls(api_url: str) -> dict[str, str]:
+    base = api_url.rstrip("/")
+    return {name: f"{base}/v1/payments/webhooks/{name}" for name in WEBHOOK_PROVIDERS_VIEW}
+
+
 def _public_view(
-    stored: dict[str, Any] | None, live_allowed: bool, environment: str
+    stored: dict[str, Any] | None, live_allowed: bool, environment: str, api_url: str = ""
 ) -> dict[str, Any]:
     stored = stored or {"provider": "none", "mode": "test", "public": {}, "secrets": {}}
     provider = stored.get("provider", "none")
@@ -125,6 +146,7 @@ def _public_view(
         },
         "live_allowed": live_allowed,
         "providers": _providers_for(environment),
+        "webhook_urls": _webhook_urls(api_url) if api_url else {},
     }
 
 
@@ -156,7 +178,10 @@ def create_admin_settings_router(ctx: AdminContext) -> APIRouter:
     async def get_payment(admin: Admin = manage) -> dict[str, Any]:
         async with ctx.db.connection() as conn:
             stored = await _load(conn, "payment")
-        return _public_view(stored, ctx.settings.payments_live_allowed, ctx.settings.environment)
+        return _public_view(
+            stored, ctx.settings.payments_live_allowed, ctx.settings.environment,
+            ctx.settings.public_api_url,
+        )  # fmt: skip
 
     @router.put("/payment")
     async def put_payment(
@@ -209,7 +234,7 @@ def create_admin_settings_router(ctx: AdminContext) -> APIRouter:
                         detail="Canlı ödeme bu dağıtımda kapalı. Açılması için işletme sahibinin "
                         "açık onayı (G3) ve dağıtım ayarı gerekir.",
                     )
-                if body.confirm != LIVE_PHRASE:
+                if _phrase(body.confirm or "") != _phrase(LIVE_PHRASE):
                     raise HTTPException(status_code=400, detail=f"Onay için '{LIVE_PHRASE}' yazın")
                 missing = [n for n in spec["secrets"] if n not in secrets_stored]
                 if body.provider == "none" or missing:
@@ -237,7 +262,10 @@ def create_admin_settings_router(ctx: AdminContext) -> APIRouter:
                     "secrets_set": sorted(body.secrets), "secrets_cleared": sorted(body.clear),
                 },
             )  # fmt: skip
-        return _public_view(value, ctx.settings.payments_live_allowed, ctx.settings.environment)
+        return _public_view(
+            value, ctx.settings.payments_live_allowed, ctx.settings.environment,
+            ctx.settings.public_api_url,
+        )  # fmt: skip
 
     @router.get("/appearance")
     async def get_appearance(admin: Admin = manage) -> dict[str, Any]:

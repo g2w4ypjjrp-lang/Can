@@ -45,6 +45,7 @@ from ati_cloud.payments.providers import (
     CheckoutRequest,
     InvalidSignature,
     IyzicoProvider,
+    LemonSqueezyProvider,
     PaymentEvent,
     PaytrProvider,
     Provider,
@@ -59,8 +60,13 @@ Conn = psycopg.AsyncConnection[dict[str, Any]]
 # Yasal metinlerin sürümü: kabul kaydıyla birlikte siparişte saklanır.
 LEGAL_VERSION = "2026-11-taslak-1"
 CLOSED_MESSAGE = "Çevrim içi ödeme şu anda kapalı. Lütfen daha sonra tekrar deneyin."
-WEBHOOK_PROVIDERS = ("paytr", "simulator")
-PROVIDER_LABELS = {"paytr": "PayTR", "iyzico": "iyzico", "simulator": "Test simülatörü"}
+WEBHOOK_PROVIDERS = ("paytr", "lemonsqueezy", "simulator")
+PROVIDER_LABELS = {
+    "paytr": "PayTR",
+    "iyzico": "iyzico",
+    "lemonsqueezy": "Lemon Squeezy",
+    "simulator": "Test simülatörü",
+}
 PENDING_TRIAL_WINDOW_H = 2
 # Kupon kullanımı sayılırken ödemesi bekleyen siparişlerin hak tükettiği süre.
 PENDING_COUPON_WINDOW_H = 2
@@ -246,6 +252,18 @@ class Payments:
                     secret_key=secret_key,
                     test_mode=test_mode,
                     transport=self.transports.get("iyzico"),
+                )
+        if name == "lemonsqueezy":
+            api_key, signing = cfg.secrets.get("api_key"), cfg.secrets.get("signing_secret")
+            store_id, variant_id = cfg.public.get("store_id", ""), cfg.public.get("variant_id", "")
+            if api_key and signing and store_id.isdigit() and variant_id.isdigit():
+                return LemonSqueezyProvider(
+                    api_key=api_key,
+                    signing_secret=signing,
+                    store_id=store_id,
+                    variant_id=variant_id,
+                    test_mode=test_mode,
+                    transport=self.transports.get("lemonsqueezy"),
                 )
         raise PaymentError(503, "payments_closed", CLOSED_MESSAGE)
 
@@ -547,6 +565,8 @@ class Payments:
         except (InvalidSignature, ValueError, KeyError, TypeError) as exc:
             await self._record_invalid(provider_name, body, ip, str(exc))
             return WebhookReply(status=400, body="invalid notification")
+        if event.event_type == "ignored":
+            return WebhookReply()  # imzası doğru ama bizi ilgilendirmeyen olay
         await self.process(provider_name, event)
         return WebhookReply()
 

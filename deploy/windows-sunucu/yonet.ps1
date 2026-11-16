@@ -13,11 +13,17 @@
   C:\ATI\betikler\yonet.ps1 eposta-dene -Eposta siz@ornek.com
   C:\ATI\betikler\yonet.ps1 guncelleme-anahtari
   C:\ATI\betikler\yonet.ps1 surum-hazirla -Dosya "C:\Users\...\AI Trading Intelligence_1.0.0_x64-setup.exe"
+  C:\ATI\betikler\yonet.ps1 canli-odeme durum
+  C:\ATI\betikler\yonet.ps1 canli-odeme ac
+  C:\ATI\betikler\yonet.ps1 canli-odeme kapat
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("durum", "baslat", "durdur", "yeniden", "davet", "yonetici-sifirla", "loglar", "yedek", "eposta-ayarla", "eposta-dene", "guncelleme-anahtari", "surum-hazirla", "yedek-bulut-ayarla", "yedek-bulut-dene")]
+    [ValidateSet("durum", "baslat", "durdur", "yeniden", "davet", "yonetici-sifirla", "loglar", "yedek", "eposta-ayarla", "eposta-dene", "guncelleme-anahtari", "surum-hazirla", "yedek-bulut-ayarla", "yedek-bulut-dene", "canli-odeme")]
     [string]$Komut,
+    [Parameter(Position = 1)]
+    [ValidateSet("durum", "ac", "kapat")]
+    [string]$Islem = "durum",
     [string]$Eposta,
     [string]$Dosya,
     [string]$Ad,
@@ -298,6 +304,41 @@ switch ($Komut) {
         if (-not $son) { throw "Henüz yerel yedek yok: önce yonet.ps1 yedek" }
         & "$Kok\uygulama\cloud\.venv\Scripts\ati-cloud-offsite.exe" upload $son.FullName
         if ($LASTEXITCODE -eq 0) { Write-Host "Sunucu dışı yedek çalışıyor." -ForegroundColor Green }
+    }
+    "canli-odeme" {
+        # Gerçek ödeme kilidi (G3). Dosya elle düzenlenmez: Env-Guncelle diğer satırlara dokunmaz ve
+        # BOM'suz UTF-8 yazar (elle Set-Content -Encoding UTF8 dosyayı bozabilir).
+        $yol = Join-Path "$Kok\ayarlar" "bulut.env"
+        $satir = Select-String -Path $yol -Pattern '^ATI_PAYMENTS_LIVE_ALLOWED=(.*)$' | Select-Object -First 1
+        $acik = $satir -and ($satir.Matches[0].Groups[1].Value.Trim().ToLowerInvariant() -eq "true")
+        switch ($Islem) {
+            "durum" {
+                if ($acik) {
+                    Write-Host "Canlı ödeme kilidi: AÇIK. Yönetim panelinde Canlı mod seçilebilir." -ForegroundColor Yellow
+                } else {
+                    Write-Host "Canlı ödeme kilidi: KAPALI. Yalnızca sağlayıcının test ortamı kullanılabilir." -ForegroundColor Green
+                }
+            }
+            "ac" {
+                if ($acik) { Write-Host "Kilit zaten açık."; break }
+                Write-Host "DİKKAT: Bu işlem müşterilerden GERÇEK PARA tahsil edilmesine izin verir." -ForegroundColor Red
+                Write-Host "Önce şunlardan emin olun: vergi kaydı (ya da satıcı adına satış yapan sağlayıcı),"
+                Write-Host "sağlayıcının canlı hesabı onaylı, yasal metinler ve şirket bilgileri güncel."
+                $onay = Read-Host "Onaylamak için CANLI ODEME yazın"
+                $norm = ($onay -replace '\s+', ' ').Trim().ToUpperInvariant().Replace([string][char]0x130, "I").Replace([string][char]0xD6, "O")
+                if ($norm -ne "CANLI ODEME") { Write-Host "Onay verilmedi; hiçbir şey değişmedi."; exit 1 }
+                Env-Guncelle "bulut.env" @{ ATI_PAYMENTS_LIVE_ALLOWED = "true" }
+                Durdur; Start-Sleep -Seconds 2; Baslat
+                Write-Host "Kilit açıldı ve servisler yeniden başlatıldı." -ForegroundColor Yellow
+                Write-Host "Son adım yönetim panelinde: Ayarlar -> Ödeme -> Mod: Canlı, canlı anahtarlar,"
+                Write-Host "'CANLI ÖDEMEYİ AÇ' ve doğrulama kodu. Kapatmak için: yonet.ps1 canli-odeme kapat"
+            }
+            "kapat" {
+                Env-Guncelle "bulut.env" @{ ATI_PAYMENTS_LIVE_ALLOWED = "false" }
+                Durdur; Start-Sleep -Seconds 2; Baslat
+                Write-Host "Kilit kapatıldı; canlı satış durdu (panelde canlı seçili olsa bile)." -ForegroundColor Green
+            }
+        }
     }
     "yedek" {
         Start-ScheduledTask -TaskPath "\ATI\" -TaskName "Yedek"
