@@ -1,4 +1,11 @@
-# En son sürümü yükleme (0.14.8)
+# En son sürümü yükleme (0.14.9)
+
+0.14.9'da düzeltildi: **acil durdurma kaldırılamıyordu.** Onay kutusu "SERBEST BIRAK" ifadesini
+harfi harfine istiyordu; Türkçe klavyede büyük harfle yazınca "BİRAK" (noktalı İ) çıktığı için
+"Kaldır" düğmesi açılmıyordu. Artık büyük/küçük harf ve Türkçe karakter (İ, ı, Ş, Ğ, Ç, Ö, Ü) fark
+etmez; aynı düzeltme "KILIDI KALDIR" (günlük kilit) ve Gerçek para onayı için de geçerli. İşlem
+başarısız olursa nedeni artık üst çubukta yazılır.
+
 
 0.14.8'de düzeltildi: **bot hiç işlem açmıyordu.** Uygulama her açılışta güvenlik için Sanal modda
 başlıyor, bot ise Sanal modda işlem açmıyordu. Artık Sanal modda bot **sanal hesapta** çalışır:
@@ -125,7 +132,7 @@ harcama sınırı tanımlanabilir).
 1. GitHub → depo → **Actions** → **Masaüstü** → **Run workflow** → dal:
    `claude/laughing-hawking-wmt8mo` → **Run workflow**. Yaklaşık 25 dakika sürer.
 2. Yeşil olunca çalıştırmanın altındaki **Artifacts** → `ati-windows-installer-unsigned` ZIP'ini
-   indirip açın: `AI Trading Intelligence_0.14.8_x64-setup.exe`.
+   indirip açın: `AI Trading Intelligence_0.14.9_x64-setup.exe`.
 3. Dosyayı VDS'ye kopyalayıp hazırlayın (indirme klasörüne koyar, SHA-256'yı ve varsa güncelleme
    imzasını yazar):
 
@@ -133,7 +140,7 @@ harcama sınırı tanımlanabilir).
    powershell -ExecutionPolicy Bypass -File C:\ATI\betikler\yonet.ps1 surum-hazirla -Dosya "<setup.exe yolu>"
    ```
 
-4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.14.8), adres, SHA-256, boyut ve
+4. Yönetim paneli → **Sürümler** → Yeni sürüm: ekrandaki sürüm (0.14.9), adres, SHA-256, boyut ve
    imzayı girin → doğrulama kodunuzla **Yayınla**. Artık canarslan.net.tr/indir sayfasında görünür.
 
 ## C. Bilgisayarınızda kurulum / güncelleme

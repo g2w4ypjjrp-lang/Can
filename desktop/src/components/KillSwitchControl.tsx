@@ -1,7 +1,7 @@
 import { OctagonAlert, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useAction } from "../api/hooks";
-import { Confirm } from "./ui";
+import { Confirm, ErrorBox } from "./ui";
 
 export const RELEASE_PHRASE = "SERBEST BIRAK";
 
@@ -21,6 +21,11 @@ export function KillSwitchControl({ engaged, onChange }: { engaged: boolean; onC
         <button type="button" className="kill-btn" onClick={() => setAskEngage(true)} data-testid="kill-engage">
           <OctagonAlert size={15} aria-hidden="true" /> ACİL DURDUR
         </button>
+      )}
+      {(release.error || engage.error) && (
+        <div className="kill-error" role="alert">
+          <ErrorBox error={release.error ?? engage.error} />
+        </div>
       )}
       <Confirm
         open={askEngage}

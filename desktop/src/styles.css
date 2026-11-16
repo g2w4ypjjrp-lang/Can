@@ -2494,3 +2494,10 @@ label.check {
   letter-spacing: 0.08em;
   text-align: center;
 }
+
+/* Acil durdurma işlemi başarısız olursa üst çubukta hata. */
+.kill-error {
+  flex-basis: 100%;
+  max-width: 520px;
+  margin-left: auto;
+}

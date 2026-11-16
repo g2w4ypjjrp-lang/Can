@@ -210,6 +210,21 @@ export function Tabs<K extends string>({
 }
 
 /** Onay penceresi (tarayıcı confirm() masaüstü görünümünde güvenilir değildir). */
+/** Onay ifadesi karşılaştırması: büyük/küçük harf, Türkçe karakterler (İ/ı/Ş/Ğ/Ç/Ö/Ü) ve fazla
+ * boşluk fark etmez. Türkçe klavyede büyük harfle "BIRAK" yazınca "BİRAK" çıkar; bu da kabul edilir. */
+export function normalizePhrase(text: string): string {
+  const map: Record<string, string> = { İ: "I", ı: "I", i: "I", Ş: "S", ş: "S", Ğ: "G", ğ: "G", Ç: "C", ç: "C", Ö: "O", ö: "O", Ü: "U", ü: "U" };
+  return text
+    .replace(/[İıiŞşĞğÇçÖöÜü]/g, (ch) => map[ch] ?? ch)
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function phraseMatches(typed: string, phrase: string): boolean {
+  return normalizePhrase(typed) === normalizePhrase(phrase);
+}
+
 export function Confirm({
   open,
   title,
@@ -225,14 +240,14 @@ export function Confirm({
   children: ReactNode;
   confirmLabel?: string;
   danger?: boolean;
-  /** Verilirse kullanıcının bu ifadeyi birebir yazması gerekir. */
+  /** Verilirse kullanıcının bu ifadeyi yazması gerekir (büyük/küçük harf ve Türkçe karakter fark etmez). */
   phrase?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   const [typed, setTyped] = useState("");
   if (!open) return null;
-  const ok = !phrase || typed.trim() === phrase;
+  const ok = !phrase || phraseMatches(typed, phrase);
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title}>
       <div className="modal">
@@ -243,7 +258,8 @@ export function Confirm({
             <span>
               Onaylamak için yazın: <code>{phrase}</code>
             </span>
-            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus />
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus data-testid="confirm-phrase" />
+            <small>Büyük/küçük harf ve Türkçe karakter (İ, ı) fark etmez.</small>
           </label>
         )}
         <div className="modal-actions">

@@ -106,7 +106,10 @@ test("acil durdurma devreye girer; kaldırmak için onay ifadesi gerekir", async
   const dialog = page.getByRole("dialog");
   const confirm = dialog.getByRole("button", { name: "Kaldır" });
   await expect(confirm).toBeDisabled();
-  await dialog.getByRole("textbox").fill("SERBEST BIRAK");
+  await dialog.getByRole("textbox").fill("SERBEST");
+  await expect(confirm).toBeDisabled(); // eksik ifade kabul edilmez
+  // Türkçe klavyede büyük harfle yazınca "BİRAK" (noktalı İ) çıkar; bu da kabul edilmeli.
+  await dialog.getByRole("textbox").fill("SERBEST BİRAK");
   await confirm.click();
   await expect(page.getByTestId("top-state")).toHaveText("Çalışıyor");
 });
