@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-/** Marka işareti: neon degrade rozet, yükselen mumlar, trend çizgisi ve hedef düğümü.
+/** Marka işareti: mavi-lacivert degrade rozet, yükselen mumlar, trend çizgisi ve hedef düğümü.
  * Uygulama simgesiyle (src-tauri/app-icon.svg) aynı çizim. */
 export function LogoMark({ size = 36, className = "" }: { size?: number; className?: string }) {
   const id = useId().replace(/:/g, "");
@@ -11,9 +11,9 @@ export function LogoMark({ size = 36, className = "" }: { size?: number; classNa
     <svg viewBox="0 0 64 64" width={size} height={size} className={`logo-mark ${className}`} aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id={bg} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#11b8f0" />
-          <stop offset="0.5" stopColor="#6a4bff" />
-          <stop offset="1" stopColor="#e23fc9" />
+          <stop offset="0" stopColor="#4f8cff" />
+          <stop offset="0.5" stopColor="#2563eb" />
+          <stop offset="1" stopColor="#1e3a8a" />
         </linearGradient>
         <linearGradient id={shine} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#fff" stopOpacity="0.38" />

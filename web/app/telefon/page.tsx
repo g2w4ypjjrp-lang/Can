@@ -18,7 +18,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#19244f",
+  themeColor: "#111a33",
 };
 
 export default function TelefonPage() {

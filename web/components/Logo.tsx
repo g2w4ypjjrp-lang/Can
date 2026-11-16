@@ -1,4 +1,4 @@
-/** Marka işareti: neon degrade rozet, yükselen mumlar, trend çizgisi ve hedef düğümü (uygulama
+/** Marka işareti: mavi-lacivert degrade rozet, yükselen mumlar, trend çizgisi ve hedef düğümü (uygulama
  * simgesiyle aynı). Süs; ekran okuyucudan gizli. Degrade kimlikleri sabittir: sayfada birden çok
  * kez kullanılsa da tanımlar aynıdır. */
 export function LogoMark({ className = "h-8 w-8" }: { className?: string }) {
@@ -7,13 +7,13 @@ export function LogoMark({ className = "h-8 w-8" }: { className?: string }) {
       viewBox="0 0 64 64"
       aria-hidden="true"
       focusable="false"
-      className={`shrink-0 drop-shadow-[0_0_10px_rgba(59,232,255,0.45)] ${className}`}
+      className={`shrink-0 ${className}`}
     >
       <defs>
         <linearGradient id="ati-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#11b8f0" />
-          <stop offset="0.5" stopColor="#6a4bff" />
-          <stop offset="1" stopColor="#e23fc9" />
+          <stop offset="0" stopColor="#4f8cff" />
+          <stop offset="0.5" stopColor="#2563eb" />
+          <stop offset="1" stopColor="#1e3a8a" />
         </linearGradient>
         <linearGradient id="ati-shine" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#fff" stopOpacity="0.38" />
@@ -49,7 +49,7 @@ export function Wordmark({ className = "" }: { className?: string }) {
   return (
     <span className={`inline-flex flex-col leading-none ${className}`}>
       <span className="text-[16px] font-extrabold tracking-tight text-fg">
-        <span className="bg-gradient-to-r from-[#11b8f0] via-[#7a55ff] to-[#e23fc9] bg-clip-text text-transparent">AI</span> Trading
+        <span className="bg-gradient-to-r from-[#5b93ff] to-[#2563eb] bg-clip-text text-transparent">AI</span> Trading
       </span>
       <span lang="en" className="mt-[3px] text-[9.5px] font-bold uppercase tracking-[0.32em] text-accent-text">
         {" "}

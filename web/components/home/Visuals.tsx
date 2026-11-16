@@ -358,7 +358,7 @@ export function RiskViz() {
             <span className="tabular text-muted">{r.v}</span>
           </div>
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-3">
-            <div className={`h-full rounded-full bg-gradient-to-r from-[#0f9d58] to-[#22d3ee] ${r.w}`} />
+            <div className={`h-full rounded-full bg-gradient-to-r from-[#0f9d58] to-[#34d399] ${r.w}`} />
           </div>
         </div>
       ))}

@@ -6,6 +6,13 @@ harfi harfine istiyordu; Türkçe klavyede büyük harfle yazınca "BİRAK" (nok
 etmez; aynı düzeltme "KILIDI KALDIR" (günlük kilit) ve Gerçek para onayı için de geçerli. İşlem
 başarısız olursa nedeni artık üst çubukta yazılır.
 
+0.14.9'da yeni: **daha profesyonel görünüm** (site, uygulama ve telefon sayfası). Yerleşim, yazılar
+ve görseller aynı; neon camgöbeği/pembe/mor tonlar lacivert-mavi aileye geçti, logo mavi-lacivert
+oldu ve parlaması kaldırıldı. Sürekli dönen, akan ve yanıp sönen süsler (dönen kenarlık ışığı, akan
+ızgara zemin, parıldayan yazılar, kampanya konfetisi ve sallanan etiket) durduruldu; acil durdurma
+düğmesi düz kırmızı. Site güncellemesinde Next.js 16.4.6'ya yükseltildi (bilinen bir güvenlik açığı
+kapatıldı; eski sürümde derleme bu nedenle duruyordu).
+
 
 0.14.8'de düzeltildi: **bot hiç işlem açmıyordu.** Uygulama her açılışta güvenlik için Sanal modda
 başlıyor, bot ise Sanal modda işlem açmıyordu. Artık Sanal modda bot **sanal hesapta** çalışır:

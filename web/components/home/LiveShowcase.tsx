@@ -79,7 +79,7 @@ export function LiveShowcase() {
           <div aria-hidden="true" className="relative mx-auto flex max-w-xl justify-center sm:justify-end sm:pr-4">
             {/* Telefon kilit ekranı */}
             <div className="relative z-10 w-[17.5rem] rounded-[2.8rem] border border-white/10 bg-[#0b1024] p-2.5 shadow-lift">
-              <div className="relative overflow-hidden rounded-[2.3rem] bg-[linear-gradient(160deg,#1b2a6b_0%,#3b1f73_55%,#11183f_100%)] px-3.5 pb-8 pt-10 text-white">
+              <div className="relative overflow-hidden rounded-[2.3rem] bg-[linear-gradient(160deg,#1c2b5e_0%,#16224c_55%,#0e1633_100%)] px-3.5 pb-8 pt-10 text-white">
                 <div className="absolute left-1/2 top-2.5 h-6 w-24 -translate-x-1/2 rounded-full bg-black/80" />
                 <p className="text-center text-[13px] font-medium text-white/80">Perşembe, 13 Kasım</p>
                 <p className="text-center text-6xl font-semibold tracking-tight">09:41</p>
