@@ -12,7 +12,7 @@
 
   Eksikse winget ile kurar: Visual Studio 2022 Build Tools (C++), Rust, Node.js, uv (Python).
   İlk çalıştırmada indirme ~4 GB, süre 45-90 dakika; sonrakiler 10-20 dakika.
-  Gerekli boş alan: en az 15 GB. Adımlar GitHub'daki derleme işiyle (desktop.yml) aynıdır.
+  Gerekli boş alan: ilk çalıştırmada 15 GB, araçlar kuruluysa 8 GB. Adımlar GitHub'daki derleme işiyle (desktop.yml) aynıdır.
 
   Aynı klasörde tekrar çalıştırıldığında paketlenmiş motor yeniden kullanılır (zaman kazanılır);
   her şeyi baştan derlemek için: -Temiz
@@ -74,8 +74,13 @@ Write-Host "Pencereyi 'Derleme tamamlandı' ya da 'HATA' yazana kadar kapatmayı
 # ---------------------------------------------------------------------------------------------
 Adim "Ön denetimler"
 $surucu = Get-PSDrive -Name ($Kok.Substring(0, 1))
-if ($surucu.Free -lt 15GB) { Hata "Bu sürücüde en az 15 GB boş alan gerekli (şu an $([math]::Round($surucu.Free / 1GB, 1)) GB)." }
 Yolu-Yenile
+# İlk kurulumda araçlar (~4 GB) da indirilir; araçlar kuruluysa derleme için 8 GB yeter.
+$araclarVar = (Var "cargo") -and (Test-Path (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"))
+$gerekli = if ($araclarVar) { 8GB } else { 15GB }
+if ($surucu.Free -lt $gerekli) {
+    Hata "Bu sürücüde en az $($gerekli / 1GB) GB boş alan gerekli (şu an $([math]::Round($surucu.Free / 1GB, 1)) GB). Geçici dosyaları ve eski derleme klasörlerini silip tekrar deneyin."
+}
 
 # ---------------------------------------------------------------------------------------------
 Adim "Visual Studio 2022 Build Tools (C++ derleyici)"
