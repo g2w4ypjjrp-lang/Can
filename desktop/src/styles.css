@@ -2649,3 +2649,15 @@ button.primary {
   -webkit-text-fill-color: var(--muted);
   color: var(--muted);
 }
+
+/* Mutabakat farkı uyarısı (Güvenli mod). */
+.reconcile-notice {
+  border-color: rgba(245, 192, 74, 0.5);
+}
+.reconcile-notice h3 {
+  font-size: 15px;
+}
+.reconcile-notice ul {
+  margin: 8px 0;
+  padding-left: 18px;
+}

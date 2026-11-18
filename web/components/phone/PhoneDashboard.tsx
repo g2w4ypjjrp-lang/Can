@@ -139,6 +139,20 @@ const AVATAR = [
   ["#4338ca", "#0e7490"],
 ];
 
+// Motorun teknik durum gerekçesini (hazırlık koşulu adları) anlaşılır Türkçeye çevirir.
+const REASONS: [RegExp, string][] = [
+  [/(live\.)?exchange\.usdm_futures\.reconciled/g, "Binance Futures kayıtları uyuşmuyor (masaüstünde ayrıntı ve “Binance'e eşitle”)"],
+  [/(live\.)?exchange\.spot\.reconciled/g, "Binance Spot kayıtları uyuşmuyor (masaüstünde ayrıntı)"],
+  [/(live\.)?exchange\.(usdm_futures|spot)\.stream/g, "Binance hesap akışı kopuk"],
+  [/(live\.)?risk\.daily_loss/g, "günlük zarar sınırı"],
+  [/market_data\.(usdm_futures|spot)/g, "piyasa verisi bekleniyor"],
+  [/license\.valid/g, "lisans"],
+  [/hazır olmayan koşullar: /, "Yeni işlem açılmıyor: "],
+];
+function explainReason(reason: string): string {
+  return REASONS.reduce((text, [pattern, label]) => text.replace(pattern, label), reason);
+}
+
 const clock = (ms?: number | null) =>
   ms ? new Date(ms).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
 const money = (v?: string | number | null, digits = 2) => {
@@ -624,7 +638,7 @@ export function PhoneDashboard({ snap: raw, snapAt, events, phase, detail, serie
               {risk ? `${money(risk.equity)}` : "—"}
             </Tile>
           </div>
-          {engine?.state !== "running" && engine?.reason ? <p className="mt-2 px-1 text-xs text-muted">{engine.reason}</p> : null}
+          {engine?.state !== "running" && engine?.reason ? <p className="mt-2 px-1 text-xs text-muted" data-testid="phone-engine-reason">{explainReason(engine.reason)}</p> : null}
           {engine?.kill_switch && (
             <p className="mt-2.5 flex items-center gap-2 rounded-2xl border border-danger-border bg-danger-bg px-3 py-2.5 text-sm font-semibold text-danger-fg" data-testid="phone-kill-on">
               <AlertOctagon size={16} aria-hidden="true" className="shrink-0" /> Acil durdurma devrede{engine.kill_reason ? `: ${engine.kill_reason}` : ""}

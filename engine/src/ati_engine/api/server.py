@@ -1374,6 +1374,17 @@ def create_app(runtime: EngineRuntime) -> FastAPI:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return report.as_dict()
 
+    @app.post("/v1/execution/reconcile/adopt")
+    async def execution_reconcile_adopt(
+        market: Market, request: Request, _: Auth
+    ) -> dict[str, Any]:
+        """Mutabakat farkı: yerel pozisyon kaydını borsadaki duruma eşitler (onaylı)."""
+        await verify(request, "reconcile_adopt")
+        try:
+            return await execution_or_404().adopt_exchange(market, actor=LOCAL_ACTOR)
+        except ExecutionUnavailable as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     # --- Risk yönetimi ve otomatik işlem (Aşama 11) ---------------------------------------------
 
     @app.get("/v1/risk/status")

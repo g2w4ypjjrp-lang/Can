@@ -254,3 +254,27 @@ async def test_stream_drop_triggers_reconciliation(exchange: FakeExchange, db: D
     assert active_algos(exchange) == []
     assert reconciler.last is not None and reconciler.last.fills_recovered >= 1
     await shutdown(engine)
+
+
+async def test_adopt_exchange_closes_local_position_closed_on_exchange(
+    exchange: FakeExchange, db: Database
+) -> None:
+    """Pozisyon Binance'ten elle kapatıldı: mutabakat kritik fark bulur (Güvenli mod); kullanıcı
+    onayıyla yerel kayıt borsaya eşitlenir, koruma emirleri iptal edilir, mutabakat temizlenir."""
+    engine = await start_engine(exchange, db)
+    await engine.open(intent(Market.USDM_FUTURES))
+    assert active_algos(exchange)  # stop ve hedef bekliyor
+    exchange.futures_positions.pop("BTCUSDT", None)  # borsada kapalı
+    reconciler = Reconciler(engine)
+    report = await reconciler.run("test")
+    assert not report.ok
+    assert any(i.rule == "position_mismatch" for i in report.issues)
+
+    changed = await reconciler.adopt_exchange()
+    assert changed == [{"symbol": "BTCUSDT", "local": "2", "exchange": "0"}]
+    assert "BTCUSDT" not in engine.positions.positions
+    assert reconciler.last is not None and reconciler.last.ok, reconciler.last.as_dict()
+    assert active_algos(exchange) == []  # artık koruma emirleri iptal edildi
+    rows = await db.fetchall("SELECT status, close_reason FROM positions WHERE symbol = 'BTCUSDT'")
+    assert rows and rows[-1][0] == "closed" and "mutabakat" in rows[-1][1]
+    await shutdown(engine)

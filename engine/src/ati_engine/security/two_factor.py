@@ -47,6 +47,7 @@ ACTIONS: dict[str, str] = {
     "live_key": "Gerçek hesap anahtarı ekleme ya da silme",
     "kill_switch_release": "Acil durdurmayı kaldırma",
     "risk_release_day": "Günlük zarar kilidini kaldırma",
+    "reconcile_adopt": "Yerel pozisyon kaydını borsaya eşitleme",
     "license_deactivate": "Lisansı bu bilgisayardan kaldırma",
     "phone_pairing": "Telefon eşleme",
     "two_factor_disable": "Doğrulamayı kapatma",

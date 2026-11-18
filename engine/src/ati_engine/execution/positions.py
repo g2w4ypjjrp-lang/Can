@@ -170,6 +170,20 @@ class PositionBook:
         await self._persist(position)
         return PositionChange(position, realized, closed)
 
+    async def adopt(self, symbol: str, quantity: Decimal, *, reason: str) -> None:
+        """Yerel pozisyonu borsadaki miktara eşitler (kullanıcı onaylı mutabakat düzeltmesi).
+        Miktar 0 ise yerel kayıt kapatılır; kâr/zarar bilinmediği için değiştirilmez."""
+        position = self.positions.get(symbol)
+        if position is None:
+            return
+        if quantity == 0:
+            position.quantity = ZERO
+            await self._persist(position, closed_at=self.now_ms(), reason=reason[:100])
+            del self.positions[symbol]
+            return
+        position.quantity = quantity
+        await self._persist(position)
+
     async def add_funding(self, symbol: str, amount: Decimal) -> None:
         """Ödenen funding (pozitif) veya alınan (negatif)."""
         position = self.positions.get(symbol)

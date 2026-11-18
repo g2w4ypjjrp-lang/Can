@@ -5,6 +5,7 @@ import { usePoll } from "../api/hooks";
 import type { ExecutionPositionInfo, OpportunitySummary, StatusResponse } from "../api/types.gen";
 import { BotPanel } from "../components/BotPanel";
 import { GettingStarted } from "../components/GettingStarted";
+import { ReconcileNotice } from "../components/ReconcileNotice";
 import { LivePnl } from "../components/LivePnl";
 import { useLivePositions } from "../lib/livePrices";
 import { LivePrice } from "../components/LivePrice";
@@ -27,6 +28,14 @@ const CONDITION_LABELS: Record<string, string> = {
   "risk.daily_loss": "Günlük zarar sınırı",
   "live.risk.daily_loss": "Günlük zarar sınırı (gerçek hesap)",
   "license.valid": "Lisans",
+  "live.exchange.usdm_futures.reconciled": "Binance Futures mutabakatı",
+  "live.exchange.spot.reconciled": "Binance Spot mutabakatı",
+  "live.exchange.usdm_futures.stream": "Binance Futures hesap akışı",
+  "live.exchange.spot.stream": "Binance Spot hesap akışı",
+  "exchange.usdm_futures.reconciled": "Futures mutabakatı",
+  "exchange.spot.reconciled": "Spot mutabakatı",
+  "exchange.usdm_futures.stream": "Futures hesap akışı",
+  "exchange.spot.stream": "Spot hesap akışı",
 };
 
 function Kpi({ icon, label, value, hint, tone, testId }: { icon: ReactNode; label: string; value: ReactNode; hint?: ReactNode; tone?: string; testId?: string }) {
@@ -188,6 +197,7 @@ export function Dashboard() {
     <div className="page" data-testid="page-dashboard">
       <ErrorBox error={status.error} what="Motor" />
       <GettingStarted mode={s?.trading_mode} />
+      <ReconcileNotice conditions={s?.readiness ?? []} onChange={() => status.refresh()} />
       <BalanceHero
         wallets={(account?.wallets as WalletInfo[] | undefined) ?? null}
         liveFuturesPnl={liveFuturesPnl}

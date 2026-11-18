@@ -143,6 +143,48 @@ class Reconciler:
             self.runs += 1
             return report
 
+    async def adopt_exchange(self) -> list[dict[str, str]]:
+        """Kullanıcı onayıyla: yerel pozisyonları borsadaki duruma eşitler (borsa tek doğru
+        kaynaktır). Borsada kapanmış (ör. Binance'ten elle kapatılmış) pozisyonun yerel kaydı
+        kapatılır, koruma emirleri iptal edilir. Borsada olup yerelde olmayan pozisyonlara
+        dokunulmaz. Ardından mutabakat yeniden çalışır."""
+        changed: list[dict[str, str]] = []
+        async with self._lock:
+            engine = self.engine
+            local = {s: p.quantity for s, p in engine.positions.positions.items()}
+            if engine.market is Market.USDM_FUTURES:
+                remote = {p.symbol: p.quantity for p in await engine.venue.positions()}
+            else:
+                balances = {b.asset: b.free + b.locked for b in await engine.venue.balances()}
+                remote = {}
+                for symbol in local:
+                    info = engine.symbols(symbol)
+                    base = info.base_asset if info else symbol.removesuffix(engine.venue.quote)
+                    held = balances.get(base, ZERO)
+                    remote[symbol] = min(held, local[symbol]) if held > self.qty_tolerance else ZERO
+            for symbol, mine in local.items():
+                theirs = remote.get(symbol, ZERO)
+                if abs(mine - theirs) <= self.qty_tolerance:
+                    continue
+                if theirs == 0:
+                    for record in list(engine.orders.open_records()):
+                        if record.symbol != symbol or record.purpose not in PROTECTIVE:
+                            continue
+                        await engine.orders.cancel(record.client_id)
+                        if not record.status.is_terminal:
+                            await engine.orders.mark(
+                                record, OrderStatus.CANCELED, "mutabakat eşitlemesi"
+                            )
+                    managed = engine.managed.pop(symbol, None)
+                    if managed is not None:
+                        managed.state = "closed"
+                await engine.positions.adopt(
+                    symbol, theirs, reason="borsada kapalı (mutabakat eşitlemesi)"
+                )
+                changed.append({"symbol": symbol, "local": str(mine), "exchange": str(theirs)})
+        await self.run("adopt")
+        return changed
+
     async def run_forever(self, interval_s: float, stop: asyncio.Event) -> None:
         while not stop.is_set():
             try:

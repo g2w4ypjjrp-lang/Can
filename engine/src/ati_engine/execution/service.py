@@ -544,6 +544,18 @@ class ExecutionService:
     async def reconcile(self, market: Market) -> ReconcileReport:
         return await self._get(market).reconciler.run("manual")
 
+    async def adopt_exchange(self, market: Market, *, actor: str) -> dict[str, Any]:
+        """Yerel pozisyon kaydını borsadaki duruma eşitler (kullanıcı onaylı)."""
+        execution = self._get(market)
+        changed = await execution.reconciler.adopt_exchange()
+        await self.audit.record(
+            actor=actor,
+            action="execution.reconcile_adopt",
+            details={"market": market.value, "changed": changed},
+        )
+        last = execution.reconciler.last
+        return {"changed": changed, "report": last.as_dict() if last else None}
+
     # --- Durum --------------------------------------------------------------------------------
 
     async def status(self) -> dict[str, Any]:

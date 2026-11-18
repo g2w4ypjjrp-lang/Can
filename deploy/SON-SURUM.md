@@ -6,6 +6,12 @@ harfi harfine istiyordu; Türkçe klavyede büyük harfle yazınca "BİRAK" (nok
 etmez; aynı düzeltme "KILIDI KALDIR" (günlük kilit) ve Gerçek para onayı için de geçerli. İşlem
 başarısız olursa nedeni artık üst çubukta yazılır.
 
+0.14.9'da yeni: **Güvenli moddan çıkış.** Uygulama her dakika kendi kaydını Binance'le
+karşılaştırır; fark varsa (ör. pozisyon Binance uygulamasından elle kapatıldıysa) yeni işlem açmaz ve
+"Güvenli mod"a geçer. Artık Kontrol panelinde nedeni Türkçe yazılır; **Tekrar denetle** ve onaylı
+**Binance'e eşitle** düğmeleri vardır (Binance'teki pozisyon ve bakiyeye dokunulmaz). Telefonda da
+neden anlaşılır yazılır.
+
 0.14.9'da yeni: **daha profesyonel görünüm** (site, uygulama ve telefon sayfası). Yerleşim, yazılar
 ve görseller aynı; neon camgöbeği/pembe/mor tonlar lacivert-mavi aileye geçti, logo mavi-lacivert
 oldu ve parlaması kaldırıldı. Sürekli dönen, akan ve yanıp sönen süsler (dönen kenarlık ışığı, akan
