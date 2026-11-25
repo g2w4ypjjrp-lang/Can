@@ -1,0 +1,542 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Liveness",
+        "tags": ["health"]
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Readiness: veritabanı ve Redis bağlantısı",
+        "tags": ["health"]
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "MeController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Oturumdaki kullanıcı ve kişisel ayarlar",
+        "tags": ["me"]
+      }
+    },
+    "/api/v1/me/settings": {
+      "patch": {
+        "operationId": "MeController_update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "uiLanguage": {
+                    "type": "string",
+                    "enum": ["tr", "en"]
+                  },
+                  "baseCurrency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "notifyEmail": {
+                    "type": "boolean"
+                  },
+                  "notifyPush": {
+                    "type": "boolean"
+                  },
+                  "notifyDailyReport": {
+                    "type": "boolean"
+                  },
+                  "requireReauthForSensitive": {
+                    "type": "boolean"
+                  },
+                  "fullName": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "timezone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Kişisel ayarları güncelle",
+        "tags": ["me"]
+      }
+    },
+    "/api/v1/stores": {
+      "get": {
+        "operationId": "StoresController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Erişimim olan mağazalar",
+        "tags": ["stores"]
+      },
+      "post": {
+        "description": "Etsy bağlantısı FAZ 2 OAuth akışıyla yapılır; bu kayıt o zamana kadar \"not_connected\" kalır.",
+        "operationId": "StoresController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "currency": {
+                    "default": "USD",
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "defaultLanguage": {
+                    "default": "en",
+                    "type": "string",
+                    "enum": ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "ja"]
+                  }
+                },
+                "required": ["name", "currency", "defaultLanguage"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mağaza kaydı oluştur",
+        "tags": ["stores"]
+      }
+    },
+    "/api/v1/stores/{storeId}": {
+      "get": {
+        "operationId": "StoresController_get",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["stores"]
+      }
+    },
+    "/api/v1/stores/{storeId}/settings": {
+      "get": {
+        "operationId": "StoresController_getSettings",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mağaza ayarları (strateji, diller, reklam bütçe sınırı)",
+        "tags": ["stores"]
+      },
+      "patch": {
+        "operationId": "StoresController_updateSettings",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "salesStrategy": {
+                    "type": "string",
+                    "enum": ["growth", "balanced", "profit"]
+                  },
+                  "automationLevel": {
+                    "type": "string",
+                    "enum": ["manual", "controlled", "autonomous_limited"]
+                  },
+                  "defaultLanguage": {
+                    "type": "string",
+                    "enum": ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "ja"]
+                  },
+                  "languages": {
+                    "minItems": 1,
+                    "maxItems": 9,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "ja"]
+                    }
+                  },
+                  "targetMarkets": {
+                    "maxItems": 60,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$"
+                    }
+                  },
+                  "dailyAdBudgetCap": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,2})?$"
+                  },
+                  "adBudgetCurrency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "timezone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["stores"]
+      }
+    },
+    "/api/v1/stores/{storeId}/profit-rules": {
+      "get": {
+        "operationId": "StoresController_getProfitRules",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Katkı eşikleri ve kâr politikası",
+        "tags": ["stores"]
+      },
+      "patch": {
+        "operationId": "StoresController_updateProfitRules",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "targetContribution": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,2})?$"
+                  },
+                  "excellentThreshold": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,2})?$"
+                  },
+                  "publishThreshold": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,2})?$"
+                  },
+                  "reviewThreshold": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,2})?$"
+                  },
+                  "minThreshold": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,2})?$"
+                  },
+                  "returnReserveRate": {
+                    "type": "string",
+                    "pattern": "^(0(\\.\\d{1,4})?|1(\\.0{1,4})?)$"
+                  },
+                  "remakeReserveRate": {
+                    "type": "string",
+                    "pattern": "^(0(\\.\\d{1,4})?|1(\\.0{1,4})?)$"
+                  },
+                  "otherVariableCostRate": {
+                    "type": "string",
+                    "pattern": "^(0(\\.\\d{1,4})?|1(\\.0{1,4})?)$"
+                  },
+                  "otherVariableCostFixed": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,4})?$"
+                  },
+                  "defaultAdCostPerOrder": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,4})?$"
+                  },
+                  "taxRateOnProfit": {
+                    "type": "string",
+                    "pattern": "^(0(\\.\\d{1,4})?|1(\\.0{1,4})?)$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["stores"]
+      }
+    },
+    "/api/v1/stores/{storeId}/dashboard": {
+      "get": {
+        "operationId": "DashboardController_overview",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "1-365, varsayılan 30",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Genel bakış: ciro, sipariş, reklam, katkı, onaylar (yalnızca gerçek kayıtlar)",
+        "tags": ["dashboard"]
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "operationId": "NotificationsController_list",
+        "parameters": [
+          {
+            "name": "unread",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Bildirimlerim (en yeni 100)",
+        "tags": ["notifications"]
+      }
+    },
+    "/api/v1/notifications/{id}/read": {
+      "post": {
+        "operationId": "NotificationsController_markRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["notifications"]
+      }
+    },
+    "/api/v1/notifications/read-all": {
+      "post": {
+        "operationId": "NotificationsController_markAll",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["notifications"]
+      }
+    }
+  },
+  "info": {
+    "title": "Etsy AI Store Manager API",
+    "description": "Etsy + Printify mağaza yönetimi API. Kimlik doğrulama: Supabase Auth erişim belirteci (Bearer).",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {}
+  }
+}

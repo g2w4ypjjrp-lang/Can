@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+
+/* Light SaaS theme: white / light-grey surfaces, navy + blue accents. */
+@theme {
+  --color-navy-950: #0b1733;
+  --color-navy-900: #10214a;
+  --color-navy-800: #172e63;
+  --color-navy-700: #1e3a7b;
+  --color-brand-600: #2456d6;
+  --color-brand-500: #2f6bf0;
+  --color-brand-100: #e3ecff;
+  --color-brand-50: #f1f5ff;
+  --color-surface: #ffffff;
+  --color-canvas: #f5f7fb;
+  --color-line: #e3e8f0;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-canvas);
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}

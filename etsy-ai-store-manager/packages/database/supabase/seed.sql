@@ -1,0 +1,1 @@
+-- Intentionally empty: no demo data is ever seeded into a real store database.
