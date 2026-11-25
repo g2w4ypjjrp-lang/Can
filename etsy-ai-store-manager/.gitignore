@@ -11,3 +11,6 @@ next-env.d.ts
 !.env.example
 infrastructure/docker/data/
 backups/
+
+# local Redis snapshots
+*.rdb
