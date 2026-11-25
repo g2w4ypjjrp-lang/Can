@@ -150,6 +150,12 @@ export async function startWorker(opts: {
       { name: JOBS.printifySyncAll, data: {}, opts: DEFAULT_JOB_OPTIONS },
     );
   }
+  // ECB publishes reference rates around 16:00 CET on working days
+  await sync.upsertJobScheduler(
+    'fx-refresh',
+    { pattern: '20 15 * * 1-5', tz: 'UTC' },
+    { name: JOBS.fxRefresh, data: {}, opts: DEFAULT_JOB_OPTIONS },
+  );
   const enqueue: Enqueue = async (jobName, storeId, idempotencyKey, payload = {}) => {
     await sync.add(jobName, { idempotencyKey, storeId, payload } satisfies JobEnvelope, {
       jobId: idempotencyKey.replace(/:/g, '_'),

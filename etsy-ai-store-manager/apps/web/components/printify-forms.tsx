@@ -78,12 +78,21 @@ export function SyncPrintifyButton({ storeId }: { storeId: string }) {
   );
 }
 
-export function PublishRequestForm({ storeId, productId }: { storeId: string; productId: string }) {
+export function PublishRequestForm({
+  storeId,
+  productId,
+  country = 'US',
+}: {
+  storeId: string;
+  productId: string;
+  country?: string;
+}) {
   const [s, action, pending] = useActionState<PState, FormData>(requestPublishAction, {});
   return (
     <form action={action} className="space-y-2" aria-label="Yayın isteği">
       <input type="hidden" name="storeId" value={storeId} />
       <input type="hidden" name="productId" value={productId} />
+      <input type="hidden" name="country" value={country} />
       <label className="block text-sm">
         <span className="mb-1 block font-medium text-slate-700">Gerekçe</span>
         <input
@@ -93,6 +102,15 @@ export function PublishRequestForm({ storeId, productId }: { storeId: string; pr
           className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           placeholder="Ör. yeni sezon koleksiyonu"
         />
+      </label>
+      <label className="flex items-start gap-2 text-xs text-slate-600">
+        <input
+          type="checkbox"
+          name="acknowledgeLowProfit"
+          className="mt-0.5 h-4 w-4 accent-brand-600"
+        />
+        Katkı “önerilmez” seviyesindeyse yine de yayın isteği oluştur (zarar eden ürünler yine
+        reddedilir)
       </label>
       <button className={btn} disabled={pending}>
         Etsy’de yayınlama isteği oluştur

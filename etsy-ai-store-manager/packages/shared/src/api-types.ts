@@ -41,6 +41,8 @@ export interface StoreSettingsDto {
   targetMarkets: string[];
   dailyAdBudgetCap: string;
   adBudgetCurrency: string;
+  sellerCountry: string | null;
+  payoutCurrency: string | null;
   timezone: string;
   updatedAt: string;
 }
@@ -59,6 +61,8 @@ export interface ProfitRulesDto {
   otherVariableCostFixed: string;
   defaultAdCostPerOrder: string;
   taxRateOnProfit: string;
+  vatOnFeesRate: string;
+  offsiteAdsTier: '15' | '12';
   updatedAt: string;
 }
 

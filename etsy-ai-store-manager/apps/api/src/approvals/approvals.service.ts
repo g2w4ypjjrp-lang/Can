@@ -15,7 +15,7 @@ import type { RequestMeta } from '../common/request-meta.decorator.js';
 export const REAUTH_WINDOW_SECONDS = 5 * 60;
 
 /** Action types the executor can currently carry out through an official API. */
-const EXECUTABLE = new Set(['update_listing', 'publish_product']);
+const EXECUTABLE = new Set(['update_listing', 'publish_product', 'change_price']);
 
 @Injectable()
 export class ApprovalsService {

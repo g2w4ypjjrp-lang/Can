@@ -45,6 +45,13 @@ export const storeSettingsUpdateSchema = z
     targetMarkets: z.array(z.string().regex(/^[A-Z]{2}$/, 'ISO ülke kodu (ör. US)')).max(60),
     dailyAdBudgetCap: nonNegativeMoneyString,
     adBudgetCurrency: currencyCode,
+    /** Etsy payment account (bank) country — selects the processing / regulatory fee */
+    sellerCountry: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/, 'ISO ülke kodu (ör. TR)'),
+    payoutCurrency: currencyCode,
     timezone: z.string().trim().min(1).max(64),
   })
   .partial()
@@ -78,6 +85,8 @@ export const profitRulesUpdateSchema = z
     otherVariableCostFixed: nonNegativeMoney4String,
     defaultAdCostPerOrder: nonNegativeMoney4String,
     taxRateOnProfit: rateString,
+    vatOnFeesRate: rateString,
+    offsiteAdsTier: z.enum(['15', '12']),
   })
   .partial()
   .strict();

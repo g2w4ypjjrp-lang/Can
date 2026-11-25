@@ -27,6 +27,8 @@ const STORE_SETTINGS_COLUMNS: Record<string, string> = {
   targetMarkets: 'target_markets',
   dailyAdBudgetCap: 'daily_ad_budget_cap',
   adBudgetCurrency: 'ad_budget_currency',
+  sellerCountry: 'seller_country',
+  payoutCurrency: 'payout_currency',
   timezone: 'timezone',
 };
 
@@ -43,6 +45,8 @@ const PROFIT_RULE_COLUMNS: Record<string, string> = {
   otherVariableCostFixed: 'other_variable_cost_fixed',
   defaultAdCostPerOrder: 'default_ad_cost_per_order',
   taxRateOnProfit: 'tax_rate_on_profit',
+  vatOnFeesRate: 'vat_on_fees_rate',
+  offsiteAdsTier: 'offsite_ads_tier',
 };
 
 @Injectable()
@@ -194,7 +198,7 @@ export class StoresService {
   private async findSettings(db: Queryable, storeId: string): Promise<StoreSettingsDto | null> {
     const r = await db.query(
       `select store_id, sales_strategy, automation_level, market_scope, default_language, languages,
-              target_markets, daily_ad_budget_cap::text, ad_budget_currency, timezone, updated_at
+              target_markets, daily_ad_budget_cap::text, ad_budget_currency, seller_country, payout_currency, timezone, updated_at
          from public.store_settings where store_id = $1`,
       [storeId],
     );
@@ -210,6 +214,8 @@ export class StoresService {
       targetMarkets: x.target_markets,
       dailyAdBudgetCap: x.daily_ad_budget_cap,
       adBudgetCurrency: x.ad_budget_currency,
+      sellerCountry: x.seller_country,
+      payoutCurrency: x.payout_currency,
       timezone: x.timezone,
       updatedAt: x.updated_at,
     };
@@ -220,7 +226,7 @@ export class StoresService {
       `select store_id, currency, target_contribution, excellent_threshold, publish_threshold,
               review_threshold, min_threshold, return_reserve_rate, remake_reserve_rate,
               other_variable_cost_rate, other_variable_cost_fixed, default_ad_cost_per_order,
-              tax_rate_on_profit, updated_at
+              tax_rate_on_profit, vat_on_fees_rate, offsite_ads_tier, updated_at
          from public.profit_rules where store_id = $1`,
       [storeId],
     );
@@ -240,6 +246,8 @@ export class StoresService {
       otherVariableCostFixed: x.other_variable_cost_fixed,
       defaultAdCostPerOrder: x.default_ad_cost_per_order,
       taxRateOnProfit: x.tax_rate_on_profit,
+      vatOnFeesRate: x.vat_on_fees_rate,
+      offsiteAdsTier: x.offsite_ads_tier,
       updatedAt: x.updated_at,
     };
   }

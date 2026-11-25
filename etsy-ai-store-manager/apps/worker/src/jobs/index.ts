@@ -5,6 +5,8 @@ import { syncEtsyStore, notifyAdmins } from '../etsy/sync.js';
 import { executeApproval } from '../etsy/execute-approval.js';
 import { getEtsyAccessToken, REFRESH_MARGIN_MS } from '../etsy/token-provider.js';
 import { syncPrintifyStore } from '../printify/sync.js';
+import { recomputeOrderSnapshots } from '../finance/recompute.js';
+import { refreshFxRates } from '../finance/fx.js';
 
 export interface JobContext {
   pool: pg.Pool;
@@ -38,10 +40,11 @@ const cleanupExpiredApprovals: JobHandler = async ({ pool }) => {
   return { expired: r.rowCount ?? 0 };
 };
 
-const etsySyncStore: JobHandler = async ({ pool, deps, storeId, attempt }, payload) => {
+const etsySyncStore: JobHandler = async ({ pool, deps, storeId, attempt, enqueue }, payload) => {
   if (!storeId) throw new Error('storeId required');
   try {
     const result = await syncEtsyStore(pool, deps, storeId);
+    await enqueueRecompute(enqueue, storeId);
     if (payload.reason === 'initial' && !result.skipped) {
       await notifyAdmins(
         pool,
@@ -124,11 +127,13 @@ const approvalExecute: JobHandler = async ({ pool, deps, attempt }, payload) => 
   return executeApproval(pool, deps, approvalId, attempt);
 };
 
-const printifySyncStore: JobHandler = async ({ pool, deps, storeId, attempt }) => {
+const printifySyncStore: JobHandler = async ({ pool, deps, storeId, attempt, enqueue }) => {
   if (!storeId) throw new Error('storeId required');
   if (!deps.printify) return { skipped: 'PRINTIFY_API_TOKEN not configured' };
   try {
-    return await syncPrintifyStore(pool, deps.printify, storeId);
+    const result = await syncPrintifyStore(pool, deps.printify, storeId);
+    await enqueueRecompute(enqueue, storeId);
+    return result;
   } catch (err) {
     if (attempt.current >= attempt.max) {
       await notifyAdmins(
@@ -175,7 +180,28 @@ const printifyWebhook: JobHandler = async ({ pool, enqueue, storeId }, payload) 
   return { queuedSync: true };
 };
 
+/** Debounced (per minute) profit recompute after data changes. */
+async function enqueueRecompute(enqueue: JobContext['enqueue'], storeId: string) {
+  await enqueue(
+    JOBS.profitRecomputeOrders,
+    storeId,
+    `profit-recompute:${storeId}:${Math.floor(Date.now() / 60_000)}`,
+    {
+      reason: 'after-sync',
+    },
+  ).catch(() => undefined);
+}
+
+const profitRecomputeOrders: JobHandler = async ({ pool, storeId }) => {
+  if (!storeId) throw new Error('storeId required');
+  return recomputeOrderSnapshots(pool, storeId);
+};
+
+const fxRefresh: JobHandler = async ({ pool, deps }) => refreshFxRates(pool, deps.fetchImpl);
+
 export const JOB_HANDLERS: Record<string, JobHandler> = {
+  [JOBS.profitRecomputeOrders]: profitRecomputeOrders,
+  [JOBS.fxRefresh]: fxRefresh,
   [JOBS.printifySyncStore]: printifySyncStore,
   [JOBS.printifySyncAll]: printifySyncAll,
   [JOBS.printifyWebhook]: printifyWebhook,

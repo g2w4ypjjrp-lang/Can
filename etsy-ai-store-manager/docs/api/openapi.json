@@ -339,6 +339,14 @@
                     "type": "string",
                     "pattern": "^[A-Z]{3}$"
                   },
+                  "sellerCountry": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                  },
+                  "payoutCurrency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
                   "timezone": {
                     "type": "string",
                     "minLength": 1,
@@ -459,6 +467,17 @@
                   "taxRateOnProfit": {
                     "type": "string",
                     "pattern": "^(0(\\.\\d{1,4})?|1(\\.0{1,4})?)$"
+                  },
+                  "vatOnFeesRate": {
+                    "type": "string",
+                    "pattern": "^(0(\\.\\d{1,4})?|1(\\.0{1,4})?)$"
+                  },
+                  "offsiteAdsTier": {
+                    "type": "string",
+                    "enum": [
+                      "12",
+                      "15"
+                    ]
                   }
                 },
                 "additionalProperties": false
@@ -1361,6 +1380,380 @@
         "summary": "Printify → Etsy yayın isteği (onay gerektirir)",
         "tags": [
           "products"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/finance/fee-rules": {
+      "get": {
+        "operationId": "FinanceController_feeRules",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Etsy ücret kuralları (kaynak, matrah, mağaza doğrulaması)",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/finance/fee-rules/{ruleId}/verify": {
+      "post": {
+        "operationId": "FinanceController_verify",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/finance/simulate": {
+      "post": {
+        "operationId": "FinanceController_simulate",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "unitPrice": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,2})?$"
+                  },
+                  "quantity": {
+                    "default": 1,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "shippingCharged": {
+                    "default": "0",
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,4})?$"
+                  },
+                  "discount": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,4})?$"
+                  },
+                  "salesTax": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,4})?$"
+                  },
+                  "productionCostPerUnit": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,4})?$"
+                  },
+                  "productionCostCurrency": {
+                    "default": "USD",
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "fulfillmentShippingFirst": {
+                    "default": "0",
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,4})?$"
+                  },
+                  "fulfillmentShippingAdditional": {
+                    "default": "0",
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,4})?$"
+                  },
+                  "fulfillmentShippingCurrency": {
+                    "default": "USD",
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "buyerCountry": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "offsiteAds": {
+                    "type": "boolean"
+                  },
+                  "adCostAllocated": {
+                    "type": "string",
+                    "pattern": "^-?\\d{1,10}(\\.\\d{1,4})?$"
+                  },
+                  "save": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "unitPrice",
+                  "quantity",
+                  "shippingCharged",
+                  "productionCostPerUnit",
+                  "productionCostCurrency",
+                  "fulfillmentShippingFirst",
+                  "fulfillmentShippingAdditional",
+                  "fulfillmentShippingCurrency",
+                  "buyerCountry"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Kârlılık simülasyonu + hedef katkı için fiyat önerisi",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/products/{productId}/profitability": {
+      "get": {
+        "operationId": "FinanceController_profitability",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ürün varyantlarının hedef ülke için katkısı, kararı ve fiyat önerisi",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/products/{productId}/price-recommendations": {
+      "post": {
+        "operationId": "FinanceController_createRecommendations",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/products/{productId}/price-change-requests": {
+      "post": {
+        "operationId": "FinanceController_priceChange",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Önerilen fiyatlar için onay isteği (Printify varyant fiyatı → Etsy)",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/finance/summary": {
+      "get": {
+        "operationId": "FinanceController_summary",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Dönem kâr/zarar: katkı (reklam öncesi), gerçek reklam harcaması, vergi tahmini",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/finance/recompute": {
+      "post": {
+        "operationId": "FinanceController_recompute",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "finance"
         ]
       }
     }

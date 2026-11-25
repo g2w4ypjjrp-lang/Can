@@ -31,11 +31,13 @@ Durum: ✅ tamamlandı ve test edildi · 🟡 kısmen · ⬜ planlandı
 - ✅ Onaylı Printify → Etsy yayınlama
 - Ayrıntı: [phase-3-report](../operations/phase-3-report.md)
 
-## FAZ 4 — Profit Engine ⬜
+## FAZ 4 — Profit Engine ✅
 
-- `packages/profit-engine`: Decimal, matrah bazlı ücret kuralları, ülke/para birimi farkları, döviz, iade/yeniden üretim rezervi, reklam dağıtımı (çift sayım yok), vergi öncesi/sonrası ayrımı, fiyat önerisi
-- `fee_rules` yalnızca resmi kaynaktan doğrulanmış oranlarla doldurulacak
-- Zorunlu 10 test senaryosu (≥10 USD, <10, negatif, reklam artışı, Printify maliyet değişimi, kargo değişimi, indirim, iade, farklı para birimi, farklı matrah)
+- ✅ `packages/profit-engine`: Decimal, matrah bazlı ücretler, ülke/para birimi, döviz (ECB), iade/rezervler, reklam dağıtımı (çift sayım yok), vergi öncesi/sonrası
+- ✅ 10 zorunlu senaryo + ek testler; fiyat önerisi; yayın kâr kapısı; onaylı fiyat değişikliği
+- ✅ Sipariş bazlı gerçek katkı ve dönem kâr/zararı
+- ⬜ Ücret oranlarının mağaza sahibince doğrulanması (panelde)
+- Ayrıntı: [phase-4-report](../operations/phase-4-report.md)
 
 ## FAZ 5 — Pazar araştırması ⬜
 

@@ -56,9 +56,14 @@ export async function requestPublishAction(_p: PState, form: FormData): Promise<
   if (!UUID_RE.test(storeId) || !UUID_RE.test(productId)) return { error: 'Geçersiz ürün' };
   if (reason.length < 3) return { error: 'Gerekçe yazın' };
   try {
+    const country = String(form.get('country') ?? 'US').toUpperCase();
     await api(`/stores/${storeId}/products/${productId}/publish-requests`, {
       method: 'POST',
-      body: { reason },
+      body: {
+        reason,
+        ...(/^[A-Z]{2}$/.test(country) ? { country } : {}),
+        ...(form.get('acknowledgeLowProfit') === 'on' ? { acknowledgeLowProfit: true } : {}),
+      },
     });
     revalidatePath('/dashboard/products');
     return {

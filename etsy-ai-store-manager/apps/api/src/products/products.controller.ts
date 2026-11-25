@@ -9,7 +9,18 @@ import { ReqMeta, type RequestMeta } from '../common/request-meta.decorator.js';
 import { ProductsService } from './products.service.js';
 
 const STATUSES = new Set(['idea', 'draft', 'ready', 'published', 'archived']);
-export const publishSchema = z.object({ reason: z.string().trim().min(3).max(1000) }).strict();
+export const publishSchema = z
+  .object({
+    reason: z.string().trim().min(3).max(1000),
+    country: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/)
+      .optional(),
+    acknowledgeLowProfit: z.boolean().optional(),
+  })
+  .strict();
 
 @ApiTags('products')
 @ApiBearerAuth()
@@ -62,9 +73,13 @@ export class ProductsController {
     @CurrentUser() u: AuthContext,
     @Param('storeId', UuidPipe) storeId: string,
     @Param('productId', UuidPipe) productId: string,
-    @Body(new ZodValidationPipe(publishSchema)) body: { reason: string },
+    @Body(new ZodValidationPipe(publishSchema))
+    body: { reason: string; country?: string; acknowledgeLowProfit?: boolean },
     @ReqMeta() meta: RequestMeta,
   ) {
-    return this.products.requestPublish(u, storeId, productId, body.reason, meta);
+    return this.products.requestPublish(u, storeId, productId, body.reason, meta, {
+      country: body.country,
+      acknowledgeLowProfit: body.acknowledgeLowProfit,
+    });
   }
 }

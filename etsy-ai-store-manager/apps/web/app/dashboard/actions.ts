@@ -114,6 +114,8 @@ export async function updateStoreSettingsAction(
       .filter(Boolean),
     dailyAdBudgetCap: str(form, 'dailyAdBudgetCap'),
     adBudgetCurrency: str(form, 'adBudgetCurrency'),
+    sellerCountry: str(form, 'sellerCountry'),
+    payoutCurrency: str(form, 'payoutCurrency'),
     timezone: str(form, 'timezone'),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Geçersiz bilgi' };
@@ -138,6 +140,8 @@ const PROFIT_FIELDS = [
   'otherVariableCostFixed',
   'defaultAdCostPerOrder',
   'taxRateOnProfit',
+  'vatOnFeesRate',
+  'offsiteAdsTier',
 ] as const;
 
 export async function updateProfitRulesAction(

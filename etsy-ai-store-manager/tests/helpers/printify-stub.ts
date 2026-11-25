@@ -17,11 +17,15 @@ export interface PrintifyStub {
   orders: Array<Record<string, unknown>>;
   published: string[];
   webhooks: Array<{ id: string; topic: string; url: string }>;
+  publishBodies: Array<Record<string, boolean>>;
+  updates: Array<{ productId: string; body: unknown }>;
 }
 
 export async function startPrintifyStub(opts: { port?: number } = {}): Promise<PrintifyStub> {
   const calls: PrintifyStub['calls'] = [];
   const published: string[] = [];
+  const publishBodies: Array<Record<string, boolean>> = [];
+  const updates: Array<{ productId: string; body: unknown }> = [];
   const webhooks: PrintifyStub['webhooks'] = [];
   const now = new Date().toISOString();
   const products = new Map<
@@ -299,11 +303,32 @@ export async function startPrintifyStub(opts: { port?: number } = {}): Promise<P
       return products.has(m[1]!)
         ? send(200, products.get(m[1]!))
         : send(404, { error: 'not found' });
+    m = p.match(new RegExp(`^${shopBase}/products/([0-9a-f]{24})\\.json$`));
+    if (req.method === 'PUT' && m) {
+      const prod = products.get(m[1]!);
+      if (!prod) return send(404, { error: 'not found' });
+      const b = JSON.parse(raw) as {
+        variants?: Array<{ id: number; price: number; is_enabled: boolean }>;
+      };
+      if (b.variants) {
+        if (b.variants.length !== prod.variants.length)
+          return send(400, { error: 'all variants must be included' });
+        for (const v of b.variants) {
+          const t = prod.variants.find((x) => x.id === v.id);
+          if (!t || !Number.isInteger(v.price)) return send(400, { error: 'invalid variant' });
+          t.price = v.price;
+          t.is_enabled = v.is_enabled;
+        }
+      }
+      updates.push({ productId: m[1]!, body: b });
+      return send(200, prod);
+    }
     m = p.match(new RegExp(`^${shopBase}/products/([0-9a-f]{24})/publish\\.json$`));
     if (req.method === 'POST' && m) {
       const prod = products.get(m[1]!);
       if (!prod) return send(404, { error: 'not found' });
       published.push(m[1]!);
+      publishBodies.push(JSON.parse(raw || '{}'));
       prod.is_locked = true;
       return send(200, {});
     }
@@ -328,5 +353,7 @@ export async function startPrintifyStub(opts: { port?: number } = {}): Promise<P
     orders,
     published,
     webhooks,
+    publishBodies,
+    updates,
   };
 }

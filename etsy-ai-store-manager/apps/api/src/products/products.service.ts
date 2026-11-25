@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { assertStoreRole } from '../common/store-access.js';
 import type { RequestMeta } from '../common/request-meta.decorator.js';
 import { toApprovalDto } from '../approvals/approvals.service.js';
+import { FinanceService } from '../finance/finance.service.js';
 
 /** Products (Printify-backed) with variants and their CURRENT costs (valid_to is null). */
 @Injectable()
@@ -11,6 +12,7 @@ export class ProductsService {
   constructor(
     private readonly db: DatabaseService,
     private readonly audit: AuditService,
+    private readonly finance: FinanceService,
   ) {}
 
   list(
@@ -140,6 +142,7 @@ export class ProductsService {
     productId: string,
     reason: string,
     meta: RequestMeta,
+    opts: { country?: string; acknowledgeLowProfit?: boolean } = {},
   ) {
     const approval = await this.db.asUser(ctx, async (db) => {
       await assertStoreRole(db, storeId, 'admin');
@@ -159,6 +162,35 @@ export class ProductsService {
       );
       if (pending.rowCount)
         throw new ConflictException('Bu ürün için bekleyen bir yayın isteği var');
+
+      // Profit gate (policy): loss -> refused; below the minimum -> only with explicit acknowledgement
+      const country = opts.country ?? 'US';
+      const prof = await this.finance.computeProduct(db, storeId, productId, country);
+      const worstVariant = [...prof.variants].sort(
+        (a, b) => Number(a.result.contribution) - Number(b.result.contribution),
+      )[0];
+      if (!prof.complete) {
+        throw new ConflictException({
+          message:
+            'Kârlılık hesaplanamadı (eksik maliyet, kur veya mağaza ayarı). Önce Finans ve Kâr sayfasındaki uyarıları giderin.',
+          details: { warnings: [...new Set(prof.variants.flatMap((v) => v.result.warnings))] },
+        });
+      }
+      if (prof.worstDecision === 'rejected') {
+        throw new ConflictException({
+          message: `Zarar eden varyant var (${worstVariant?.title}: ${worstVariant?.result.contribution} ${worstVariant?.currency}). Yayın reddedildi; önce fiyatı düzeltin.`,
+          details: { decision: 'rejected' },
+        });
+      }
+      if (prof.worstDecision === 'not_recommended' && !opts.acknowledgeLowProfit) {
+        throw new ConflictException({
+          message: `Katkı alt eşiğin altında (${worstVariant?.title}: ${worstVariant?.result.contribution} ${worstVariant?.currency}). Yayınlamak için düşük kârı onaylayın.`,
+          details: { decision: 'not_recommended', requiresAcknowledgement: true },
+        });
+      }
+      const profitText =
+        `${country} için en düşük katkı ${worstVariant?.result.contribution} ${worstVariant?.currency} (${prof.worstDecision}); hedef ${prof.targetContribution}.` +
+        (prof.feesVerified ? '' : ' Uyarı: bazı Etsy ücret oranları henüz doğrulanmadı.');
       const costs = await db.query(
         `select min(v.price)::text min_price, max(v.price)::text max_price,
                 min(c.amount)::text min_cost, max(c.amount)::text max_cost, count(distinct v.id)::int variants
@@ -183,13 +215,17 @@ export class ProductsService {
             : `Printify ürünü bağlı Etsy mağazasında yeni ilan olarak yayınlanacak (${k.variants} aktif varyant).`,
           reason,
           'Yeni ürünün satışa açılması',
-          `Satış fiyatı ${k.min_price ?? '?'}–${k.max_price ?? '?'} USD, Printify üretim maliyeti ${k.min_cost ?? '?'}–${k.max_cost ?? '?'} USD. ` +
-            'Etsy listeleme ücreti uygulanır. Tam katkı hesabı Profit Engine ile yapılır.',
+          `${profitText} Satış fiyatı ${k.min_price ?? '?'}–${k.max_price ?? '?'} USD, üretim maliyeti ${k.min_cost ?? '?'}–${k.max_cost ?? '?'} USD.`,
           'POST /v1/shops/{shop_id}/products/{product_id}/publish.json (Printify → Etsy)',
           JSON.stringify({
             kind: 'printify_publish',
             productId,
             printifyProductId: prod.printify_product_id,
+            profit: {
+              country,
+              worstDecision: prof.worstDecision,
+              acknowledgedLowProfit: Boolean(opts.acknowledgeLowProfit),
+            },
           }),
         ],
       );

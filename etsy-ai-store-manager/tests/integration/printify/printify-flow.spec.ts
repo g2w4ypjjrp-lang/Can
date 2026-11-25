@@ -305,6 +305,110 @@ describe('provider comparison (catalog)', () => {
   });
 });
 
+describe('Profit Engine on Printify products', () => {
+  const tee = async () =>
+    (
+      await http
+        .get(`/api/v1/stores/${storeId}/products?q=Retro`)
+        .set(auth(owner.token))
+        .expect(200)
+    ).body.items[0];
+
+  it('refuses to evaluate/publish until the seller country is set', async () => {
+    const r = await http
+      .post(`/api/v1/stores/${storeId}/products/${(await tee()).id}/publish-requests`)
+      .set(auth(owner.token))
+      .send({ reason: 'test' })
+      .expect(409);
+    expect(r.body.message).toMatch(/Kârlılık hesaplanamadı/);
+    await http
+      .patch(`/api/v1/stores/${storeId}/settings`)
+      .set(auth(owner.token))
+      .send({ sellerCountry: 'US', payoutCurrency: 'USD' })
+      .expect(200);
+  });
+
+  it('computes per-variant contribution with real Printify costs (28.00 tee -> 9.29 needs approval)', async () => {
+    const id = (await tee()).id;
+    const p = await http
+      .get(`/api/v1/stores/${storeId}/products/${id}/profitability?country=US`)
+      .set(auth(viewer.token))
+      .expect(200);
+    // 28.00 - (0.20 + 1.82 + 0.84 + 0.25) - 10.85 - 4.75
+    expect(p.body.variants[0].result).toMatchObject({
+      contribution: '9.2900',
+      decision: 'needs_approval',
+      complete: true,
+      feesVerified: false,
+    });
+    expect(p.body.variants[0].recommendation).toMatchObject({
+      minimumUnitPrice: '28.79',
+      suggestedUnitPrice: '28.99',
+    });
+    expect(p.body.variants[0].shippingRegion).toBe('US');
+    const jp = await http
+      .get(`/api/v1/stores/${storeId}/products/${id}/profitability?country=JP`)
+      .set(auth(viewer.token))
+      .expect(200);
+    expect(jp.body.variants[0].shippingRegion).toBe('REST_OF_THE_WORLD');
+    expect(jp.body.worstDecision).toBe('rejected'); // 14.99 world shipping makes it a loss
+  });
+
+  it('price recommendation -> approval -> Printify variant prices updated (all variants sent)', async () => {
+    const id = (await tee()).id;
+    const recs = await http
+      .post(`/api/v1/stores/${storeId}/products/${id}/price-recommendations?country=US`)
+      .set(auth(owner.token))
+      .expect(201);
+    expect(recs.body).toEqual([
+      expect.objectContaining({ currentPrice: '28.00', recommendedPrice: '28.99' }),
+    ]);
+    const a = await http
+      .post(`/api/v1/stores/${storeId}/products/${id}/price-change-requests`)
+      .set(auth(owner.token))
+      .expect(201);
+    expect(a.body).toMatchObject({
+      actionType: 'change_price',
+      requiresReauth: true,
+      apiOperation: expect.stringContaining('PUT /v1/shops'),
+    });
+    await http
+      .post(`/api/v1/stores/${storeId}/approvals/${a.body.id}/approve`)
+      .set(auth(await signTestToken(owner.id)))
+      .send({})
+      .expect(200);
+    const done = await waitFor(async () => {
+      const r = await pool.query(
+        `select status, execution_result from public.approval_requests where id = $1`,
+        [a.body.id],
+      );
+      return ['executed', 'failed'].includes(r.rows[0].status) ? r.rows[0] : null;
+    });
+    expect(done).toMatchObject({
+      status: 'executed',
+      execution_result: { updatedVariants: 1, republished: false },
+    });
+    expect(stub.updates.at(-1)).toEqual({
+      productId: '6e4ac260f8d59d000839d9a0',
+      body: { variants: [{ id: 12100, price: 2899, is_enabled: true }] },
+    });
+    const st = await pool.query(
+      `select status from public.price_recommendations where approval_request_id = $1`,
+      [a.body.id],
+    );
+    expect(st.rows).toEqual([{ status: 'applied' }]);
+  });
+
+  it('refuses to publish a loss-making product for that market', async () => {
+    const r = await http
+      .post(`/api/v1/stores/${storeId}/products/${(await tee()).id}/publish-requests`)
+      .set(auth(owner.token))
+      .send({ reason: 'Japonya', country: 'JP' })
+      .expect(409);
+    expect(r.body.details).toEqual({ decision: 'rejected' });
+  });
+});
+
 describe('publishing to Etsy requires approval', () => {
   it('creates an approval and only publishes after (re-authenticated) approval', async () => {
     const list = await http
@@ -320,8 +424,8 @@ describe('publishing to Etsy requires approval', () => {
     const a = await http
       .post(`/api/v1/stores/${storeId}/products/${tee.id}/publish-requests`)
       .set(auth(owner.token))
-      .send({ reason: 'Yeni koleksiyon' })
-      .expect(201);
+      .send({ reason: 'Yeni koleksiyon' });
+    expect(a.status).toBe(201);
     expect(a.body).toMatchObject({
       actionType: 'publish_product',
       requiresReauth: true,

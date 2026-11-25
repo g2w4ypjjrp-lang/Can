@@ -6,6 +6,32 @@ import { loadStores } from '@/lib/current-store';
 import { formatDate, formatMoney } from '@/lib/format';
 import { Card, PageHeader } from '@/components/ui';
 import { PublishRequestForm } from '@/components/printify-forms';
+import { PriceRecommendationForm } from '@/components/finance-forms';
+import { DecisionBadge } from '@/components/decision-badge';
+
+interface Profitability {
+  country: string;
+  targetContribution: string;
+  worstDecision: string | null;
+  complete: boolean;
+  feesVerified: boolean;
+  pendingPriceProposals: number;
+  variants: Array<{
+    variantId: string;
+    title: string;
+    price: string | null;
+    currency: string;
+    shippingRegion: string | null;
+    result: {
+      contribution: string;
+      decision: string;
+      complete: boolean;
+      warnings: string[];
+      totalFees: string;
+    };
+    recommendation: { minimumUnitPrice: string | null; suggestedUnitPrice: string | null } | null;
+  }>;
+}
 
 export const metadata: Metadata = { title: 'Ürün' };
 
@@ -40,8 +66,16 @@ interface Detail {
   images: Array<{ url: string; alt: string | null }>;
 }
 
-export default async function ProductPage({ params }: { params: Promise<{ productId: string }> }) {
+export default async function ProductPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ productId: string }>;
+  searchParams: Promise<{ country?: string }>;
+}) {
   const { productId } = await params;
+  const sp = await searchParams;
+  const country = /^[A-Z]{2}$/.test(sp.country ?? '') ? sp.country! : 'US';
   if (!/^[0-9a-f-]{36}$/i.test(productId)) notFound();
   const { current } = await loadStores();
   if (!current) notFound();
@@ -53,6 +87,10 @@ export default async function ProductPage({ params }: { params: Promise<{ produc
     throw e;
   }
   const canPublish = (current.role === 'owner' || current.role === 'admin') && !p.locked;
+  const prof = await api<Profitability>(
+    `/stores/${current.id}/products/${productId}/profitability?country=${country}`,
+  );
+  const warnings = [...new Set(prof.variants.flatMap((v) => v.result.warnings))];
   return (
     <>
       <PageHeader
@@ -124,7 +162,7 @@ export default async function ProductPage({ params }: { params: Promise<{ produc
           )}
           <Card title="Etsy’de yayınla">
             {canPublish ? (
-              <PublishRequestForm storeId={current.id} productId={p.id} />
+              <PublishRequestForm storeId={current.id} productId={p.id} country={country} />
             ) : (
               <p className="text-sm text-slate-500">
                 {p.locked
@@ -135,6 +173,84 @@ export default async function ProductPage({ params }: { params: Promise<{ produc
           </Card>
         </div>
       </div>
+      <Card
+        title={`Kârlılık (${prof.country} alıcısı, hedef ${prof.targetContribution})`}
+        className="mt-6"
+      >
+        <form className="mb-3 flex items-end gap-2 text-sm">
+          <label>
+            <span className="mb-1 block text-slate-600">Alıcı ülkesi</span>
+            <input
+              name="country"
+              defaultValue={country}
+              maxLength={2}
+              className="w-20 rounded-lg border border-line px-2 py-1.5 uppercase"
+            />
+          </label>
+          <button className="rounded-lg border border-line px-3 py-1.5">Hesapla</button>
+          <span className="ml-auto">
+            <DecisionBadge decision={prof.worstDecision} />
+          </span>
+        </form>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-left text-sm" aria-label="Varyant kârlılığı">
+            <thead className="border-b border-line text-xs uppercase text-slate-500">
+              <tr>
+                <th className="py-2 pr-3">Varyant</th>
+                <th className="py-2 pr-3">Fiyat</th>
+                <th className="py-2 pr-3">Etsy ücretleri</th>
+                <th className="py-2 pr-3">Katkı</th>
+                <th className="py-2 pr-3">Karar</th>
+                <th className="py-2">Önerilen fiyat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {prof.variants.map((v) => (
+                <tr key={v.variantId} className="border-b border-line last:border-0">
+                  <td className="py-2 pr-3">
+                    {v.title}
+                    <span className="block text-xs text-slate-500">
+                      kargo bölgesi: {v.shippingRegion ?? '—'}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-3 tabular-nums">{formatMoney(v.price, v.currency)}</td>
+                  <td className="py-2 pr-3 tabular-nums">
+                    {formatMoney(v.result.totalFees, v.currency)}
+                  </td>
+                  <td className="py-2 pr-3 tabular-nums font-medium">
+                    {formatMoney(v.result.contribution, v.currency)}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <DecisionBadge decision={v.result.decision} />
+                  </td>
+                  <td className="py-2 tabular-nums">
+                    {v.recommendation?.suggestedUnitPrice
+                      ? formatMoney(v.recommendation.suggestedUnitPrice, v.currency)
+                      : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {warnings.length > 0 && (
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-amber-800">
+            {warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        )}
+        {(current.role === 'owner' || current.role === 'admin') && (
+          <div className="mt-4">
+            <PriceRecommendationForm
+              storeId={current.id}
+              productId={p.id}
+              country={country}
+              hasProposals={prof.pendingPriceProposals > 0}
+            />
+          </div>
+        )}
+      </Card>
       {p.costHistory.length > 0 && (
         <Card title="Maliyet geçmişi (değişen maliyetler)" className="mt-6">
           <ul className="divide-y divide-line text-sm">

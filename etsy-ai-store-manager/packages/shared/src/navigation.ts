@@ -129,7 +129,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Finans ve Kâr',
     icon: 'Wallet',
     phase: 4,
-    status: 'planned',
+    status: 'ready',
     description: 'Profit Engine: ürün başına gerçek katkı ve fiyat önerisi',
   },
   {

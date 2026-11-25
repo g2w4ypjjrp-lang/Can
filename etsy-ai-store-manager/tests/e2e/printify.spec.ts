@@ -40,8 +40,19 @@ test.describe.serial('FAZ 3: Printify', () => {
     await expect(table.getByRole('row').nth(1)).toContainText('Monster Digital');
     await expect(table.getByRole('row').nth(1)).toContainText('$4,75');
 
+    // Profit Engine needs the seller (bank) country
+    await page.goto('/dashboard/settings');
+    const storeForm = page.getByRole('form', { name: 'Mağaza ayarları' });
+    await storeForm.getByLabel(/banka\) ülkesi/).fill('US');
+    await storeForm.getByLabel(/Ödeme hesabı para birimi/).fill('USD');
+    await storeForm.getByRole('button', { name: 'Mağaza ayarlarını kaydet' }).click();
+    await expect(storeForm.getByRole('status')).toHaveText('Kaydedildi');
+
     await page.goto('/dashboard/products');
     await page.getByRole('link', { name: 'Retro Sunset Tee' }).click();
+    const prof = page.getByRole('table', { name: 'Varyant kârlılığı' });
+    await expect(prof).toContainText('$9,29');
+    await expect(prof).toContainText('Onay bekler');
     await page
       .getByRole('form', { name: 'Yayın isteği' })
       .getByLabel('Gerekçe')

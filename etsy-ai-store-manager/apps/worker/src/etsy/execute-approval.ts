@@ -39,6 +39,9 @@ export async function executeApproval(
     ]);
     return { status: 'skipped', reason: `status=${cur.rows[0]?.status ?? 'missing'}` };
   }
+  if (a.action_type === 'change_price' && a.payload?.kind === 'printify_variant_price') {
+    return executePrintifyPriceChange(pool, deps, a, attempt);
+  }
   if (a.action_type === 'publish_product' && a.payload?.kind === 'printify_publish') {
     return executePrintifyPublish(pool, deps, a, attempt);
   }
@@ -134,6 +137,73 @@ async function executePrintifyPublish(
     return finish(pool, a, 'executed', {
       publishedProduct: productId,
       note: 'Printify yayınlamayı başlattı; Etsy ilan kimliği sonraki senkronizasyonda gelir.',
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (attempt.current >= attempt.max)
+      return finish(pool, a, 'failed', { error: message.slice(0, 500) });
+    await pool.query(
+      `update public.approval_requests set status = 'approved', execution_result = $2 where id = $1`,
+      [a.id, JSON.stringify({ lastError: message.slice(0, 500), attempt: attempt.current })],
+    );
+    throw err;
+  }
+}
+
+/**
+ * Approved price change: updates the variant prices on the Printify product (all
+ * variants must be sent, per the API) and republishes ONLY variants to Etsy.
+ */
+async function executePrintifyPriceChange(
+  pool: pg.Pool,
+  deps: IntegrationDeps,
+  a: { id: string; store_id: string; title: string; payload: Record<string, unknown> },
+  attempt: { current: number; max: number },
+): Promise<ExecuteOutcome> {
+  try {
+    if (!deps.printify)
+      return finish(pool, a, 'failed', { error: 'PRINTIFY_API_TOKEN tanımlı değil' });
+    const conn = await loadPrintifyConnection(pool, a.store_id);
+    if (!conn) return finish(pool, a, 'failed', { error: 'Printify bağlantısı aktif değil' });
+    const productId = String(a.payload.printifyProductId ?? '');
+    const prices = a.payload.prices as Record<string, string>;
+    const client = printifyClientFor(pool, deps.printify, a.store_id);
+    const product = await client.getProduct(conn.shopId, productId);
+    if (product.is_locked) return finish(pool, a, 'failed', { error: 'Ürün Printify’da kilitli' });
+    const variants = product.variants.map((v) => ({
+      id: v.id,
+      price:
+        prices[String(v.id)] !== undefined
+          ? Math.round(Number(prices[String(v.id)]) * 100)
+          : v.price,
+      is_enabled: v.is_enabled,
+    }));
+    await client.updateProduct(conn.shopId, productId, { variants });
+    if (product.external?.id) {
+      await client.publishProduct(conn.shopId, productId, {
+        title: false,
+        description: false,
+        images: false,
+        variants: true,
+        tags: false,
+        keyFeatures: false,
+        shipping_template: false,
+      });
+    }
+    for (const [vid, price] of Object.entries(prices)) {
+      await pool.query(
+        `update public.product_variants v set price = $3 from public.products p
+          where p.id = v.product_id and p.store_id = $1 and p.printify_product_id = $2 and v.printify_variant_id = $4`,
+        [a.store_id, productId, price, Number(vid)],
+      );
+    }
+    await pool.query(
+      `update public.price_recommendations set status = 'applied' where approval_request_id = $1`,
+      [a.id],
+    );
+    return finish(pool, a, 'executed', {
+      updatedVariants: Object.keys(prices).length,
+      republished: Boolean(product.external?.id),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

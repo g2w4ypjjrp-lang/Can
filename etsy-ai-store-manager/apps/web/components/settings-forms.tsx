@@ -208,6 +208,32 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettingsDto }) 
         <span className={label}>Mağaza saat dilimi (raporlar)</span>
         <input name="timezone" defaultValue={settings.timezone} className={input} />
       </label>
+      <label>
+        <span className={label}>Etsy ödeme hesabı (banka) ülkesi</span>
+        <input
+          name="sellerCountry"
+          defaultValue={settings.sellerCountry ?? ''}
+          maxLength={2}
+          placeholder="TR"
+          className={`${input} uppercase`}
+        />
+        <span className="mt-1 block text-xs text-slate-500">
+          Ödeme işleme ve düzenleyici ücret buna göre seçilir (kâr hesabı için zorunlu)
+        </span>
+      </label>
+      <label>
+        <span className={label}>Ödeme hesabı para birimi</span>
+        <input
+          name="payoutCurrency"
+          defaultValue={settings.payoutCurrency ?? ''}
+          maxLength={3}
+          placeholder="TRY"
+          className={`${input} uppercase`}
+        />
+        <span className="mt-1 block text-xs text-slate-500">
+          İlan para biriminden farklıysa döviz çevirme ücreti uygulanır
+        </span>
+      </label>
       <div className="flex items-center gap-3 sm:col-span-2">
         <Submit pending={pending}>Mağaza ayarlarını kaydet</Submit>
         <Status state={state} pending={pending} />
@@ -244,6 +270,11 @@ const PROFIT_FIELDS: Array<{ name: keyof ProfitRulesDto; text: string; hint: str
     text: 'Vergi sonrası tahmin oranı',
     hint: 'Vergi öncesi katkıdan ayrı gösterilir',
   },
+  {
+    name: 'vatOnFeesRate',
+    text: 'Etsy ücretleri üzerindeki KDV',
+    hint: 'Ülkenize göre (ör. 0.20); Etsy faturanızdan kontrol edin',
+  },
 ];
 
 export function ProfitRulesForm({ rules }: { rules: ProfitRulesDto }) {
@@ -270,6 +301,13 @@ export function ProfitRulesForm({ rules }: { rules: ProfitRulesDto }) {
           </label>
         ))}
       </div>
+      <label className="block max-w-sm">
+        <span className={label}>Offsite Ads kademesi</span>
+        <select name="offsiteAdsTier" defaultValue={rules.offsiteAdsTier} className={input}>
+          <option value="15">%15 (son 365 günde 10.000 USD altı satış)</option>
+          <option value="12">%12 (10.000 USD ve üzeri)</option>
+        </select>
+      </label>
       <div className="flex items-center gap-3">
         <Submit pending={pending}>Kâr politikasını kaydet</Submit>
         <Status state={state} pending={pending} />
