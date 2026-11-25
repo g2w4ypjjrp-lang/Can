@@ -16,9 +16,9 @@ export class ApiError extends Error {
 /** Server-side call to the NestJS API with the user's Supabase access token. */
 export async function api<T>(
   path: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; accessToken?: string } = {},
 ): Promise<T> {
-  const session = await getSessionUser();
+  const session = init.accessToken ? { accessToken: init.accessToken } : await getSessionUser();
   if (!session) redirect('/login');
   const res = await fetch(`${webConfig().apiUrl}/api/v1${path}`, {
     method: init.method ?? 'GET',

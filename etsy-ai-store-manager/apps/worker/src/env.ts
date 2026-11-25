@@ -15,6 +15,20 @@ export const workerEnvSchema = z.object({
     .positive()
     .default(5 * 60_000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  /** Same key material as the API (needed to read/refresh OAuth tokens). */
+  TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  TOKEN_ENCRYPTION_KEY_VERSION: z.coerce.number().int().positive().default(1),
+  TOKEN_ENCRYPTION_PREVIOUS_KEYS: z.string().optional(),
+  ETSY_KEYSTRING: z.string().optional().default(''),
+  ETSY_SHARED_SECRET: z.string().optional().default(''),
+  ETSY_REDIRECT_URI: z.string().optional().default(''),
+  ETSY_TOKEN_URL: z.string().url().optional(),
+  ETSY_API_BASE_URL: z.string().url().optional(),
+  ETSY_SYNC_EVERY_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(6 * 3600_000),
 });
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;
 

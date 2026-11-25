@@ -7,6 +7,7 @@ const pool = new pg.Pool({ connectionString: TEST_DATABASE_URL });
 afterAll(() => pool.end());
 
 const REQUIRED_TABLES = [
+  // (Phase 2 adds oauth_states)
   'users',
   'user_settings',
   'connected_accounts',
@@ -65,6 +66,26 @@ describe('database migrations', () => {
         where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity`,
     );
     expect(r.rows.map((x) => x.relname)).toEqual([]);
+  });
+
+  it('grants the server role (service_role) full DML on every public table', async () => {
+    const r = await pool.query(`
+      select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname = 'public' and c.relkind = 'r'
+         and not (has_table_privilege('service_role', c.oid, 'select')
+              and has_table_privilege('service_role', c.oid, 'insert')
+              and has_table_privilege('service_role', c.oid, 'update'))`);
+    expect(r.rows).toEqual([]);
+  });
+
+  it('never exposes server-only secret tables to client roles', async () => {
+    for (const t of ['oauth_tokens', 'oauth_states']) {
+      const r = await pool.query(
+        `select has_table_privilege('authenticated', $1, 'select') a, has_table_privilege('anon', $1, 'select') b`,
+        [`public.${t}`],
+      );
+      expect(r.rows[0], t).toEqual({ a: false, b: false });
+    }
   });
 
   it('indexes every foreign key column (leading column)', async () => {

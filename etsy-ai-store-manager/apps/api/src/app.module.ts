@@ -12,6 +12,10 @@ import { MeModule } from './me/me.module.js';
 import { StoresModule } from './stores/stores.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { QueueModule } from './queue/queue.module.js';
+import { EtsyModule } from './etsy/etsy.module.js';
+import { ListingsModule } from './listings/listings.module.js';
+import { ApprovalsModule } from './approvals/approvals.module.js';
 
 @Module({})
 export class AppModule {
@@ -32,6 +36,10 @@ export class AppModule {
         StoresModule,
         DashboardModule,
         NotificationsModule,
+        QueueModule,
+        EtsyModule,
+        ListingsModule,
+        ApprovalsModule,
       ],
       providers: [
         { provide: ENV, useValue: env },

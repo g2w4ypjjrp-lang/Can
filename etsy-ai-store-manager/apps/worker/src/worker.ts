@@ -4,6 +4,16 @@ import type { Logger } from 'pino';
 import { JOBS, QUEUES, type JobEnvelope } from '@esm/shared';
 import { JOB_HANDLERS } from './jobs/index.js';
 import { runIdempotent } from './idempotency.js';
+import type { IntegrationDeps } from './etsy/deps.js';
+
+const NO_DEPS: IntegrationDeps = { cipher: null, etsy: null, fetchImpl: fetch };
+
+export type Enqueue = (
+  jobName: string,
+  storeId: string,
+  idempotencyKey: string,
+  payload?: Record<string, unknown>,
+) => Promise<void>;
 
 export const DEFAULT_JOB_OPTIONS = {
   attempts: 3,
@@ -37,7 +47,14 @@ export function idempotencyKeyFor(job: Job): string {
   return `${job.name}:${job.id}`;
 }
 
-export function createProcessor(pool: pg.Pool, logger: Logger) {
+export function createProcessor(
+  pool: pg.Pool,
+  logger: Logger,
+  deps: IntegrationDeps = NO_DEPS,
+  enqueue: Enqueue = async () => {
+    throw new Error('enqueue not available');
+  },
+) {
   return async (job: Job) => {
     const handler = JOB_HANDLERS[job.name];
     if (!handler) throw new Error(`Unknown job ${job.name}`);
@@ -55,7 +72,18 @@ export function createProcessor(pool: pg.Pool, logger: Logger) {
         maxAttempts: job.opts.attempts ?? 1,
         schedule: job.repeatJobKey ? 'repeat' : null,
       },
-      () => handler({ pool, now: new Date() }, envelope.payload ?? {}),
+      () =>
+        handler(
+          {
+            pool,
+            now: new Date(),
+            deps,
+            storeId: envelope.storeId ?? null,
+            attempt: { current: job.attemptsMade + 1, max: job.opts.attempts ?? 1 },
+            enqueue,
+          },
+          envelope.payload ?? {},
+        ),
     );
     logger.info({ job: job.name, id: job.id, key, outcome: outcome.status }, 'job processed');
     return outcome;
@@ -75,6 +103,8 @@ export async function startWorker(opts: {
   concurrency: number;
   heartbeatEveryMs: number;
   logger: Logger;
+  deps?: IntegrationDeps;
+  etsySyncEveryMs?: number;
 }): Promise<RunningWorker> {
   const pool = new pg.Pool({
     connectionString: opts.databaseUrl,
@@ -99,24 +129,48 @@ export async function startWorker(opts: {
     { name: JOBS.cleanupExpiredApprovals, data: {}, opts: DEFAULT_JOB_OPTIONS },
   );
 
-  const worker = new Worker(QUEUES.maintenance, createProcessor(pool, opts.logger), {
-    connection,
-    concurrency: opts.concurrency,
-  });
-  worker.on('failed', (job, err) =>
-    opts.logger.warn(
-      { job: job?.name, id: job?.id, attempts: job?.attemptsMade, err: err.message },
-      'job failed',
-    ),
-  );
-  worker.on('error', (err) => opts.logger.error({ err }, 'worker error'));
+  const sync = new Queue(QUEUES.sync, { connection, defaultJobOptions: DEFAULT_JOB_OPTIONS });
+  const deps = opts.deps ?? NO_DEPS;
+  if (deps.etsy && deps.cipher) {
+    await sync.upsertJobScheduler(
+      'etsy-sync-all',
+      { every: opts.etsySyncEveryMs ?? 6 * 3600_000 },
+      { name: JOBS.etsySyncAll, data: {}, opts: DEFAULT_JOB_OPTIONS },
+    );
+    await sync.upsertJobScheduler(
+      'etsy-refresh-tokens',
+      { pattern: '*/20 * * * *', tz: 'UTC' },
+      { name: JOBS.etsyRefreshTokens, data: {}, opts: DEFAULT_JOB_OPTIONS },
+    );
+  }
+  const enqueue: Enqueue = async (jobName, storeId, idempotencyKey, payload = {}) => {
+    await sync.add(jobName, { idempotencyKey, storeId, payload } satisfies JobEnvelope, {
+      jobId: idempotencyKey.replace(/:/g, '_'),
+    });
+  };
+
+  const processor = createProcessor(pool, opts.logger, deps, enqueue);
+  const workers = [
+    new Worker(QUEUES.maintenance, processor, { connection, concurrency: opts.concurrency }),
+    // Etsy calls are rate limited per API key: keep sync concurrency low
+    new Worker(QUEUES.sync, processor, { connection, concurrency: Math.min(2, opts.concurrency) }),
+  ];
+  for (const worker of workers) {
+    worker.on('failed', (job, err) =>
+      opts.logger.warn(
+        { job: job?.name, id: job?.id, attempts: job?.attemptsMade, err: err.message },
+        'job failed',
+      ),
+    );
+    worker.on('error', (err) => opts.logger.error({ err }, 'worker error'));
+  }
 
   return {
-    queues: [maintenance],
-    workers: [worker],
+    queues: [maintenance, sync],
+    workers,
     async close() {
-      await worker.close();
-      await maintenance.close();
+      await Promise.all(workers.map((w) => w.close()));
+      await Promise.all([maintenance.close(), sync.close()]);
       await pool.end();
     },
   };

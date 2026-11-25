@@ -13,13 +13,14 @@ Durum: ✅ tamamlandı ve test edildi · 🟡 kısmen · ⬜ planlandı
 - ✅ Next.js panel: 17 maddelik menü, genel bakış (yalnızca gerçek veri), ayarlar, bildirimler, PWA, mobil
 - ✅ Docker (api/worker/web/migrate), Docker Compose, Nginx + HTTPS, şifreli yedekleme/geri yükleme
 
-## FAZ 2 — Etsy ⬜
+## FAZ 2 — Etsy ✅ (sözleşme testleriyle; canlı doğrulama anahtar bekliyor)
 
-- Etsy Open API v3 OAuth 2.0 (PKCE) bağlantısı, token yenileme (worker), şifreli saklama
-- Mağaza bilgisi, aktif/taslak ilanlar, siparişler (receipts/transactions) içe aktarma (`data_origin=imported/live`)
-- İlan düzenleme: önce güncel ilan çekilir, yalnızca değişen alanlar gönderilir (`listings.raw` korunur), onay akışı
-- Başlangıçta resmi dokümantasyonla doğrulanacaklar: kapsamlar (scopes), hız limitleri, ilan güncelleme/görsel/varyasyon uç noktaları
-- Gerekli: `ETSY_API_KEY` (keystring), `ETSY_SHARED_SECRET`, kayıtlı callback URL
+- ✅ Etsy Open API v3 OAuth 2.0 + PKCE, tek kullanımlık state, şifreli token, otomatik yenileme
+- ✅ Mağaza, ilan (tüm durumlar, görseller, sayfalama) ve sipariş (receipt/transaction/kargo/iade) içe aktarma, artımlı ve idempotent
+- ✅ Onaylı ilan düzenleme: yalnızca değişen alanlar, çakışma kontrolü, parolayla yeniden doğrulama
+- ✅ API'de olmayan işlemler açıkça listelendi ve otomatikleştirilmedi
+- ⬜ Canlı doğrulama: `ETSY_KEYSTRING`, `ETSY_SHARED_SECRET`, kayıtlı callback URL gerekli
+- Ayrıntı: [phase-2-report](../operations/phase-2-report.md)
 
 ## FAZ 3 — Printify ⬜
 

@@ -75,7 +75,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Etsy Mağazam',
     icon: 'Store',
     phase: 2,
-    status: 'planned',
+    status: 'ready',
     description: 'Etsy OAuth, mağaza verisi ve ilan yönetimi',
   },
   {

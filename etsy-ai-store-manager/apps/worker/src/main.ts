@@ -1,6 +1,7 @@
 import { pino } from 'pino';
 import { loadWorkerEnv } from './env.js';
 import { startWorker } from './worker.js';
+import { integrationDepsFromEnv } from './etsy/deps.js';
 
 const env = loadWorkerEnv();
 const logger = pino({ level: env.LOG_LEVEL, base: { service: 'worker' } });
@@ -11,6 +12,8 @@ const running = await startWorker({
   redisUrl: env.REDIS_URL,
   concurrency: env.WORKER_CONCURRENCY,
   heartbeatEveryMs: env.HEARTBEAT_EVERY_MS,
+  deps: integrationDepsFromEnv(env),
+  etsySyncEveryMs: env.ETSY_SYNC_EVERY_MS,
   logger,
 });
 logger.info({ queues: running.queues.map((q) => q.name) }, 'worker started');

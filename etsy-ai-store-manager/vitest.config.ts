@@ -16,6 +16,7 @@ const swcPlugin = swc.vite({
 
 const alias = {
   '@esm/shared': r('packages/shared/src/index.ts'),
+  '@esm/integrations': r('packages/integrations/src/index.ts'),
 };
 
 export default defineConfig({

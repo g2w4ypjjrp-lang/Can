@@ -10,6 +10,10 @@ export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 export const JOBS = {
   heartbeat: 'system.heartbeat',
   cleanupExpiredApprovals: 'system.cleanup-expired-approvals',
+  etsySyncStore: 'etsy.sync-store',
+  etsySyncAll: 'etsy.sync-all',
+  etsyRefreshTokens: 'etsy.refresh-tokens',
+  approvalExecute: 'approval.execute',
 } as const;
 export type JobName = (typeof JOBS)[keyof typeof JOBS];
 

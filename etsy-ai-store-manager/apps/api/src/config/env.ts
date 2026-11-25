@@ -29,6 +29,17 @@ export const envSchema = z
         'TOKEN_ENCRYPTION_KEY 32 baytlık base64 olmalı',
       ),
     TOKEN_ENCRYPTION_KEY_VERSION: z.coerce.number().int().positive().default(1),
+    /** Older keys kept for decryption during rotation: "1:base64,2:base64" */
+    TOKEN_ENCRYPTION_PREVIOUS_KEYS: z.string().optional(),
+
+    /** Etsy app (Phase 2). Empty = integration disabled; the UI shows what is missing. */
+    ETSY_KEYSTRING: z.string().optional().default(''),
+    ETSY_SHARED_SECRET: z.string().optional().default(''),
+    ETSY_REDIRECT_URI: z.string().optional().default(''),
+    /** Overrides for tests only; defaults are the official endpoints. */
+    ETSY_CONNECT_URL: z.string().url().optional(),
+    ETSY_TOKEN_URL: z.string().url().optional(),
+    ETSY_API_BASE_URL: z.string().url().optional(),
 
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(120),
     SWAGGER_ENABLED: bool.default(true),
