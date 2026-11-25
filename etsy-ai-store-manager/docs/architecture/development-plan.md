@@ -22,11 +22,14 @@ Durum: ✅ tamamlandı ve test edildi · 🟡 kısmen · ⬜ planlandı
 - ⬜ Canlı doğrulama: `ETSY_KEYSTRING`, `ETSY_SHARED_SECRET`, kayıtlı callback URL gerekli
 - Ayrıntı: [phase-2-report](../operations/phase-2-report.md)
 
-## FAZ 3 — Printify ⬜
+## FAZ 3 — Printify ✅ (sözleşme testleriyle; canlı doğrulama token bekliyor)
 
-- Kişisel erişim belirteci ile bağlantı (tek hesap için); katalog (blueprint/print provider/variant), üretim ve kargo maliyetleri → `product_costs`
-- Ürün oluşturma, görsel yükleme, mockup çekme, sipariş durumu, webhook'lar
-- Gerekli: `PRINTIFY_API_TOKEN`
+- ✅ Token ile bağlantı, mağaza seçimi, imzalı webhook'lar
+- ✅ Ürün/varyant/üretim ve kargo maliyeti (sürümlü), mockup, Etsy ilan eşleşmesi
+- ✅ Sipariş eşleştirme: üretim durumu, gerçek maliyet, kargo takibi
+- ✅ Katalog ve baskı sağlayıcı karşılaştırması (önbellekli)
+- ✅ Onaylı Printify → Etsy yayınlama
+- Ayrıntı: [phase-3-report](../operations/phase-3-report.md)
 
 ## FAZ 4 — Profit Engine ⬜
 

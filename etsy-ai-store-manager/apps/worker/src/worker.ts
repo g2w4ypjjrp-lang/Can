@@ -143,6 +143,13 @@ export async function startWorker(opts: {
       { name: JOBS.etsyRefreshTokens, data: {}, opts: DEFAULT_JOB_OPTIONS },
     );
   }
+  if (deps.printify) {
+    await sync.upsertJobScheduler(
+      'printify-sync-all',
+      { every: 3 * 3600_000 },
+      { name: JOBS.printifySyncAll, data: {}, opts: DEFAULT_JOB_OPTIONS },
+    );
+  }
   const enqueue: Enqueue = async (jobName, storeId, idempotencyKey, payload = {}) => {
     await sync.add(jobName, { idempotencyKey, storeId, payload } satisfies JobEnvelope, {
       jobId: idempotencyKey.replace(/:/g, '_'),

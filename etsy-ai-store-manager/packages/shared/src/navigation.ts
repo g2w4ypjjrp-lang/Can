@@ -66,7 +66,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Ürünler',
     icon: 'Package',
     phase: 3,
-    status: 'planned',
+    status: 'ready',
     description: 'Ürünler, varyantlar ve maliyetler',
   },
   {
@@ -84,7 +84,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Printify',
     icon: 'Printer',
     phase: 3,
-    status: 'planned',
+    status: 'ready',
     description: 'Katalog, baskı sağlayıcıları, üretim maliyeti ve siparişler',
   },
   {

@@ -24,6 +24,8 @@ export const workerEnvSchema = z.object({
   ETSY_REDIRECT_URI: z.string().optional().default(''),
   ETSY_TOKEN_URL: z.string().url().optional(),
   ETSY_API_BASE_URL: z.string().url().optional(),
+  PRINTIFY_API_TOKEN: z.string().optional().default(''),
+  PRINTIFY_API_BASE_URL: z.string().url().optional(),
   ETSY_SYNC_EVERY_MS: z.coerce
     .number()
     .int()

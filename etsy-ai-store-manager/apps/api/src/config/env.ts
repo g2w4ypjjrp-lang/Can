@@ -41,6 +41,12 @@ export const envSchema = z
     ETSY_TOKEN_URL: z.string().url().optional(),
     ETSY_API_BASE_URL: z.string().url().optional(),
 
+    /** Printify personal access token (Phase 3). Server-side only; valid for one year. */
+    PRINTIFY_API_TOKEN: z.string().optional().default(''),
+    /** openssl rand -hex 20 — used to verify X-Pfy-Signature on webhooks */
+    PRINTIFY_WEBHOOK_SECRET: z.string().optional().default(''),
+    PRINTIFY_API_BASE_URL: z.string().url().optional(),
+
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(120),
     SWAGGER_ENABLED: bool.default(true),
     LOG_LEVEL: z

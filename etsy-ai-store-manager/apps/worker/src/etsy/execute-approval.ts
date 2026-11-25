@@ -2,6 +2,7 @@ import type pg from 'pg';
 import { mapListing, type EtsyListingPatch } from '@esm/integrations';
 import { etsyClientFor, loadEtsyConnection, type IntegrationDeps } from './deps.js';
 import { notifyAdmins } from './sync.js';
+import { loadPrintifyConnection, printifyClientFor } from '../printify/sync.js';
 
 type Field = 'title' | 'description' | 'tags' | 'materials' | 'state';
 
@@ -37,6 +38,9 @@ export async function executeApproval(
       approvalId,
     ]);
     return { status: 'skipped', reason: `status=${cur.rows[0]?.status ?? 'missing'}` };
+  }
+  if (a.action_type === 'publish_product' && a.payload?.kind === 'printify_publish') {
+    return executePrintifyPublish(pool, deps, a, attempt);
   }
   if (!['update_listing', 'publish_product'].includes(a.action_type)) {
     return finish(pool, a, 'failed', { error: 'Bu işlem türü için otomatik yürütücü yok' });
@@ -93,6 +97,51 @@ export async function executeApproval(
     await pool.query(
       `update public.approval_requests set status = 'approved', execution_result = $2 where id = $1`,
       [approvalId, JSON.stringify({ lastError: message.slice(0, 500), attempt: attempt.current })],
+    );
+    throw err;
+  }
+}
+
+/**
+ * Approved "publish Printify product to Etsy": calls Printify publish.json. Printify then
+ * creates/updates the Etsy listing through its own Etsy connection; the Etsy listing id
+ * appears later on product.external (picked up by the next Printify sync).
+ */
+async function executePrintifyPublish(
+  pool: pg.Pool,
+  deps: IntegrationDeps,
+  a: { id: string; store_id: string; title: string; payload: Record<string, unknown> },
+  attempt: { current: number; max: number },
+): Promise<ExecuteOutcome> {
+  try {
+    if (!deps.printify)
+      return finish(pool, a, 'failed', { error: 'PRINTIFY_API_TOKEN tanımlı değil' });
+    const conn = await loadPrintifyConnection(pool, a.store_id);
+    if (!conn) return finish(pool, a, 'failed', { error: 'Printify bağlantısı aktif değil' });
+    const productId = String(a.payload.printifyProductId ?? '');
+    const client = printifyClientFor(pool, deps.printify, a.store_id);
+    const product = await client.getProduct(conn.shopId, productId);
+    if (product.is_locked) {
+      return finish(pool, a, 'failed', {
+        error: 'Ürün Printify’da kilitli (yayınlama sürüyor olabilir)',
+      });
+    }
+    await client.publishProduct(conn.shopId, productId);
+    await pool.query(
+      `update public.products set status = 'ready', printify_is_locked = true where store_id = $1 and printify_product_id = $2`,
+      [a.store_id, productId],
+    );
+    return finish(pool, a, 'executed', {
+      publishedProduct: productId,
+      note: 'Printify yayınlamayı başlattı; Etsy ilan kimliği sonraki senkronizasyonda gelir.',
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (attempt.current >= attempt.max)
+      return finish(pool, a, 'failed', { error: message.slice(0, 500) });
+    await pool.query(
+      `update public.approval_requests set status = 'approved', execution_result = $2 where id = $1`,
+      [a.id, JSON.stringify({ lastError: message.slice(0, 500), attempt: attempt.current })],
     );
     throw err;
   }

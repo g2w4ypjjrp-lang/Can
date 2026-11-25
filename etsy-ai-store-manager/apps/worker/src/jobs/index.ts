@@ -4,6 +4,7 @@ import type { IntegrationDeps } from '../etsy/deps.js';
 import { syncEtsyStore, notifyAdmins } from '../etsy/sync.js';
 import { executeApproval } from '../etsy/execute-approval.js';
 import { getEtsyAccessToken, REFRESH_MARGIN_MS } from '../etsy/token-provider.js';
+import { syncPrintifyStore } from '../printify/sync.js';
 
 export interface JobContext {
   pool: pg.Pool;
@@ -123,7 +124,61 @@ const approvalExecute: JobHandler = async ({ pool, deps, attempt }, payload) => 
   return executeApproval(pool, deps, approvalId, attempt);
 };
 
+const printifySyncStore: JobHandler = async ({ pool, deps, storeId, attempt }) => {
+  if (!storeId) throw new Error('storeId required');
+  if (!deps.printify) return { skipped: 'PRINTIFY_API_TOKEN not configured' };
+  try {
+    return await syncPrintifyStore(pool, deps.printify, storeId);
+  } catch (err) {
+    if (attempt.current >= attempt.max) {
+      await notifyAdmins(
+        pool,
+        storeId,
+        'printify.sync_failed',
+        'warning',
+        'Printify senkronizasyonu başarısız',
+        err instanceof Error ? err.message.slice(0, 300) : 'Bilinmeyen hata',
+        '/dashboard/printify',
+      );
+    }
+    throw err;
+  }
+};
+
+const printifySyncAll: JobHandler = async ({ pool, enqueue, now }) => {
+  const r = await pool.query(
+    `select store_id from public.connected_accounts where platform = 'printify' and status = 'active'`,
+  );
+  const window = Math.floor(now.getTime() / 3_600_000);
+  for (const row of r.rows) {
+    await enqueue(
+      JOBS.printifySyncStore,
+      row.store_id,
+      `printify-sync:${row.store_id}:scheduled:${window}`,
+      { reason: 'scheduled' },
+    );
+  }
+  return { scheduled: r.rowCount ?? 0 };
+};
+
+/** Webhook deliveries are stored by the API; processing = debounced re-sync of that store. */
+const printifyWebhook: JobHandler = async ({ pool, enqueue, storeId }, payload) => {
+  const eventRowId = String(payload.webhookEventId ?? '');
+  if (!storeId || !eventRowId) throw new Error('storeId and webhookEventId required');
+  const bucket = Math.floor(Date.now() / 60_000);
+  await enqueue(JOBS.printifySyncStore, storeId, `printify-sync:${storeId}:webhook:${bucket}`, {
+    reason: 'webhook',
+  });
+  await pool.query(`update public.webhook_events set processed_at = now() where id = $1`, [
+    eventRowId,
+  ]);
+  return { queuedSync: true };
+};
+
 export const JOB_HANDLERS: Record<string, JobHandler> = {
+  [JOBS.printifySyncStore]: printifySyncStore,
+  [JOBS.printifySyncAll]: printifySyncAll,
+  [JOBS.printifyWebhook]: printifyWebhook,
   [JOBS.heartbeat]: heartbeat,
   [JOBS.cleanupExpiredApprovals]: cleanupExpiredApprovals,
   [JOBS.etsySyncStore]: etsySyncStore,

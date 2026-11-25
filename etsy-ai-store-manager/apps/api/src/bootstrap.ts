@@ -24,6 +24,7 @@ export async function createApp(env: Env): Promise<CreatedApp> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule.register(env), {
     logger: new PinoNestLogger(logger),
     bodyParser: true,
+    rawBody: true, // needed to verify webhook signatures over the exact bytes
   });
 
   app.set('trust proxy', 1); // behind Nginx

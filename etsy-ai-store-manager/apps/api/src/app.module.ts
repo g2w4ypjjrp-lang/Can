@@ -16,6 +16,8 @@ import { QueueModule } from './queue/queue.module.js';
 import { EtsyModule } from './etsy/etsy.module.js';
 import { ListingsModule } from './listings/listings.module.js';
 import { ApprovalsModule } from './approvals/approvals.module.js';
+import { PrintifyModule } from './printify/printify.module.js';
+import { ProductsModule } from './products/products.module.js';
 
 @Module({})
 export class AppModule {
@@ -40,6 +42,8 @@ export class AppModule {
         EtsyModule,
         ListingsModule,
         ApprovalsModule,
+        PrintifyModule,
+        ProductsModule,
       ],
       providers: [
         { provide: ENV, useValue: env },

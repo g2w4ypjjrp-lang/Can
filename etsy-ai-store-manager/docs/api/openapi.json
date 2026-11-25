@@ -11,7 +11,9 @@
           }
         },
         "summary": "Liveness",
-        "tags": ["health"]
+        "tags": [
+          "health"
+        ]
       }
     },
     "/api/v1/health/ready": {
@@ -24,7 +26,9 @@
           }
         },
         "summary": "Readiness: veritabanı ve Redis bağlantısı",
-        "tags": ["health"]
+        "tags": [
+          "health"
+        ]
       }
     },
     "/api/v1/me": {
@@ -42,7 +46,9 @@
           }
         ],
         "summary": "Oturumdaki kullanıcı ve kişisel ayarlar",
-        "tags": ["me"]
+        "tags": [
+          "me"
+        ]
       }
     },
     "/api/v1/me/settings": {
@@ -58,7 +64,10 @@
                 "properties": {
                   "uiLanguage": {
                     "type": "string",
-                    "enum": ["tr", "en"]
+                    "enum": [
+                      "tr",
+                      "en"
+                    ]
                   },
                   "baseCurrency": {
                     "type": "string",
@@ -103,7 +112,9 @@
           }
         ],
         "summary": "Kişisel ayarları güncelle",
-        "tags": ["me"]
+        "tags": [
+          "me"
+        ]
       }
     },
     "/api/v1/stores": {
@@ -121,7 +132,9 @@
           }
         ],
         "summary": "Erişimim olan mağazalar",
-        "tags": ["stores"]
+        "tags": [
+          "stores"
+        ]
       },
       "post": {
         "description": "Etsy bağlantısı FAZ 2 OAuth akışıyla yapılır; bu kayıt o zamana kadar \"not_connected\" kalır.",
@@ -147,10 +160,24 @@
                   "defaultLanguage": {
                     "default": "en",
                     "type": "string",
-                    "enum": ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "ja"]
+                    "enum": [
+                      "en",
+                      "de",
+                      "fr",
+                      "es",
+                      "it",
+                      "pt",
+                      "nl",
+                      "pl",
+                      "ja"
+                    ]
                   }
                 },
-                "required": ["name", "currency", "defaultLanguage"],
+                "required": [
+                  "name",
+                  "currency",
+                  "defaultLanguage"
+                ],
                 "additionalProperties": false
               }
             }
@@ -167,7 +194,9 @@
           }
         ],
         "summary": "Mağaza kaydı oluştur",
-        "tags": ["stores"]
+        "tags": [
+          "stores"
+        ]
       }
     },
     "/api/v1/stores/{storeId}": {
@@ -193,7 +222,9 @@
             "bearer": []
           }
         ],
-        "tags": ["stores"]
+        "tags": [
+          "stores"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/settings": {
@@ -220,7 +251,9 @@
           }
         ],
         "summary": "Mağaza ayarları (strateji, diller, reklam bütçe sınırı)",
-        "tags": ["stores"]
+        "tags": [
+          "stores"
+        ]
       },
       "patch": {
         "operationId": "StoresController_updateSettings",
@@ -243,15 +276,33 @@
                 "properties": {
                   "salesStrategy": {
                     "type": "string",
-                    "enum": ["growth", "balanced", "profit"]
+                    "enum": [
+                      "growth",
+                      "balanced",
+                      "profit"
+                    ]
                   },
                   "automationLevel": {
                     "type": "string",
-                    "enum": ["manual", "controlled", "autonomous_limited"]
+                    "enum": [
+                      "manual",
+                      "controlled",
+                      "autonomous_limited"
+                    ]
                   },
                   "defaultLanguage": {
                     "type": "string",
-                    "enum": ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "ja"]
+                    "enum": [
+                      "en",
+                      "de",
+                      "fr",
+                      "es",
+                      "it",
+                      "pt",
+                      "nl",
+                      "pl",
+                      "ja"
+                    ]
                   },
                   "languages": {
                     "minItems": 1,
@@ -259,7 +310,17 @@
                     "type": "array",
                     "items": {
                       "type": "string",
-                      "enum": ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "ja"]
+                      "enum": [
+                        "en",
+                        "de",
+                        "fr",
+                        "es",
+                        "it",
+                        "pt",
+                        "nl",
+                        "pl",
+                        "ja"
+                      ]
                     }
                   },
                   "targetMarkets": {
@@ -299,7 +360,9 @@
             "bearer": []
           }
         ],
-        "tags": ["stores"]
+        "tags": [
+          "stores"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/profit-rules": {
@@ -326,7 +389,9 @@
           }
         ],
         "summary": "Katkı eşikleri ve kâr politikası",
-        "tags": ["stores"]
+        "tags": [
+          "stores"
+        ]
       },
       "patch": {
         "operationId": "StoresController_updateProfitRules",
@@ -411,7 +476,9 @@
             "bearer": []
           }
         ],
-        "tags": ["stores"]
+        "tags": [
+          "stores"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/dashboard": {
@@ -447,7 +514,9 @@
           }
         ],
         "summary": "Genel bakış: ciro, sipariş, reklam, katkı, onaylar (yalnızca gerçek kayıtlar)",
-        "tags": ["dashboard"]
+        "tags": [
+          "dashboard"
+        ]
       }
     },
     "/api/v1/notifications": {
@@ -474,7 +543,9 @@
           }
         ],
         "summary": "Bildirimlerim (en yeni 100)",
-        "tags": ["notifications"]
+        "tags": [
+          "notifications"
+        ]
       }
     },
     "/api/v1/notifications/{id}/read": {
@@ -500,7 +571,9 @@
             "bearer": []
           }
         ],
-        "tags": ["notifications"]
+        "tags": [
+          "notifications"
+        ]
       }
     },
     "/api/v1/notifications/read-all": {
@@ -517,7 +590,9 @@
             "bearer": []
           }
         ],
-        "tags": ["notifications"]
+        "tags": [
+          "notifications"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/integrations/etsy": {
@@ -544,7 +619,9 @@
           }
         ],
         "summary": "Etsy bağlantı durumu, sayılar ve API ile yapılamayan işlemler",
-        "tags": ["etsy"]
+        "tags": [
+          "etsy"
+        ]
       },
       "delete": {
         "operationId": "EtsyController_disconnect",
@@ -569,7 +646,9 @@
           }
         ],
         "summary": "Bağlantıyı keser, belirteçleri siler (veriler korunur)",
-        "tags": ["etsy"]
+        "tags": [
+          "etsy"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/integrations/etsy/connect": {
@@ -596,7 +675,9 @@
           }
         ],
         "summary": "OAuth 2.0 + PKCE onay URL’si üretir (yalnızca mağaza sahibi)",
-        "tags": ["etsy"]
+        "tags": [
+          "etsy"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/integrations/etsy/sync": {
@@ -623,7 +704,9 @@
           }
         ],
         "summary": "Mağaza, ilan ve sipariş içe aktarmayı kuyruğa alır",
-        "tags": ["etsy"]
+        "tags": [
+          "etsy"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/listings": {
@@ -682,7 +765,9 @@
           }
         ],
         "summary": "İçe aktarılmış ilanlar",
-        "tags": ["listings"]
+        "tags": [
+          "listings"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/listings/{listingId}": {
@@ -716,7 +801,9 @@
             "bearer": []
           }
         ],
-        "tags": ["listings"]
+        "tags": [
+          "listings"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/listings/{listingId}/change-requests": {
@@ -777,7 +864,10 @@
                   },
                   "state": {
                     "type": "string",
-                    "enum": ["active", "inactive"]
+                    "enum": [
+                      "active",
+                      "inactive"
+                    ]
                   },
                   "reason": {
                     "type": "string",
@@ -785,7 +875,9 @@
                     "maxLength": 1000
                   }
                 },
-                "required": ["reason"],
+                "required": [
+                  "reason"
+                ],
                 "additionalProperties": false
               }
             }
@@ -802,7 +894,9 @@
           }
         ],
         "summary": "İlan değişikliği önerisi oluşturur (onaydan sonra Etsy’ye gönderilir)",
-        "tags": ["listings"]
+        "tags": [
+          "listings"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/approvals": {
@@ -837,7 +931,9 @@
           }
         ],
         "summary": "Onay istekleri (ne / neden / fayda / maliyet / kâr etkisi / API işlemi)",
-        "tags": ["approvals"]
+        "tags": [
+          "approvals"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/approvals/{approvalId}/approve": {
@@ -872,7 +968,9 @@
           }
         ],
         "summary": "Onayla ve yürütmeyi kuyruğa al (hassas işlemlerde yeniden kimlik doğrulama)",
-        "tags": ["approvals"]
+        "tags": [
+          "approvals"
+        ]
       }
     },
     "/api/v1/stores/{storeId}/approvals/{approvalId}/reject": {
@@ -906,7 +1004,364 @@
             "bearer": []
           }
         ],
-        "tags": ["approvals"]
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/integrations/printify": {
+      "get": {
+        "operationId": "PrintifyController_status",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "printify"
+        ]
+      },
+      "delete": {
+        "operationId": "PrintifyController_disconnect",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "printify"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/integrations/printify/shops": {
+      "get": {
+        "operationId": "PrintifyController_shops",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Token’a bağlı Printify mağazaları (sales_channel ile)",
+        "tags": [
+          "printify"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/integrations/printify/connect": {
+      "post": {
+        "operationId": "PrintifyController_connect",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "printify"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/integrations/printify/sync": {
+      "post": {
+        "operationId": "PrintifyController_sync",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "printify"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/printify/catalog/blueprints": {
+      "get": {
+        "operationId": "PrintifyController_blueprints",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Printify kataloğu (önbellekli)",
+        "tags": [
+          "printify"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/printify/catalog/blueprints/{blueprintId}/providers": {
+      "get": {
+        "operationId": "PrintifyController_providers",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blueprintId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Baskı sağlayıcı karşılaştırması: kargo, süre, varyant sayısı",
+        "tags": [
+          "printify"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/products": {
+      "get": {
+        "operationId": "ProductsController_list",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ürünler, varyant sayısı, fiyat ve güncel üretim maliyeti aralığı",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/products/{productId}": {
+      "get": {
+        "operationId": "ProductsController_get",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/products/{productId}/publish-requests": {
+      "post": {
+        "operationId": "ProductsController_publish",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Printify → Etsy yayın isteği (onay gerektirir)",
+        "tags": [
+          "products"
+        ]
       }
     }
   },

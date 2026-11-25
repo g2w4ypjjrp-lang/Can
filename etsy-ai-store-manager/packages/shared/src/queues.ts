@@ -14,6 +14,9 @@ export const JOBS = {
   etsySyncAll: 'etsy.sync-all',
   etsyRefreshTokens: 'etsy.refresh-tokens',
   approvalExecute: 'approval.execute',
+  printifySyncStore: 'printify.sync-store',
+  printifySyncAll: 'printify.sync-all',
+  printifyWebhook: 'printify.webhook',
 } as const;
 export type JobName = (typeof JOBS)[keyof typeof JOBS];
 

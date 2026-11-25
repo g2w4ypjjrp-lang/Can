@@ -13,7 +13,7 @@ işlem onay ister.
 | ---- | ------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | 1    | Monorepo, veritabanı (41 tablo + RLS), Auth, dashboard, ayarlar, worker, Docker/Nginx | ✅ Tamamlandı, test edildi                              |
 | 2    | Etsy OAuth, mağaza verisi, ilanlar, onaylı ilan düzenleme                             | ✅ Test edildi (canlı doğrulama Etsy anahtarı bekliyor) |
-| 3    | Printify                                                                              | ⬜ Printify token bekliyor                              |
+| 3    | Printify: ürünler, maliyetler, siparişler, sağlayıcı karşılaştırması, onaylı yayın    | ✅ Test edildi (canlı doğrulama token bekliyor)         |
 | 4    | Profit Engine                                                                         | ⬜                                                      |
 | 5–11 | Pazar araştırma, tasarım, SEO, reklam, sipariş, AI yönetici, production               | ⬜                                                      |
 
@@ -60,9 +60,9 @@ Yerel API için `.env`: `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5
 
 ```bash
 pnpm lint && pnpm typecheck
-pnpm test:unit                       # 76 test
-TEST_DATABASE_URL=postgres://...test pnpm test:integration   # 68 test: migration, RLS, API, worker, Etsy akışı (gerçek Postgres + Redis)
-pnpm --filter @esm/web build && E2E_SUPABASE_ANON_KEY=<publishable key> pnpm test:e2e   # 11 test: gerçek Supabase Auth + Etsy sözleşme test sunucusu
+pnpm test:unit                       # 86 test
+TEST_DATABASE_URL=postgres://...test pnpm test:integration   # 77 test: migration, RLS, API, worker, Etsy ve Printify akışları (gerçek Postgres + Redis)
+pnpm --filter @esm/web build && E2E_SUPABASE_ANON_KEY=<publishable key> pnpm test:e2e   # 12 test: gerçek Supabase Auth + Etsy/Printify sözleşme test sunucuları
 ```
 
 Entegrasyon testleri veritabanını sıfırlar; URL'de `test` geçmeyen bir veritabanında çalışmayı reddeder.

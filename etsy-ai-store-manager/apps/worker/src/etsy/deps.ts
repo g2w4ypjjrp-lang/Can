@@ -2,12 +2,14 @@ import type pg from 'pg';
 import { EtsyClient, TokenCipher, type EtsyAppConfig, type EtsyCallLog } from '@esm/integrations';
 import type { WorkerEnv } from '../env.js';
 import { getEtsyAccessToken } from './token-provider.js';
+import type { PrintifyDeps } from '../printify/sync.js';
 
 export interface IntegrationDeps {
   cipher: TokenCipher | null;
   etsy: EtsyAppConfig | null;
   fetchImpl: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  printify?: PrintifyDeps | null;
 }
 
 export function integrationDepsFromEnv(
@@ -31,7 +33,10 @@ export function integrationDepsFromEnv(
           apiBaseUrl: env.ETSY_API_BASE_URL,
         }
       : null;
-  return { cipher, etsy, fetchImpl };
+  const printify: PrintifyDeps | null = env.PRINTIFY_API_TOKEN
+    ? { token: env.PRINTIFY_API_TOKEN, baseUrl: env.PRINTIFY_API_BASE_URL, fetchImpl }
+    : null;
+  return { cipher, etsy, fetchImpl, printify };
 }
 
 export class IntegrationNotConfiguredError extends Error {}

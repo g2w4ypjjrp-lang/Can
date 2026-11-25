@@ -292,23 +292,21 @@ export async function startEtsyStub(
         const state = url.searchParams.get('state') ?? 'active';
         const all = [...listings.values()].filter((l) => l.state === state);
         const withImages = (url.searchParams.get('includes') ?? '').split(',').includes('Images');
-        const results = all
-          .slice(offset, offset + limit)
-          .map((l) =>
-            withImages
-              ? {
-                  ...l,
-                  images: [
-                    {
-                      listing_image_id: l.listing_id * 10,
-                      url_fullxfull: `https://i.etsystatic.com/${l.listing_id}.jpg`,
-                      rank: 1,
-                      alt_text: null,
-                    },
-                  ],
-                }
-              : l,
-          );
+        const results = all.slice(offset, offset + limit).map((l) =>
+          withImages
+            ? {
+                ...l,
+                images: [
+                  {
+                    listing_image_id: l.listing_id * 10,
+                    url_fullxfull: `https://i.etsystatic.com/${l.listing_id}.jpg`,
+                    rank: 1,
+                    alt_text: null,
+                  },
+                ],
+              }
+            : l,
+        );
         return send(200, { count: all.length, results }, rl);
       }
       const lm = url.pathname.match(/^\/v3\/application\/listings\/(\d+)$/);

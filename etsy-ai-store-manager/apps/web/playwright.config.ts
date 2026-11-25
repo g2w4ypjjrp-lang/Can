@@ -12,6 +12,11 @@ const DATABASE_URL =
 const API_PORT = 4300;
 const WEB_PORT = 3300;
 const STUB_PORT = 4600;
+const PRINTIFY_PORT = 4700;
+const PRINTIFY_ENV = {
+  PRINTIFY_API_TOKEN: 'printify-test-token',
+  PRINTIFY_API_BASE_URL: `http://127.0.0.1:${PRINTIFY_PORT}`,
+};
 const TOKEN_KEY = Buffer.alloc(32, 9).toString('base64');
 // Etsy contract stub (test double) — see tests/helpers/etsy-stub.ts
 const ETSY_ENV = {
@@ -43,6 +48,12 @@ export default defineConfig({
       env: { ETSY_STUB_PORT: String(STUB_PORT) },
     },
     {
+      command: 'node ../../tests/e2e/run-printify-stub.ts',
+      url: `http://127.0.0.1:${PRINTIFY_PORT}/__test/published`,
+      reuseExistingServer: false,
+      env: { PRINTIFY_STUB_PORT: String(PRINTIFY_PORT) },
+    },
+    {
       command: 'node ../worker/dist/main.js',
       reuseExistingServer: false,
       env: {
@@ -53,6 +64,7 @@ export default defineConfig({
         LOG_LEVEL: 'warn',
         HEARTBEAT_EVERY_MS: '3600000',
         ...ETSY_ENV,
+        ...PRINTIFY_ENV,
       },
     },
     {
@@ -70,6 +82,7 @@ export default defineConfig({
         WEB_APP_URL: `http://127.0.0.1:${WEB_PORT}`,
         CORS_ORIGINS: `http://127.0.0.1:${WEB_PORT}`,
         ...ETSY_ENV,
+        ...PRINTIFY_ENV,
         LOG_LEVEL: 'warn',
       },
     },
