@@ -42,6 +42,9 @@ export const envSchema = z
     ETSY_API_BASE_URL: z.string().url().optional(),
 
     /** Printify personal access token (Phase 3). Server-side only; valid for one year. */
+    /** Claude API key (worker uses it; API only reports whether AI is configured). */
+    ANTHROPIC_API_KEY: z.string().optional().default(''),
+
     PRINTIFY_API_TOKEN: z.string().optional().default(''),
     /** openssl rand -hex 20 — used to verify X-Pfy-Signature on webhooks */
     PRINTIFY_WEBHOOK_SECRET: z.string().optional().default(''),

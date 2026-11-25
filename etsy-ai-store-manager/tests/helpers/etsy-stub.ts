@@ -238,6 +238,41 @@ export async function startEtsyStub(
     if (url.pathname.startsWith('/v3/application/')) {
       if (req.headers['x-api-key'] !== `${STUB_APP.keystring}:${STUB_APP.sharedSecret}`)
         return send(403, { error: 'Invalid API key' });
+      // public marketplace search: API key only, no OAuth token (findAllListingsActive)
+      if (req.method === 'GET' && url.pathname === '/v3/application/listings/active') {
+        const kw = (url.searchParams.get('keywords') ?? '').toLowerCase();
+        const limit = Number(url.searchParams.get('limit') ?? 25);
+        const offset = Number(url.searchParams.get('offset') ?? 0);
+        if (!kw) return send(400, { error: 'keywords required' });
+        if (limit > 100) return send(400, { error: 'limit max 100' });
+        const nowTs = Math.floor(Date.now() / 1000);
+        const all = Array.from({ length: 150 }, (_, i) => ({
+          listing_id: 700000 + i,
+          shop_id: 9000 + (i % 40),
+          title: `${kw} design ${i}`,
+          description: '',
+          state: 'active',
+          quantity: 10,
+          url: `https://www.etsy.com/listing/${700000 + i}`,
+          num_favorers: (i % 10) * 5,
+          tags: [kw, 'gift', i % 2 ? 'personalized' : 'funny'],
+          materials: [],
+          shipping_profile_id: null,
+          shop_section_id: null,
+          taxonomy_id: 1,
+          who_made: 'i_did',
+          when_made: 'made_to_order',
+          is_supply: false,
+          price:
+            i % 15 === 0
+              ? { amount: 2000 + i * 10, divisor: 100, currency_code: 'EUR' }
+              : { amount: 1500 + i * 10, divisor: 100, currency_code: 'USD' },
+          updated_timestamp: nowTs,
+          created_timestamp: nowTs - (i % 3) * 60 * 86400,
+          has_variations: false,
+        }));
+        return send(200, { count: 12500, results: all.slice(offset, offset + limit) });
+      }
       const auth = String(req.headers.authorization ?? '');
       const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
       const exp = access.get(token);

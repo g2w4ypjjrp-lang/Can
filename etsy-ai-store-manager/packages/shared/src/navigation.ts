@@ -39,7 +39,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Pazar Araştırma',
     icon: 'Globe',
     phase: 5,
-    status: 'planned',
+    status: 'ready',
     description: 'Trend, anahtar kelime ve rakip analizi',
   },
   {
@@ -48,7 +48,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Ürün Fırsatları',
     icon: 'Lightbulb',
     phase: 5,
-    status: 'planned',
+    status: 'ready',
     description: 'Talep/rekabet puanlı ürün fırsatları ve kârlılık simülasyonu',
   },
   {

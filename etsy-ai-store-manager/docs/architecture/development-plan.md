@@ -39,10 +39,11 @@ Durum: ✅ tamamlandı ve test edildi · 🟡 kısmen · ⬜ planlandı
 - ⬜ Ücret oranlarının mağaza sahibince doğrulanması (panelde)
 - Ayrıntı: [phase-4-report](../operations/phase-4-report.md)
 
-## FAZ 5 — Pazar araştırması ⬜
+## FAZ 5 — Pazar araştırması ✅ (canlı doğrulama anahtar bekliyor)
 
-- Claude API (structured output + tool calling); yalnızca erişilebilen veri kaynakları; her metrik `is_estimate` + güven seviyesi
-- Gerekli: `ANTHROPIC_API_KEY`
+- ✅ Etsy `findAllListingsActive` ile gerçek pazar verisi; Claude web araması + yapılandırılmış analiz
+- ✅ Profit Engine ile fırsat kârlılığı, deterministik puan, zarar/IP riski otomatik eleme, maliyet takibi
+- Ayrıntı: [phase-5-report](../operations/phase-5-report.md)
 
 ## FAZ 6 — Tasarım stüdyosu ⬜
 

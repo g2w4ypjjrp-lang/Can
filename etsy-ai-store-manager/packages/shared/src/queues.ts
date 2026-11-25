@@ -19,6 +19,7 @@ export const JOBS = {
   printifyWebhook: 'printify.webhook',
   profitRecomputeOrders: 'profit.recompute-orders',
   fxRefresh: 'fx.refresh',
+  marketResearch: 'market.research',
 } as const;
 export type JobName = (typeof JOBS)[keyof typeof JOBS];
 

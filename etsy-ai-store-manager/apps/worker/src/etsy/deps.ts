@@ -10,6 +10,7 @@ export interface IntegrationDeps {
   fetchImpl: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   printify?: PrintifyDeps | null;
+  anthropic?: { apiKey: string; baseURL?: string | undefined } | null;
 }
 
 export function integrationDepsFromEnv(
@@ -36,7 +37,10 @@ export function integrationDepsFromEnv(
   const printify: PrintifyDeps | null = env.PRINTIFY_API_TOKEN
     ? { token: env.PRINTIFY_API_TOKEN, baseUrl: env.PRINTIFY_API_BASE_URL, fetchImpl }
     : null;
-  return { cipher, etsy, fetchImpl, printify };
+  const anthropic = env.ANTHROPIC_API_KEY
+    ? { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }
+    : null;
+  return { cipher, etsy, fetchImpl, printify, anthropic };
 }
 
 export class IntegrationNotConfiguredError extends Error {}

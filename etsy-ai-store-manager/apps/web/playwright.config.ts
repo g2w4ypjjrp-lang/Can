@@ -17,6 +17,11 @@ const PRINTIFY_ENV = {
   PRINTIFY_API_TOKEN: 'printify-test-token',
   PRINTIFY_API_BASE_URL: `http://127.0.0.1:${PRINTIFY_PORT}`,
 };
+const AI_PORT = 4800;
+const AI_ENV = {
+  ANTHROPIC_API_KEY: 'sk-ant-test',
+  ANTHROPIC_BASE_URL: `http://127.0.0.1:${AI_PORT}`,
+};
 const TOKEN_KEY = Buffer.alloc(32, 9).toString('base64');
 // Etsy contract stub (test double) — see tests/helpers/etsy-stub.ts
 const ETSY_ENV = {
@@ -54,6 +59,11 @@ export default defineConfig({
       env: { PRINTIFY_STUB_PORT: String(PRINTIFY_PORT) },
     },
     {
+      command: 'node ../../tests/e2e/run-anthropic-stub.ts',
+      port: AI_PORT,
+      reuseExistingServer: false,
+    },
+    {
       command: 'node ../worker/dist/main.js',
       reuseExistingServer: false,
       env: {
@@ -65,6 +75,7 @@ export default defineConfig({
         HEARTBEAT_EVERY_MS: '3600000',
         ...ETSY_ENV,
         ...PRINTIFY_ENV,
+        ...AI_ENV,
       },
     },
     {
@@ -83,6 +94,7 @@ export default defineConfig({
         CORS_ORIGINS: `http://127.0.0.1:${WEB_PORT}`,
         ...ETSY_ENV,
         ...PRINTIFY_ENV,
+        ...AI_ENV,
         LOG_LEVEL: 'warn',
       },
     },

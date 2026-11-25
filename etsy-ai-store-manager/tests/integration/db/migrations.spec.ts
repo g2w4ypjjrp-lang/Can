@@ -114,6 +114,7 @@ describe('database migrations', () => {
       'price_recommendations.profit_snapshot_id',
       'refunds.approval_request_id',
       'fee_rule_verifications.verified_by',
+      'product_opportunities.decided_by',
     ]);
     const missing = r.rows.map((x) => `${x.tbl}.${x.col}`).filter((k) => !allowed.has(k));
     expect(missing).toEqual([]);

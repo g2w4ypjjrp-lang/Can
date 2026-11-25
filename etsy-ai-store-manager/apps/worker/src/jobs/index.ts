@@ -7,6 +7,7 @@ import { getEtsyAccessToken, REFRESH_MARGIN_MS } from '../etsy/token-provider.js
 import { syncPrintifyStore } from '../printify/sync.js';
 import { recomputeOrderSnapshots } from '../finance/recompute.js';
 import { refreshFxRates } from '../finance/fx.js';
+import { runMarketResearch } from '../market/research.js';
 
 export interface JobContext {
   pool: pg.Pool;
@@ -199,7 +200,28 @@ const profitRecomputeOrders: JobHandler = async ({ pool, storeId }) => {
 
 const fxRefresh: JobHandler = async ({ pool, deps }) => refreshFxRates(pool, deps.fetchImpl);
 
+const marketResearch: JobHandler = async ({ pool, deps, attempt }, payload) => {
+  const researchId = String(payload.researchId ?? '');
+  if (!researchId) throw new Error('researchId required');
+  try {
+    return await runMarketResearch(
+      pool,
+      { etsy: deps.etsy, anthropic: deps.anthropic ?? null, fetchImpl: deps.fetchImpl },
+      researchId,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message.slice(0, 500) : String(err);
+    await pool.query(`update public.market_research set status = $2, error = $3 where id = $1`, [
+      researchId,
+      attempt.current >= attempt.max ? 'failed' : 'queued',
+      message,
+    ]);
+    throw err;
+  }
+};
+
 export const JOB_HANDLERS: Record<string, JobHandler> = {
+  [JOBS.marketResearch]: marketResearch,
   [JOBS.profitRecomputeOrders]: profitRecomputeOrders,
   [JOBS.fxRefresh]: fxRefresh,
   [JOBS.printifySyncStore]: printifySyncStore,

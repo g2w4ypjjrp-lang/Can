@@ -51,6 +51,7 @@ export interface EtsyListing {
   is_supply: boolean | null;
   price: EtsyMoney;
   updated_timestamp: number;
+  created_timestamp?: number;
   last_modified_timestamp?: number;
   has_variations: boolean;
   images?: Array<{
@@ -252,6 +253,36 @@ export class EtsyClient {
     }
   }
 
+  /**
+   * Public marketplace search (findAllListingsActive). Needs only the API key —
+   * no OAuth token — so it works for market research on any keyword.
+   */
+  findActiveListings(q: {
+    keywords: string;
+    limit?: number;
+    offset?: number;
+    sortOn?: 'created' | 'price' | 'updated' | 'score';
+    currency?: string;
+    buyerCountry?: string;
+  }): Promise<Paged<EtsyListing>> {
+    return this.request(
+      'GET',
+      '/v3/application/listings/active',
+      {
+        query: {
+          keywords: q.keywords,
+          limit: String(q.limit ?? 100),
+          offset: String(q.offset ?? 0),
+          sort_on: q.sortOn ?? 'score',
+          ...(q.sortOn && q.sortOn !== 'score' ? { sort_order: 'desc' } : {}),
+          ...(q.currency ? { currency: q.currency } : {}),
+          ...(q.buyerCountry ? { buyer_country: q.buyerCountry } : {}),
+        },
+      },
+      false,
+    );
+  }
+
   getShopShippingProfiles(
     shopId: number | string,
   ): Promise<Paged<{ shipping_profile_id: number; title: string }>> {
@@ -262,6 +293,7 @@ export class EtsyClient {
     method: string,
     path: string,
     opts: { query?: Record<string, string> | undefined; form?: URLSearchParams } = {},
+    authenticated = true,
   ): Promise<T> {
     const url = new URL(this.base + path);
     for (const [k, v] of Object.entries(opts.query ?? {})) url.searchParams.set(k, v);
@@ -275,7 +307,9 @@ export class EtsyClient {
           method,
           headers: {
             'x-api-key': etsyApiKeyHeader(this.opts.app),
-            Authorization: `Bearer ${await this.opts.getAccessToken()}`,
+            ...(authenticated
+              ? { Authorization: `Bearer ${await this.opts.getAccessToken()}` }
+              : {}),
             Accept: 'application/json',
             ...(opts.form
               ? { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' }
