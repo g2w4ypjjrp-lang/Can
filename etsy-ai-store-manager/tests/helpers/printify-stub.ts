@@ -19,6 +19,8 @@ export interface PrintifyStub {
   webhooks: Array<{ id: string; topic: string; url: string }>;
   publishBodies: Array<Record<string, boolean>>;
   updates: Array<{ productId: string; body: unknown }>;
+  uploads: Array<{ fileName: string; bytes: number }>;
+  createdProducts: Array<Record<string, unknown>>;
 }
 
 export async function startPrintifyStub(opts: { port?: number } = {}): Promise<PrintifyStub> {
@@ -26,6 +28,8 @@ export async function startPrintifyStub(opts: { port?: number } = {}): Promise<P
   const published: string[] = [];
   const publishBodies: Array<Record<string, boolean>> = [];
   const updates: Array<{ productId: string; body: unknown }> = [];
+  const uploads: Array<{ fileName: string; bytes: number }> = [];
+  const createdProducts: Array<Record<string, unknown>> = [];
   const webhooks: PrintifyStub['webhooks'] = [];
   const now = new Date().toISOString();
   const products = new Map<
@@ -332,6 +336,78 @@ export async function startPrintifyStub(opts: { port?: number } = {}): Promise<P
       prod.is_locked = true;
       return send(200, {});
     }
+    if (req.method === 'POST' && p === '/v1/uploads/images.json') {
+      const b = JSON.parse(raw) as { file_name?: string; url?: string; contents?: string };
+      if (!b.file_name || (!b.url && !b.contents))
+        return send(400, { code: 10100, error: 'file_name and url or contents required' });
+      uploads.push({
+        fileName: b.file_name,
+        bytes: b.contents ? Buffer.from(b.contents, 'base64').length : 0,
+      });
+      return send(200, {
+        id: `img${uploads.length}`,
+        file_name: b.file_name,
+        height: 5400,
+        width: 4500,
+        size: 1,
+        mime_type: 'image/png',
+        preview_url: 'https://x',
+        upload_time: now,
+      });
+    }
+    if (req.method === 'POST' && p === `${shopBase}/products.json`) {
+      const b = JSON.parse(raw) as {
+        title?: string;
+        blueprint_id?: number;
+        print_provider_id?: number;
+        variants?: Array<{ id: number; price: number; is_enabled: boolean }>;
+        print_areas?: unknown[];
+      };
+      if (
+        !b.title ||
+        !b.blueprint_id ||
+        !b.print_provider_id ||
+        !b.variants?.length ||
+        !b.print_areas?.length
+      )
+        return send(400, { errors: { reason: 'missing fields' } });
+      const id = (Date.now().toString(16) + 'abcdef0123456789').slice(0, 24);
+      const prod = {
+        id,
+        title: b.title,
+        description: '',
+        tags: [],
+        variants: b.variants.map((v) => ({
+          id: v.id,
+          sku: `SKU-${v.id}`,
+          cost: 1085,
+          price: v.price,
+          title: 'Black / M',
+          is_enabled: v.is_enabled,
+          is_available: true,
+        })),
+        images: [
+          {
+            src: `https://images.printify.com/mock/${id}.png`,
+            variant_ids: b.variants.map((v) => v.id),
+            position: 'front',
+            is_default: true,
+          },
+        ],
+        created_at: now,
+        updated_at: now,
+        visible: true,
+        is_locked: false,
+        blueprint_id: b.blueprint_id,
+        print_provider_id: b.print_provider_id,
+        external: null,
+        shop_id: PRINTIFY_SHOP_ID,
+        print_areas: b.print_areas,
+      };
+      products.set(id, prod as never);
+      createdProducts.push(prod);
+      return send(200, prod);
+    }
     if (req.method === 'GET' && p === `${shopBase}/orders.json`) {
       return send(200, { current_page: 1, last_page: 1, data: orders });
     }
@@ -355,5 +431,7 @@ export async function startPrintifyStub(opts: { port?: number } = {}): Promise<P
     webhooks,
     publishBodies,
     updates,
+    uploads,
+    createdProducts,
   };
 }

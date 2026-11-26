@@ -210,6 +210,12 @@ export function OpportunityCard({
               Reddet
             </button>
           )}
+          <a
+            href={`/dashboard/design-studio?opportunity=${o.id}`}
+            className="rounded-lg border border-line px-3 py-1.5 text-xs text-brand-600"
+          >
+            Tasarıma başla
+          </a>
           {o.status !== 'new' && (
             <button
               name="status"

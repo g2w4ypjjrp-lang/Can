@@ -8,6 +8,7 @@ import { syncPrintifyStore } from '../printify/sync.js';
 import { recomputeOrderSnapshots } from '../finance/recompute.js';
 import { refreshFxRates } from '../finance/fx.js';
 import { runMarketResearch } from '../market/research.js';
+import { generateDesign, reviewDesign } from '../designs/jobs.js';
 
 export interface JobContext {
   pool: pg.Pool;
@@ -220,7 +221,28 @@ const marketResearch: JobHandler = async ({ pool, deps, attempt }, payload) => {
   }
 };
 
+const designGenerate: JobHandler = async ({ pool, deps }, payload) => {
+  if (!deps.store) throw new Error('storage not configured');
+  return generateDesign(
+    pool,
+    { anthropic: deps.anthropic ?? null, store: deps.store },
+    String(payload.designId),
+    (payload.userId as string) ?? null,
+  );
+};
+
+const designIpReview: JobHandler = async ({ pool, deps }, payload) => {
+  if (!deps.store) throw new Error('storage not configured');
+  return reviewDesign(
+    pool,
+    { anthropic: deps.anthropic ?? null, store: deps.store },
+    String(payload.designId),
+  );
+};
+
 export const JOB_HANDLERS: Record<string, JobHandler> = {
+  [JOBS.designGenerate]: designGenerate,
+  [JOBS.designIpReview]: designIpReview,
   [JOBS.marketResearch]: marketResearch,
   [JOBS.profitRecomputeOrders]: profitRecomputeOrders,
   [JOBS.fxRefresh]: fxRefresh,

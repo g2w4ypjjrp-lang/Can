@@ -19,6 +19,8 @@
     "@esm/integrations": "workspace:*",
     "@esm/profit-engine": "workspace:*",
     "decimal.js": "10.6.0",
-    "@esm/ai-engine": "workspace:*"
+    "@esm/ai-engine": "workspace:*",
+    "@esm/design-tools": "workspace:*",
+    "sharp": "0.35.5"
   }
 }

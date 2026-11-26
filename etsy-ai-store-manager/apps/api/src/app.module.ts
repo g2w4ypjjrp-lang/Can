@@ -20,6 +20,7 @@ import { PrintifyModule } from './printify/printify.module.js';
 import { ProductsModule } from './products/products.module.js';
 import { FinanceModule } from './finance/finance.module.js';
 import { MarketModule } from './market/market.module.js';
+import { DesignsModule } from './designs/designs.module.js';
 
 @Module({})
 export class AppModule {
@@ -48,6 +49,7 @@ export class AppModule {
         ProductsModule,
         FinanceModule,
         MarketModule,
+        DesignsModule,
       ],
       providers: [
         { provide: ENV, useValue: env },

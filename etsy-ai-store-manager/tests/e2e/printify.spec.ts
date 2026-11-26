@@ -29,7 +29,8 @@ test.describe.serial('FAZ 3: Printify', () => {
 
     await expect(async () => {
       await page.goto('/dashboard/products');
-      await expect(page.getByRole('heading', { name: 'Ürünler (2)' })).toBeVisible({
+      // the stub is shared across specs (the design spec adds a draft), so match by name
+      await expect(page.getByRole('row', { name: /Retro Sunset Tee/ })).toBeVisible({
         timeout: 1000,
       });
     }).toPass({ timeout: 20_000 });

@@ -22,6 +22,7 @@ const AI_ENV = {
   ANTHROPIC_API_KEY: 'sk-ant-test',
   ANTHROPIC_BASE_URL: `http://127.0.0.1:${AI_PORT}`,
 };
+const STORAGE_ENV = { STORAGE_DRIVER: 'local', STORAGE_LOCAL_DIR: '/tmp/esm-e2e-storage' };
 const TOKEN_KEY = Buffer.alloc(32, 9).toString('base64');
 // Etsy contract stub (test double) — see tests/helpers/etsy-stub.ts
 const ETSY_ENV = {
@@ -76,6 +77,7 @@ export default defineConfig({
         ...ETSY_ENV,
         ...PRINTIFY_ENV,
         ...AI_ENV,
+        ...STORAGE_ENV,
       },
     },
     {
@@ -95,6 +97,7 @@ export default defineConfig({
         ...ETSY_ENV,
         ...PRINTIFY_ENV,
         ...AI_ENV,
+        ...STORAGE_ENV,
         LOG_LEVEL: 'warn',
       },
     },

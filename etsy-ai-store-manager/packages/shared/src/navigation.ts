@@ -57,7 +57,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Tasarım Stüdyosu',
     icon: 'Palette',
     phase: 6,
-    status: 'planned',
+    status: 'ready',
     description: 'Özgün tasarım, baskı dosyası, mockup ve IP risk kontrolü',
   },
   {

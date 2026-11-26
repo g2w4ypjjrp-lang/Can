@@ -18,6 +18,8 @@ const config: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: ['@esm/shared'],
+  // design uploads go through a server action as files (≤ 25 MB)
+  experimental: { serverActions: { bodySizeLimit: '26mb' } },
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },

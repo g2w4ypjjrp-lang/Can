@@ -16,7 +16,8 @@ işlem onay ister.
 | 3    | Printify: ürünler, maliyetler, siparişler, sağlayıcı karşılaştırması, onaylı yayın    | ✅ Test edildi (canlı doğrulama token bekliyor)              |
 | 4    | Profit Engine: katkı, ücret matrahları, döviz, karar, fiyat önerisi, P&L              | ✅ Test edildi (ücret oranları sizin doğrulamanızı bekliyor) |
 | 5    | AI pazar araştırması (gerçek Etsy verisi + Claude), ürün fırsatları, kâr filtresi     | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
-| 6–11 | Tasarım, SEO, reklam, sipariş, AI yönetici, production                                | ⬜                                                           |
+| 6    | AI Tasarım Stüdyosu: SVG üretimi, IP kontrolü, baskı dosyası, Printify taslağı        | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
+| 7–11 | SEO, reklam, sipariş, AI yönetici, production                                         | ⬜                                                           |
 
 Ayrıntılı görev listesi ve API kısıtları: [docs/architecture/development-plan.md](docs/architecture/development-plan.md)
 

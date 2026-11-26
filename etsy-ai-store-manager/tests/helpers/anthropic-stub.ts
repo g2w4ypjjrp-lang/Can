@@ -11,7 +11,7 @@ export interface AnthropicStub {
   close(): Promise<void>;
   requests: Array<{ headers: http.IncomingHttpHeaders; body: Record<string, unknown> }>;
   /** next analysis responses: 'ok' | 'refusal' */
-  mode: { analysis: 'ok' | 'refusal' };
+  mode: { analysis: 'ok' | 'refusal'; unsafeSvg?: boolean };
 }
 
 export const STUB_ANALYSIS = {
@@ -184,7 +184,55 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
       });
     }
 
-    const format = (body.output_config as { format?: { type?: string } } | undefined)?.format;
+    const format = (
+      body.output_config as
+        | { format?: { type?: string; schema?: { properties?: Record<string, unknown> } } }
+        | undefined
+    )?.format;
+    const props = Object.keys(format?.schema?.properties ?? {});
+    if (format?.type === 'json_schema' && props.includes('svg')) {
+      const svg = mode.unsafeSvg
+        ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 540"><image href="file:///etc/passwd"/></svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 540"><circle cx="225" cy="250" r="150" fill="#2f6bf0"/><text x="225" y="470" font-family="sans-serif" font-size="48" text-anchor="middle" fill="#10214a">GROW SLOW</text></svg>';
+      return send(200, {
+        ...base,
+        stop_reason: 'end_turn',
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              svg,
+              title: 'Grow Slow Botanical',
+              description: 'Özgün bitki temalı tipografi',
+              textInDesign: ['GROW SLOW'],
+              palette: ['#2f6bf0', '#10214a'],
+            }),
+          },
+        ],
+        usage: { input_tokens: 800, output_tokens: 1200 },
+      });
+    }
+    if (format?.type === 'json_schema' && props.includes('riskLevel')) {
+      const content = JSON.stringify(body.messages);
+      if (!content.includes('"type":"image"') || !content.includes('image/png'))
+        return bad('IP review must include the image');
+      return send(200, {
+        ...base,
+        stop_reason: 'end_turn',
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              riskLevel: 'low',
+              findings: [],
+              textDetected: ['GROW SLOW'],
+              recommendation: 'Satışa uygun görünüyor.',
+            }),
+          },
+        ],
+        usage: { input_tokens: 1500, output_tokens: 200 },
+      });
+    }
     if (format?.type === 'json_schema') {
       if (mode.analysis === 'refusal') {
         return send(200, {

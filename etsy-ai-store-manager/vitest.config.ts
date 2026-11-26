@@ -19,6 +19,7 @@ const alias = {
   '@esm/integrations': r('packages/integrations/src/index.ts'),
   '@esm/profit-engine': r('packages/profit-engine/src/index.ts'),
   '@esm/ai-engine': r('packages/ai-engine/src/index.ts'),
+  '@esm/design-tools': r('packages/design-tools/src/index.ts'),
 };
 
 export default defineConfig({

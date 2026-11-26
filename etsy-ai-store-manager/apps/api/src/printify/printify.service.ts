@@ -320,6 +320,41 @@ export class PrintifyService {
     };
   }
 
+  /** Print areas (placeholder pixel sizes) for a blueprint + provider, largest per position. */
+  async printAreas(storeId: string, blueprintId: number, providerId: number) {
+    const client = this.client(storeId);
+    const v = await this.cached(`variants:${blueprintId}:${providerId}`, 24, () =>
+      client.getVariants(blueprintId, providerId),
+    );
+    const areas = new Map<
+      string,
+      { position: string; width: number; height: number; variantIds: number[] }
+    >();
+    for (const variant of v.variants) {
+      for (const ph of variant.placeholders ?? []) {
+        const cur = areas.get(ph.position) ?? {
+          position: ph.position,
+          width: 0,
+          height: 0,
+          variantIds: [],
+        };
+        cur.width = Math.max(cur.width, ph.width);
+        cur.height = Math.max(cur.height, ph.height);
+        cur.variantIds.push(variant.id);
+        areas.set(ph.position, cur);
+      }
+    }
+    return {
+      variants: v.variants.map((x) => ({ id: x.id, title: x.title })),
+      areas: [...areas.values()],
+    };
+  }
+
+  /** Low-level client for other modules (product creation from a design). */
+  apiClient(storeId: string): PrintifyClient {
+    return this.client(storeId);
+  }
+
   /** Public webhook endpoint: verify signature over raw bytes, store once, enqueue processing. */
   async receiveWebhook(
     storeId: string,

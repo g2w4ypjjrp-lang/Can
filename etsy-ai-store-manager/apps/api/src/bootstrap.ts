@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import helmet from 'helmet';
+import express from 'express';
 import { pinoHttp } from 'pino-http';
 import { randomUUID } from 'node:crypto';
 import type { Logger } from 'pino';
@@ -29,6 +30,13 @@ export async function createApp(env: Env): Promise<CreatedApp> {
 
   app.set('trust proxy', 1); // behind Nginx
   app.disable('x-powered-by');
+  // Design uploads (base64 images) get a larger limit; everything else stays at 1 MB.
+  const largeJson = express.json({ limit: '36mb' });
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) =>
+    /^\/api\/v1\/stores\/[0-9a-f-]{36}\/designs\/[0-9a-f-]{36}\/upload$/i.test(req.path)
+      ? largeJson(req, res, next)
+      : next(),
+  );
   app.useBodyParser('json', { limit: '1mb' });
   app.use(
     pinoHttp({

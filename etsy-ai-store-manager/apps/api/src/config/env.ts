@@ -45,6 +45,12 @@ export const envSchema = z
     /** Claude API key (worker uses it; API only reports whether AI is configured). */
     ANTHROPIC_API_KEY: z.string().optional().default(''),
 
+    /** Design file storage: 'local' (dev/tests) or 'supabase' (production, private bucket) */
+    STORAGE_DRIVER: z.enum(['local', 'supabase']).default('local'),
+    STORAGE_LOCAL_DIR: z.string().default('./.data/storage'),
+    /** Service role key: server-side only, used for Storage. Never sent to browsers. */
+    SUPABASE_SERVICE_ROLE_KEY: z.string().optional().default(''),
+
     PRINTIFY_API_TOKEN: z.string().optional().default(''),
     /** openssl rand -hex 20 — used to verify X-Pfy-Signature on webhooks */
     PRINTIFY_WEBHOOK_SECRET: z.string().optional().default(''),

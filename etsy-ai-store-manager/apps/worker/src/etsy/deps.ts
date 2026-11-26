@@ -3,6 +3,7 @@ import { EtsyClient, TokenCipher, type EtsyAppConfig, type EtsyCallLog } from '@
 import type { WorkerEnv } from '../env.js';
 import { getEtsyAccessToken } from './token-provider.js';
 import type { PrintifyDeps } from '../printify/sync.js';
+import { blobStoreFromEnv, type BlobStore } from '@esm/design-tools';
 
 export interface IntegrationDeps {
   cipher: TokenCipher | null;
@@ -11,6 +12,7 @@ export interface IntegrationDeps {
   sleep?: (ms: number) => Promise<void>;
   printify?: PrintifyDeps | null;
   anthropic?: { apiKey: string; baseURL?: string | undefined } | null;
+  store?: BlobStore | null;
 }
 
 export function integrationDepsFromEnv(
@@ -40,7 +42,8 @@ export function integrationDepsFromEnv(
   const anthropic = env.ANTHROPIC_API_KEY
     ? { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }
     : null;
-  return { cipher, etsy, fetchImpl, printify, anthropic };
+  const store = blobStoreFromEnv(env);
+  return { cipher, etsy, fetchImpl, printify, anthropic, store };
 }
 
 export class IntegrationNotConfiguredError extends Error {}

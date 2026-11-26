@@ -20,6 +20,8 @@ export const JOBS = {
   profitRecomputeOrders: 'profit.recompute-orders',
   fxRefresh: 'fx.refresh',
   marketResearch: 'market.research',
+  designGenerate: 'design.generate',
+  designIpReview: 'design.ip-review',
 } as const;
 export type JobName = (typeof JOBS)[keyof typeof JOBS];
 
