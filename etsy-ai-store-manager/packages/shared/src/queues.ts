@@ -27,6 +27,7 @@ export const JOBS = {
   adsSyncStore: 'ads.sync-store',
   adsSyncAll: 'ads.sync-all',
   adsRebuildLedgerSpend: 'ads.rebuild-ledger-spend',
+  supportTriage: 'support.triage',
 } as const;
 export type JobName = (typeof JOBS)[keyof typeof JOBS];
 

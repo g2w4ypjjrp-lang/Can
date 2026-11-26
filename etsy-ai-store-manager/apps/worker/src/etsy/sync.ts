@@ -241,8 +241,8 @@ async function upsertReceipt(pool: pg.Pool, storeId: string, r: MappedReceipt): 
     }
     for (const s of r.shipments) {
       await c.query(
-        `insert into public.shipments (order_id, store_id, carrier, tracking_number, status, shipped_at)
-         values ($1, $2, $3, $4, 'in_transit', $5)
+        `insert into public.shipments (order_id, store_id, carrier, tracking_number, status, shipped_at, source)
+         values ($1, $2, $3, $4, 'in_transit', $5, 'etsy')
          on conflict (order_id, coalesce(tracking_number, '')) do update set carrier = excluded.carrier,
            shipped_at = coalesce(public.shipments.shipped_at, excluded.shipped_at)`,
         [orderId, storeId, s.carrier, s.trackingNumber, s.shippedAt],

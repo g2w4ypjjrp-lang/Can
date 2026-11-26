@@ -21,6 +21,7 @@ const EXECUTABLE = new Set([
   'change_price',
   'create_listing',
   'update_listing_translation',
+  'add_tracking',
 ]);
 
 /**
@@ -31,6 +32,10 @@ export const MANUAL_ACTIONS = new Set([
   'allocate_ad_budget',
   'increase_ad_budget',
   'start_ad_campaign',
+  // Etsy Open API v3 has no endpoints for these (verified against the OAS spec)
+  'refund',
+  'send_customer_message',
+  'cancel_order',
 ]);
 
 @Injectable()
@@ -65,6 +70,13 @@ export class ApprovalsService {
       await assertStoreRole(db, storeId, 'admin');
       return confirmManualApproval(db, ctx, storeId, approvalId, note);
     });
+    if (['refund', 'cancel_order'].includes(row.action_type)) {
+      await this.queue.enqueue(QUEUES.sync, JOBS.profitRecomputeOrders, {
+        idempotencyKey: `profit-recompute:${storeId}:manual:${approvalId}`,
+        storeId,
+        payload: { reason: 'manual-approval' },
+      });
+    }
     await this.audit.record({
       storeId,
       actorUserId: ctx.userId,
@@ -128,6 +140,14 @@ export class ApprovalsService {
       if (decision === 'reject') {
         await db.query(
           `update public.ad_budget_proposals set status = 'rejected' where approval_request_id = $1`,
+          [approvalId],
+        );
+        await db.query(
+          `update public.refunds set status = 'rejected' where approval_request_id = $1 and status = 'requested'`,
+          [approvalId],
+        );
+        await db.query(
+          `update public.customer_messages set status = 'draft_ready' where approval_request_id = $1 and status = 'awaiting_approval'`,
           [approvalId],
         );
       }
@@ -203,6 +223,35 @@ export async function confirmManualApproval(
     await db.query(`update public.ad_budget_proposals set status = 'applied' where id = $1`, [
       a.payload.proposalId,
     ]);
+  }
+  if (a.payload?.kind === 'refund') {
+    const ref = (
+      await db.query(
+        `update public.refunds set status = 'processed', processed_at = now() where id = $1 and store_id = $2 returning order_id`,
+        [a.payload.refundId, storeId],
+      )
+    ).rows[0];
+    if (ref) {
+      await db.query(
+        `update public.orders o set status = case
+            when (select coalesce(sum(amount),0) from public.refunds r where r.order_id = o.id and r.status = 'processed') >= o.grand_total
+              then 'refunded' else 'partially_refunded' end
+          where o.id = $1`,
+        [ref.order_id],
+      );
+    }
+  }
+  if (a.payload?.kind === 'customer_message') {
+    await db.query(
+      `update public.customer_messages set status = 'sent', sent_at = now(), ai_draft = $3 where id = $1 and store_id = $2`,
+      [a.payload.messageId, storeId, a.payload.text],
+    );
+  }
+  if (a.payload?.kind === 'cancel_order') {
+    await db.query(
+      `update public.orders set status = 'cancelled' where id = $1 and store_id = $2`,
+      [a.payload.orderId, storeId],
+    );
   }
   const r = await db.query(
     `update public.approval_requests set status = 'executed', executed_at = now(), manual_confirmed_by = $2,

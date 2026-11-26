@@ -14,7 +14,14 @@ export const ETSY_DEFAULTS = {
  *  shops_r (getMe, shipping profiles), listings_r/w (import + edit), transactions_r (receipts).
  *  listings_d / transactions_w are NOT requested yet (delete listings / tracking come later with approval).
  */
-export const ETSY_SCOPES = ['shops_r', 'listings_r', 'listings_w', 'transactions_r'] as const;
+/** transactions_w: createReceiptShipment (tracking upload, FAZ 9) — existing connections must reconnect. */
+export const ETSY_SCOPES = [
+  'shops_r',
+  'listings_r',
+  'listings_w',
+  'transactions_r',
+  'transactions_w',
+] as const;
 
 export interface EtsyAppConfig {
   /** App keystring (client_id). */

@@ -51,6 +51,9 @@ export async function executeApproval(
   if (a.action_type === 'update_listing_translation') {
     return executeTranslation(pool, deps, a, attempt);
   }
+  if (a.action_type === 'add_tracking') {
+    return executeAddTracking(pool, deps, a, attempt);
+  }
   if (a.action_type === 'create_listing') {
     return executeCreateListing(pool, deps, a, attempt);
   }
@@ -406,6 +409,57 @@ async function executeCreateListing(
       listingId: r.rows[0].id,
       note: 'Etsy’de TASLAK ilan oluşturuldu. Yayın öncesi Etsy’de görsel ekleyin; yayınlama ayrı onay gerektirir.',
     });
+  } catch (err) {
+    return retryOrFail(pool, a, err, attempt);
+  }
+}
+
+/** Approved tracking upload: createReceiptShipment (Etsy notifies the buyer). */
+async function executeAddTracking(
+  pool: pg.Pool,
+  deps: IntegrationDeps,
+  a: ApprovalRow,
+  attempt: { current: number; max: number },
+): Promise<ExecuteOutcome> {
+  const p = a.payload as {
+    orderId: string;
+    etsyReceiptId: string;
+    trackingCode: string;
+    carrierName: string;
+    noteToBuyer?: string;
+  };
+  try {
+    const conn = await loadEtsyConnection(pool, a.store_id);
+    if (!conn) return finish(pool, a, 'failed', { error: 'Etsy bağlantısı aktif değil' });
+    const scopes = (
+      await pool.query(`select scopes from public.connected_accounts where id = $1`, [
+        conn.accountId,
+      ])
+    ).rows[0]?.scopes as string[] | undefined;
+    if (!scopes?.includes('transactions_w'))
+      return finish(pool, a, 'failed', {
+        error:
+          'Etsy bağlantısında transactions_w izni yok; Etsy Mağazam sayfasından yeniden bağlanın.',
+      });
+    const client = etsyClientFor(pool, deps, conn);
+    await client.createReceiptShipment(conn.shopId, p.etsyReceiptId, {
+      tracking_code: p.trackingCode,
+      carrier_name: p.carrierName,
+      ...(p.noteToBuyer ? { note_to_buyer: p.noteToBuyer } : {}),
+    });
+    await pool.query(
+      `insert into public.shipments (order_id, store_id, carrier, tracking_number, status, shipped_at, source, etsy_submitted_at)
+       values ($1,$2,$3,$4,'in_transit',now(),'etsy',now())
+       on conflict (order_id, coalesce(tracking_number, '')) do update set etsy_submitted_at = now(), carrier = excluded.carrier`,
+      [p.orderId, a.store_id, p.carrierName, p.trackingCode],
+    );
+    await pool.query(
+      `update public.orders set status = case when status in ('open','paid','in_production') then 'shipped' else status end,
+              shipped_at = coalesce(shipped_at, now())
+        where id = $1 and store_id = $2`,
+      [p.orderId, a.store_id],
+    );
+    return finish(pool, a, 'executed', { trackingCode: p.trackingCode, carrier: p.carrierName });
   } catch (err) {
     return retryOrFail(pool, a, err, attempt);
   }

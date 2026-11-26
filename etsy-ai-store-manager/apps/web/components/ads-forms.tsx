@@ -156,9 +156,11 @@ export function SubmitProposalForm({
 export function ConfirmManualForm({
   storeId,
   approvalId,
+  path = '/dashboard/ads',
 }: {
   storeId: string;
   approvalId: string;
+  path?: string;
 }) {
   const [s, action, pending] = useActionState<AState, FormData>(confirmManualAction, {});
   return (
@@ -168,6 +170,7 @@ export function ConfirmManualForm({
       aria-label="Manuel uygulamayı onayla"
     >
       <input type="hidden" name="storeId" value={storeId} />
+      <input type="hidden" name="path" value={path} />
       <input type="hidden" name="approvalId" value={approvalId} />
       <input
         name="note"

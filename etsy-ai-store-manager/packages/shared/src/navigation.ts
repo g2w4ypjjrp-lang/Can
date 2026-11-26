@@ -102,7 +102,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Siparişler',
     icon: 'ShoppingBag',
     phase: 9,
-    status: 'planned',
+    status: 'ready',
     description: 'Sipariş, üretim, kargo ve iade takibi',
   },
   {
@@ -111,7 +111,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Müşteriler',
     icon: 'Users',
     phase: 9,
-    status: 'planned',
+    status: 'ready',
     description: 'Müşteri mesajları ve AI yanıt taslakları',
   },
   {

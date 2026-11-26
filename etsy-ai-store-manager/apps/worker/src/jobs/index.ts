@@ -11,6 +11,7 @@ import { runMarketResearch } from '../market/research.js';
 import { generateDesign, reviewDesign } from '../designs/jobs.js';
 import { generateSeoDraft, generateTranslation } from '../seo/jobs.js';
 import { rebuildEtsyAdsSpend, syncAdsStore } from '../ads/sync.js';
+import { detectDelays, syncShopReviews, triageMessage } from '../support/jobs.js';
 
 export interface JobContext {
   pool: pg.Pool;
@@ -49,6 +50,29 @@ const etsySyncStore: JobHandler = async ({ pool, deps, storeId, attempt, enqueue
   try {
     const result = await syncEtsyStore(pool, deps, storeId);
     await enqueueRecompute(enqueue, storeId);
+    if (!result.skipped) {
+      // reviews + delay checks never fail the order sync; errors are kept in the job result
+      const err = (e: unknown) => ({
+        error: e instanceof Error ? e.message.slice(0, 300) : String(e),
+      });
+      (result as unknown as Record<string, unknown>).reviews = await syncShopReviews(
+        pool,
+        deps,
+        storeId,
+      ).catch(err);
+      (result as unknown as Record<string, unknown>).delays = await detectDelays(
+        pool,
+        storeId,
+      ).catch(err);
+      if (deps.anthropic) {
+        const q = await pool.query(
+          `select id from public.customer_messages where store_id = $1 and source = 'etsy_review' and status = 'new' limit 20`,
+          [storeId],
+        );
+        for (const m of q.rows)
+          await enqueue(JOBS.supportTriage, storeId, `support-triage:${m.id}`, { messageId: m.id });
+      }
+    }
     if (payload.reason === 'initial' && !result.skipped) {
       await notifyAdmins(
         pool,
@@ -281,7 +305,16 @@ const adsRebuildLedgerSpend: JobHandler = async ({ pool, storeId }) => {
   return rebuildEtsyAdsSpend(pool, storeId);
 };
 
+const supportTriage: JobHandler = async ({ pool, deps }, payload) =>
+  triageMessage(
+    pool,
+    { anthropic: deps.anthropic ?? null },
+    String(payload.messageId),
+    (payload.userId as string) ?? null,
+  );
+
 export const JOB_HANDLERS: Record<string, JobHandler> = {
+  [JOBS.supportTriage]: supportTriage,
   [JOBS.adsSyncStore]: adsSyncStore,
   [JOBS.adsSyncAll]: adsSyncAll,
   [JOBS.adsRebuildLedgerSpend]: adsRebuildLedgerSpend,

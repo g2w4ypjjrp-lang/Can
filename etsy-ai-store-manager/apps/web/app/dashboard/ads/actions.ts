@@ -174,7 +174,9 @@ export async function confirmManualAction(_p: AState, f: FormData): Promise<ASta
   } catch (e) {
     return fail(e);
   }
-  return ok('Uygulandı olarak işaretlendi; kampanya bütçeleri güncellendi.');
+  const path = str(f, 'path');
+  if (path.startsWith('/dashboard/')) revalidatePath(path);
+  return ok('Uygulandı olarak işaretlendi.');
 }
 
 export async function ledgerMappingAction(_p: AState, f: FormData): Promise<AState> {

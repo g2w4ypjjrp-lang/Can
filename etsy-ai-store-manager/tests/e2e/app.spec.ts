@@ -51,9 +51,9 @@ test.describe.serial('Faz 1 akışı (gerçek Supabase Auth + API + RLS)', () =>
     await logIn(page);
     const nav = page.getByRole('navigation');
     await expect(nav.getByRole('link')).toHaveCount(17);
-    await nav.getByRole('link', { name: /Siparişler/ }).click();
-    await expect(page.getByRole('heading', { name: 'Siparişler' })).toBeVisible();
-    await expect(page.getByText('FAZ 9')).toBeVisible();
+    await nav.getByRole('link', { name: /AI Store Manager/ }).click();
+    await expect(page.getByRole('heading', { name: 'AI Store Manager' })).toBeVisible();
+    await expect(page.getByText('FAZ 10')).toBeVisible();
     await expect(page.getByTestId('module-status')).toHaveText('Durum: Planlandı');
   });
 

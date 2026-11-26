@@ -50,6 +50,7 @@ export interface EtsyStub {
   listings: Map<number, StubListing>;
   translations: Map<string, Record<string, unknown>>;
   draftForms: Array<Record<string, string>>;
+  shipmentsPosted: Array<Record<string, unknown>>;
   receipts: Array<Record<string, unknown>>;
   /** next N listing-page requests answer 429 with retry-after: 0 */
   rateLimitNext(n: number): void;
@@ -72,6 +73,7 @@ export async function startEtsyStub(
   const listings = new Map<number, StubListing>();
   const translations = new Map<string, Record<string, unknown>>();
   const draftForms: Array<Record<string, string>> = [];
+  const shipmentsPosted: Array<Record<string, unknown>> = [];
   const count = opts.listingCount ?? 102;
   for (let i = 1; i <= count; i++) {
     const id = 900000 + i;
@@ -156,7 +158,7 @@ export async function startEtsyStub(
       token_type: 'Bearer',
       expires_in: 3600,
       refresh_token: rt,
-      scope: 'shops_r listings_r listings_w transactions_r',
+      scope: 'shops_r listings_r listings_w transactions_r transactions_w',
     };
   }
 
@@ -242,6 +244,37 @@ export async function startEtsyStub(
     if (url.pathname.startsWith('/v3/application/')) {
       if (req.headers['x-api-key'] !== `${STUB_APP.keystring}:${STUB_APP.sharedSecret}`)
         return send(403, { error: 'Invalid API key' });
+      // reviews (getReviewsByShop): ListingReview has no review id
+      if (
+        req.method === 'GET' &&
+        url.pathname === `/v3/application/shops/${STUB_SHOP_ID}/reviews`
+      ) {
+        const nowTs = Math.floor(Date.now() / 1000);
+        const all = [
+          {
+            shop_id: STUB_SHOP_ID,
+            listing_id: 900001,
+            rating: 5,
+            review: 'Love it!',
+            language: 'en',
+            create_timestamp: nowTs - 5000,
+            created_timestamp: nowTs - 5000,
+          },
+          {
+            shop_id: STUB_SHOP_ID,
+            listing_id: 900002,
+            rating: 2,
+            review: 'The mug arrived chipped and took three weeks.',
+            language: 'en',
+            create_timestamp: nowTs - 3000,
+            created_timestamp: nowTs - 3000,
+          },
+        ];
+        const offset = Number(url.searchParams.get('offset') ?? 0);
+        const limit = Number(url.searchParams.get('limit') ?? 25);
+        if (limit > 100) return send(400, { error: 'limit max 100' });
+        return send(200, { count: all.length, results: all.slice(offset, offset + limit) });
+      }
       // seller taxonomy: public, API key only
       if (req.method === 'GET' && url.pathname === '/v3/application/seller-taxonomy/nodes') {
         const leaf = (id: number, name: string, parent: number, path: number[]) => ({
@@ -417,6 +450,22 @@ export async function startEtsyStub(
         }
         l.updated_timestamp = Math.floor(Date.now() / 1000);
         return send(200, l, rl);
+      }
+      // createReceiptShipment (transactions_w, JSON body)
+      const shipM = url.pathname.match(
+        new RegExp(`^/v3/application/shops/${STUB_SHOP_ID}/receipts/(\\d+)/tracking$`),
+      );
+      if (req.method === 'POST' && shipM) {
+        if (!String(req.headers['content-type']).startsWith('application/json'))
+          return send(400, { error: 'expected JSON body' });
+        const b = JSON.parse(body || '{}') as { tracking_code?: string; carrier_name?: string };
+        const rc = receipts.find((r) => r.receipt_id === Number(shipM[1]));
+        if (!rc) return send(404, { error: 'receipt not found' });
+        if (!b.tracking_code || !b.carrier_name)
+          return send(400, { error: 'tracking_code and carrier_name required' });
+        shipmentsPosted.push({ receiptId: Number(shipM[1]), ...b });
+        rc.is_shipped = true;
+        return send(200, { receipt_id: Number(shipM[1]), is_shipped: true }, rl);
       }
       // payment ledger (transactions_r); amounts in minor units
       if (
@@ -612,6 +661,7 @@ export async function startEtsyStub(
     listings,
     translations,
     draftForms,
+    shipmentsPosted,
     receipts,
     rateLimitNext: (n) => {
       rateLimitRemaining = n;

@@ -256,6 +256,38 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
         usage: { input_tokens: 1200, output_tokens: 600 },
       });
     }
+    if (format?.type === 'json_schema' && props.includes('suggestedAction')) {
+      const content = JSON.stringify(body.messages);
+      const chipped = /chipped|broken|kırık/i.test(content);
+      return send(200, {
+        ...base,
+        stop_reason: 'end_turn',
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              category: chipped ? 'complaint' : 'question',
+              sentiment: chipped ? 'negative' : 'neutral',
+              urgency: /chargeback|lawyer/i.test(content)
+                ? 'critical'
+                : chipped
+                  ? 'high'
+                  : 'normal',
+              issues: chipped ? ['damaged', 'late_delivery'] : [],
+              suggestedAction: chipped ? 'replacement' : 'reply',
+              language: 'en',
+              replyDraft: chipped
+                ? 'Hi, I am so sorry your mug arrived damaged. I will check your order right away and get back to you with a solution.'
+                : 'Hi, thanks for your message! I will check and get back to you shortly.',
+              internalNote: chipped
+                ? 'Ürün hasarlı ulaşmış; fotoğraf isteyip yeniden gönderim değerlendirin.'
+                : 'Genel soru.',
+            }),
+          },
+        ],
+        usage: { input_tokens: 700, output_tokens: 250 },
+      });
+    }
     if (format?.type === 'json_schema' && props.includes('backTranslation')) {
       const content = JSON.stringify(body.messages);
       const lang = /Target language: (\w+)/.exec(content)?.[1] ?? 'German';

@@ -119,6 +119,18 @@ export interface EtsyTaxonomyNode {
   full_path_taxonomy_ids: number[];
 }
 
+export interface EtsyReview {
+  shop_id: number;
+  listing_id: number;
+  rating: number;
+  review: string | null;
+  language: string | null;
+  create_timestamp: number;
+  created_timestamp?: number;
+  update_timestamp?: number;
+  updated_timestamp?: number;
+}
+
 export interface EtsyLedgerEntry {
   entry_id: number;
   ledger_id: number;
@@ -357,6 +369,42 @@ export class EtsyClient {
     });
   }
 
+  /** getReviewsByShop (API key only); paged by offset, limit max 100. */
+  getShopReviews(
+    shopId: number | string,
+    q: { limit?: number; offset?: number; minCreated?: number } = {},
+  ): Promise<Paged<EtsyReview>> {
+    return this.request(
+      'GET',
+      `/v3/application/shops/${shopId}/reviews`,
+      {
+        query: {
+          limit: String(q.limit ?? 100),
+          offset: String(q.offset ?? 0),
+          ...(q.minCreated ? { min_created: String(q.minCreated) } : {}),
+        },
+      },
+      false,
+    );
+  }
+
+  /** createReceiptShipment (transactions_w, JSON body): adds tracking and notifies the buyer. */
+  createReceiptShipment(
+    shopId: number | string,
+    receiptId: number | string,
+    body: {
+      tracking_code: string;
+      carrier_name: string;
+      send_bcc?: boolean;
+      note_to_buyer?: string;
+      ship_date?: string;
+    },
+  ): Promise<{ receipt_id: number; is_shipped: boolean; shipments?: unknown[] }> {
+    return this.request('POST', `/v3/application/shops/${shopId}/receipts/${receiptId}/tracking`, {
+      json: body,
+    });
+  }
+
   /** Seller taxonomy tree (public data; API key only). */
   getSellerTaxonomyNodes(): Promise<Paged<EtsyTaxonomyNode>> {
     return this.request('GET', '/v3/application/seller-taxonomy/nodes', {}, false);
@@ -424,7 +472,11 @@ export class EtsyClient {
   private async request<T>(
     method: string,
     path: string,
-    opts: { query?: Record<string, string> | undefined; form?: URLSearchParams } = {},
+    opts: {
+      query?: Record<string, string> | undefined;
+      form?: URLSearchParams;
+      json?: unknown;
+    } = {},
     authenticated = true,
   ): Promise<T> {
     const url = new URL(this.base + path);
@@ -446,8 +498,9 @@ export class EtsyClient {
             ...(opts.form
               ? { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' }
               : {}),
+            ...(opts.json !== undefined ? { 'Content-Type': 'application/json' } : {}),
           },
-          body: opts.form?.toString(),
+          body: opts.json !== undefined ? JSON.stringify(opts.json) : opts.form?.toString(),
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

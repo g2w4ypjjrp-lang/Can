@@ -1,6 +1,7 @@
 import { DynamicModule, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { UserThrottlerGuard } from './common/user-throttler.guard.js';
 import { ENV, type Env } from './config/env.js';
 import { DatabaseModule } from './database/database.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -23,6 +24,7 @@ import { MarketModule } from './market/market.module.js';
 import { DesignsModule } from './designs/designs.module.js';
 import { SeoModule } from './seo/seo.module.js';
 import { AdsModule } from './ads/ads.module.js';
+import { OrdersModule } from './orders/orders.module.js';
 
 @Module({})
 export class AppModule {
@@ -54,11 +56,12 @@ export class AppModule {
         DesignsModule,
         SeoModule,
         AdsModule,
+        OrdersModule,
       ],
       providers: [
         { provide: ENV, useValue: env },
         // Order matters: rate limit first, then authentication.
-        { provide: APP_GUARD, useClass: ThrottlerGuard },
+        { provide: APP_GUARD, useClass: UserThrottlerGuard },
         { provide: APP_GUARD, useClass: AuthGuard },
       ],
       exports: [ENV],

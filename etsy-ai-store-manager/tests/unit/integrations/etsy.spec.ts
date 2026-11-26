@@ -63,7 +63,7 @@ describe('Etsy OAuth helpers', () => {
       response_type: 'code',
       client_id: 'k',
       redirect_uri: 'https://app.example.com/api/v1/integrations/etsy/callback',
-      scope: 'shops_r listings_r listings_w transactions_r',
+      scope: 'shops_r listings_r listings_w transactions_r transactions_w',
       state: 'st',
       code_challenge: 'ch',
       code_challenge_method: 'S256',
