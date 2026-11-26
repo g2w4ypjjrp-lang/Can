@@ -24,6 +24,9 @@ export const JOBS = {
   designIpReview: 'design.ip-review',
   seoGenerate: 'seo.generate',
   seoTranslate: 'seo.translate',
+  adsSyncStore: 'ads.sync-store',
+  adsSyncAll: 'ads.sync-all',
+  adsRebuildLedgerSpend: 'ads.rebuild-ledger-spend',
 } as const;
 export type JobName = (typeof JOBS)[keyof typeof JOBS];
 

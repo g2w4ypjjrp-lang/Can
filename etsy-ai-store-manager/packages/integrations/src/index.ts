@@ -6,3 +6,4 @@ export * from './etsy/oauth.js';
 export * from './etsy/client.js';
 export * from './etsy/mappers.js';
 export * from './printify/client.js';
+export * from './meta/client.js';

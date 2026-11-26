@@ -150,6 +150,12 @@ export async function startWorker(opts: {
       { name: JOBS.printifySyncAll, data: {}, opts: DEFAULT_JOB_OPTIONS },
     );
   }
+  // ad platform reports settle within a day; refresh daily
+  await sync.upsertJobScheduler(
+    'ads-sync-all',
+    { pattern: '37 6 * * *', tz: 'UTC' },
+    { name: JOBS.adsSyncAll, data: {}, opts: DEFAULT_JOB_OPTIONS },
+  );
   // ECB publishes reference rates around 16:00 CET on working days
   await sync.upsertJobScheduler(
     'fx-refresh',

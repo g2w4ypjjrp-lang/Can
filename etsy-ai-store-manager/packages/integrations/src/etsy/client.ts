@@ -119,6 +119,21 @@ export interface EtsyTaxonomyNode {
   full_path_taxonomy_ids: number[];
 }
 
+export interface EtsyLedgerEntry {
+  entry_id: number;
+  ledger_id: number;
+  sequence_number: number;
+  amount: number;
+  currency: string;
+  description: string;
+  balance: number;
+  create_date: number;
+  created_timestamp?: number;
+  ledger_type: string;
+  reference_type: string;
+  reference_id: string | null;
+}
+
 export interface EtsyListingTranslation {
   listing_id: number;
   language: string;
@@ -325,6 +340,21 @@ export class EtsyClient {
     shopId: number | string,
   ): Promise<Paged<{ shipping_profile_id: number; title: string }>> {
     return this.request('GET', `/v3/application/shops/${shopId}/shipping-profiles`);
+  }
+
+  /** Payment-account ledger entries (transactions_r); amounts are in currency subunits per Etsy. */
+  getLedgerEntries(
+    shopId: number | string,
+    q: { minCreated: number; maxCreated: number; limit?: number; offset?: number },
+  ): Promise<Paged<EtsyLedgerEntry>> {
+    return this.request('GET', `/v3/application/shops/${shopId}/payment-account/ledger-entries`, {
+      query: {
+        min_created: String(q.minCreated),
+        max_created: String(q.maxCreated),
+        limit: String(q.limit ?? 100),
+        offset: String(q.offset ?? 0),
+      },
+    });
   }
 
   /** Seller taxonomy tree (public data; API key only). */

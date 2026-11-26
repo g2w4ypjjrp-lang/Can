@@ -93,7 +93,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Reklam Yönetimi',
     icon: 'Megaphone',
     phase: 8,
-    status: 'planned',
+    status: 'ready',
     description: 'Kampanyalar, bütçe sınırı, ROAS ve reklam sonrası katkı',
   },
   {

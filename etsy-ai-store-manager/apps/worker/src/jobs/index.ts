@@ -10,6 +10,7 @@ import { refreshFxRates } from '../finance/fx.js';
 import { runMarketResearch } from '../market/research.js';
 import { generateDesign, reviewDesign } from '../designs/jobs.js';
 import { generateSeoDraft, generateTranslation } from '../seo/jobs.js';
+import { rebuildEtsyAdsSpend, syncAdsStore } from '../ads/sync.js';
 
 export interface JobContext {
   pool: pg.Pool;
@@ -257,7 +258,33 @@ const seoTranslate: JobHandler = async ({ pool, deps }, payload) =>
     (payload.userId as string) ?? null,
   );
 
+const adsSyncStore: JobHandler = async ({ pool, deps, storeId }) => {
+  if (!storeId) throw new Error('storeId required');
+  return syncAdsStore(pool, deps, storeId);
+};
+
+const adsSyncAll: JobHandler = async ({ pool, enqueue, now }) => {
+  const r = await pool.query(
+    `select distinct store_id from public.ad_accounts
+      where status = 'active' and (connected_account_id is not null or spend_source = 'ledger')`,
+  );
+  const dayKey = now.toISOString().slice(0, 10);
+  for (const row of r.rows)
+    await enqueue(JOBS.adsSyncStore, row.store_id, `ads-sync:${row.store_id}:${dayKey}`, {
+      reason: 'scheduled',
+    });
+  return { scheduled: r.rowCount ?? 0 };
+};
+
+const adsRebuildLedgerSpend: JobHandler = async ({ pool, storeId }) => {
+  if (!storeId) throw new Error('storeId required');
+  return rebuildEtsyAdsSpend(pool, storeId);
+};
+
 export const JOB_HANDLERS: Record<string, JobHandler> = {
+  [JOBS.adsSyncStore]: adsSyncStore,
+  [JOBS.adsSyncAll]: adsSyncAll,
+  [JOBS.adsRebuildLedgerSpend]: adsRebuildLedgerSpend,
   [JOBS.seoGenerate]: seoGenerate,
   [JOBS.seoTranslate]: seoTranslate,
   [JOBS.designGenerate]: designGenerate,

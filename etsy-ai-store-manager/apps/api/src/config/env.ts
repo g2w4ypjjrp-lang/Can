@@ -40,6 +40,7 @@ export const envSchema = z
     ETSY_CONNECT_URL: z.string().url().optional(),
     ETSY_TOKEN_URL: z.string().url().optional(),
     ETSY_API_BASE_URL: z.string().url().optional(),
+    META_GRAPH_BASE_URL: z.string().url().optional(),
 
     /** Printify personal access token (Phase 3). Server-side only; valid for one year. */
     /** Claude API key (worker uses it; API only reports whether AI is configured). */

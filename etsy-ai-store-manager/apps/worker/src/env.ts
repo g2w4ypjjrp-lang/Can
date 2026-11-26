@@ -27,6 +27,7 @@ export const workerEnvSchema = z.object({
   /** Claude API (Phase 5+). Never exposed to clients. */
   ANTHROPIC_API_KEY: z.string().optional().default(''),
   ANTHROPIC_BASE_URL: z.string().url().optional(),
+  META_GRAPH_BASE_URL: z.string().url().optional(),
   STORAGE_DRIVER: z.enum(['local', 'supabase']).default('local'),
   STORAGE_LOCAL_DIR: z.string().default('./.data/storage'),
   SUPABASE_URL: z.string().url().optional(),

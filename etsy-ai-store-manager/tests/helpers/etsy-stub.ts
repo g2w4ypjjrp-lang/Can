@@ -418,6 +418,48 @@ export async function startEtsyStub(
         l.updated_timestamp = Math.floor(Date.now() / 1000);
         return send(200, l, rl);
       }
+      // payment ledger (transactions_r); amounts in minor units
+      if (
+        req.method === 'GET' &&
+        url.pathname === `/v3/application/shops/${STUB_SHOP_ID}/payment-account/ledger-entries`
+      ) {
+        const min = Number(url.searchParams.get('min_created'));
+        const max = Number(url.searchParams.get('max_created'));
+        if (!min || !max) return send(400, { error: 'min_created and max_created are required' });
+        if (Number(url.searchParams.get('limit') ?? 25) > 100)
+          return send(400, { error: 'limit max 100' });
+        const nowTs = Math.floor(Date.now() / 1000);
+        const mk = (
+          id: number,
+          type: string,
+          amount: number,
+          ago: number,
+          description: string,
+        ) => ({
+          entry_id: id,
+          ledger_id: 1,
+          sequence_number: id,
+          amount,
+          currency: 'USD',
+          description,
+          balance: 0,
+          create_date: nowTs - ago,
+          created_timestamp: nowTs - ago,
+          ledger_type: type,
+          reference_type: 'shop',
+          reference_id: String(STUB_SHOP_ID),
+        });
+        const all = [
+          mk(1, 'PROLIST', -450, 86400, 'Etsy Ads'),
+          mk(2, 'PROLIST', -300, 2 * 86400, 'Etsy Ads'),
+          mk(3, 'offsite_ads_fee', -380, 86400, 'Offsite Ads fee'),
+          mk(4, 'transaction', -65, 86400, 'Transaction fee'),
+          mk(5, 'PAYMENT', 2899, 86400, 'Payment'),
+        ].filter((e) => e.create_date >= min && e.create_date <= max);
+        const offset = Number(url.searchParams.get('offset') ?? 0);
+        const limit = Number(url.searchParams.get('limit') ?? 25);
+        return send(200, { count: all.length, results: all.slice(offset, offset + limit) }, rl);
+      }
       if (
         req.method === 'GET' &&
         url.pathname === `/v3/application/shops/${STUB_SHOP_ID}/shipping-profiles`

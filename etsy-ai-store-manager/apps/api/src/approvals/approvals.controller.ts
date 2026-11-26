@@ -29,6 +29,10 @@ const STATUSES = new Set([
   'cancelled',
 ]);
 
+export const manualSchema = z
+  .object({ note: z.string().trim().min(3, 'Ne yaptığınızı kısaca yazın').max(500) })
+  .strict();
+
 @ApiTags('approvals')
 @ApiBearerAuth()
 @Controller('stores/:storeId/approvals')
@@ -74,5 +78,20 @@ export class ApprovalsController {
     @ReqMeta() meta: RequestMeta,
   ) {
     return this.approvals.decide(user, storeId, approvalId, 'reject', body.note, meta);
+  }
+
+  @Post(':approvalId/confirm-manual')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Platform panelinde elle uygulanan onaylı işlemi tamamlandı olarak işaretle',
+  })
+  confirmManual(
+    @CurrentUser() user: AuthContext,
+    @Param('storeId', UuidPipe) storeId: string,
+    @Param('approvalId', UuidPipe) approvalId: string,
+    @Body(new ZodValidationPipe(manualSchema)) body: { note: string },
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    return this.approvals.confirmManual(user, storeId, approvalId, body.note, meta);
   }
 }

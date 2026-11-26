@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JOBS, QUEUES, type ApprovalDto } from '@esm/shared';
-import { DatabaseService, type AuthContext } from '../database/database.service.js';
+import { DatabaseService, type AuthContext, type Queryable } from '../database/database.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { QueueService } from '../queue/queue.service.js';
 import { assertStoreRole } from '../common/store-access.js';
@@ -21,6 +21,16 @@ const EXECUTABLE = new Set([
   'change_price',
   'create_listing',
   'update_listing_translation',
+]);
+
+/**
+ * Action types with no official write API: approval means "go ahead"; the owner applies the
+ * change on the platform and then confirms it here (status awaiting_manual → executed).
+ */
+export const MANUAL_ACTIONS = new Set([
+  'allocate_ad_budget',
+  'increase_ad_budget',
+  'start_ad_campaign',
 ]);
 
 @Injectable()
@@ -42,6 +52,30 @@ export class ApprovalsService {
       );
       return r.rows.map(toApprovalDto);
     });
+  }
+
+  async confirmManual(
+    ctx: AuthContext,
+    storeId: string,
+    approvalId: string,
+    note: string,
+    meta: RequestMeta,
+  ) {
+    const row = await this.db.asUser(ctx, async (db) => {
+      await assertStoreRole(db, storeId, 'admin');
+      return confirmManualApproval(db, ctx, storeId, approvalId, note);
+    });
+    await this.audit.record({
+      storeId,
+      actorUserId: ctx.userId,
+      actorType: 'user',
+      action: 'approval.manual_confirmed',
+      entityType: 'approval_request',
+      entityId: approvalId,
+      after: { note },
+      meta,
+    });
+    return toApprovalDto(row);
   }
 
   async decide(
@@ -70,7 +104,7 @@ export class ApprovalsService {
       }
       if (decision === 'approve') {
         if (a.requires_reauth) assertRecentAuth(ctx);
-        if (!EXECUTABLE.has(a.action_type)) {
+        if (!EXECUTABLE.has(a.action_type) && !MANUAL_ACTIONS.has(a.action_type)) {
           throw new ConflictException(
             'Bu işlem resmi API ile otomatik yapılamıyor; manuel uygulama akışını kullanın.',
           );
@@ -80,8 +114,23 @@ export class ApprovalsService {
         `update public.approval_requests
             set status = $2, decided_by = $3, decided_at = now(), decision_note = $4
           where id = $1 returning *`,
-        [approvalId, decision === 'approve' ? 'approved' : 'rejected', ctx.userId, note ?? null],
+        [
+          approvalId,
+          decision === 'approve'
+            ? MANUAL_ACTIONS.has(a.action_type)
+              ? 'awaiting_manual'
+              : 'approved'
+            : 'rejected',
+          ctx.userId,
+          note ?? null,
+        ],
       );
+      if (decision === 'reject') {
+        await db.query(
+          `update public.ad_budget_proposals set status = 'rejected' where approval_request_id = $1`,
+          [approvalId],
+        );
+      }
       if (decision === 'reject') {
         // the proposal goes back to editable state
         await db.query(
@@ -96,7 +145,7 @@ export class ApprovalsService {
       return r.rows[0];
     });
 
-    if (decision === 'approve') {
+    if (decision === 'approve' && row.status === 'approved') {
       await this.queue.enqueue(QUEUES.sync, JOBS.approvalExecute, {
         idempotencyKey: `approval:${approvalId}`,
         storeId,
@@ -115,6 +164,53 @@ export class ApprovalsService {
     });
     return toApprovalDto(row);
   }
+}
+
+export async function confirmManualApproval(
+  db: Queryable,
+  ctx: AuthContext,
+  storeId: string,
+  approvalId: string,
+  note: string,
+) {
+  const a = (
+    await db.query(
+      `select * from public.approval_requests where id = $1 and store_id = $2 for update`,
+      [approvalId, storeId],
+    )
+  ).rows[0];
+  if (!a) throw new NotFoundException('Onay isteği bulunamadı');
+  if (a.status !== 'awaiting_manual')
+    throw new ConflictException(`Bu istek "${a.status}" durumunda; manuel onay beklenmiyor`);
+  if (a.payload?.kind === 'ad_budget_proposal') {
+    const p = (
+      await db.query(`select * from public.ad_budget_proposals where id = $1 and store_id = $2`, [
+        a.payload.proposalId,
+        storeId,
+      ])
+    ).rows[0];
+    for (const x of (p?.allocations ?? []) as Array<{
+      campaignId: string;
+      proposedDailyBudget: string;
+    }>) {
+      await db.query(
+        `update public.ad_campaigns set daily_budget = $3,
+                status = case when $3::numeric = 0 then 'paused' when status = 'paused' then 'active' else status end
+          where id = $1 and store_id = $2`,
+        [x.campaignId, storeId, x.proposedDailyBudget],
+      );
+    }
+    await db.query(`update public.ad_budget_proposals set status = 'applied' where id = $1`, [
+      a.payload.proposalId,
+    ]);
+  }
+  const r = await db.query(
+    `update public.approval_requests set status = 'executed', executed_at = now(), manual_confirmed_by = $2,
+            manual_confirmed_at = now(), execution_result = $3
+      where id = $1 returning *`,
+    [approvalId, ctx.userId, JSON.stringify({ manual: true, note })],
+  );
+  return r.rows[0];
 }
 
 /**

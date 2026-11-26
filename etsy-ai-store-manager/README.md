@@ -9,16 +9,17 @@ işlem onay ister.
 
 ## Durum
 
-| Faz  | Kapsam                                                                                | Durum                                                        |
-| ---- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| 1    | Monorepo, veritabanı (41 tablo + RLS), Auth, dashboard, ayarlar, worker, Docker/Nginx | ✅ Tamamlandı, test edildi                                   |
-| 2    | Etsy OAuth, mağaza verisi, ilanlar, onaylı ilan düzenleme                             | ✅ Test edildi (canlı doğrulama Etsy anahtarı bekliyor)      |
-| 3    | Printify: ürünler, maliyetler, siparişler, sağlayıcı karşılaştırması, onaylı yayın    | ✅ Test edildi (canlı doğrulama token bekliyor)              |
-| 4    | Profit Engine: katkı, ücret matrahları, döviz, karar, fiyat önerisi, P&L              | ✅ Test edildi (ücret oranları sizin doğrulamanızı bekliyor) |
-| 5    | AI pazar araştırması (gerçek Etsy verisi + Claude), ürün fırsatları, kâr filtresi     | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
-| 6    | AI Tasarım Stüdyosu: SVG üretimi, IP kontrolü, baskı dosyası, Printify taslağı        | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
-| 7    | SEO, çok dilli içerik (kalite kontrollü çeviri), Etsy taslak ilan oluşturma           | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
-| 8–11 | Reklam, sipariş, AI yönetici, production                                              | ⬜                                                           |
+| Faz  | Kapsam                                                                                   | Durum                                                        |
+| ---- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 1    | Monorepo, veritabanı (41 tablo + RLS), Auth, dashboard, ayarlar, worker, Docker/Nginx    | ✅ Tamamlandı, test edildi                                   |
+| 2    | Etsy OAuth, mağaza verisi, ilanlar, onaylı ilan düzenleme                                | ✅ Test edildi (canlı doğrulama Etsy anahtarı bekliyor)      |
+| 3    | Printify: ürünler, maliyetler, siparişler, sağlayıcı karşılaştırması, onaylı yayın       | ✅ Test edildi (canlı doğrulama token bekliyor)              |
+| 4    | Profit Engine: katkı, ücret matrahları, döviz, karar, fiyat önerisi, P&L                 | ✅ Test edildi (ücret oranları sizin doğrulamanızı bekliyor) |
+| 5    | AI pazar araştırması (gerçek Etsy verisi + Claude), ürün fırsatları, kâr filtresi        | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
+| 6    | AI Tasarım Stüdyosu: SVG üretimi, IP kontrolü, baskı dosyası, Printify taslağı           | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
+| 7    | SEO, çok dilli içerik (kalite kontrollü çeviri), Etsy taslak ilan oluşturma              | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
+| 8    | Reklam: bütçe sınırı, başa baş/hedef ROAS, onaylı dağıtım, Meta API raporu, Etsy defteri | ✅ Test edildi (Meta jetonu isteğe bağlı)                    |
+| 9–11 | Sipariş, AI yönetici, production                                                         | ⬜                                                           |
 
 Ayrıntılı görev listesi ve API kısıtları: [docs/architecture/development-plan.md](docs/architecture/development-plan.md)
 

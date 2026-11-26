@@ -1028,6 +1028,43 @@
         ]
       }
     },
+    "/api/v1/stores/{storeId}/approvals/{approvalId}/confirm-manual": {
+      "post": {
+        "operationId": "ApprovalsController_confirmManual",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "approvalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Platform panelinde elle uygulanan onaylı işlemi tamamlandı olarak işaretle",
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
     "/api/v1/stores/{storeId}/integrations/printify": {
       "get": {
         "operationId": "PrintifyController_status",
@@ -3400,6 +3437,705 @@
         "summary": "Etsy taslak ilanı için onay isteği (createDraftListing)",
         "tags": [
           "seo"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/policy": {
+      "get": {
+        "operationId": "AdsController_policy",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "ads"
+        ]
+      },
+      "put": {
+        "operationId": "AdsController_setPolicy",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dailyCap": {
+                    "type": "string",
+                    "pattern": "^\\d{1,8}(\\.\\d{1,2})?$"
+                  },
+                  "monthlyCap": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^\\d{1,8}(\\.\\d{1,2})?$"
+                  },
+                  "currency": {
+                    "default": "USD",
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "minClicksForDecision": {
+                    "default": 100,
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 10000
+                  }
+                },
+                "required": [
+                  "dailyCap",
+                  "currency",
+                  "minClicksForDecision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Günlük / aylık reklam bütçesi sınırı (kullanıcı belirler)",
+        "tags": [
+          "ads"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/accounts": {
+      "get": {
+        "operationId": "AdsController_accounts",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "ads"
+        ]
+      },
+      "post": {
+        "operationId": "AdsController_createAccount",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "etsy_ads",
+                      "meta_ads",
+                      "google_ads",
+                      "pinterest_ads",
+                      "tiktok_ads"
+                    ]
+                  },
+                  "externalAccountId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "currency": {
+                    "default": "USD",
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  }
+                },
+                "required": [
+                  "platform",
+                  "externalAccountId",
+                  "name",
+                  "currency"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "ads"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/meta/connect": {
+      "post": {
+        "operationId": "AdsController_connectMeta",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "adAccountId": {},
+                  "accessToken": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "adAccountId",
+                  "accessToken"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Meta reklam hesabını salt-okuma raporlama için bağla (ads_read jetonu şifreli saklanır)",
+        "tags": [
+          "ads"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/sync": {
+      "post": {
+        "operationId": "AdsController_sync",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "ads"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/campaigns": {
+      "post": {
+        "operationId": "AdsController_createCampaign",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "adAccountId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "objective": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "dailyBudget": {
+                    "type": "string",
+                    "pattern": "^\\d{1,8}(\\.\\d{1,2})?$"
+                  }
+                },
+                "required": [
+                  "adAccountId",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Var olan bir kampanyayı takibe ekle (başlatma onaylı manuel adımdır)",
+        "tags": [
+          "ads"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/metrics/import": {
+      "post": {
+        "operationId": "AdsController_importMetrics",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "adAccountId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "rows": {
+                    "minItems": 1,
+                    "maxItems": 5000,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "campaign": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "impressions": {
+                          "default": 0,
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "clicks": {
+                          "default": 0,
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "spend": {
+                          "type": "string",
+                          "pattern": "^\\d{1,8}(\\.\\d{1,2})?$"
+                        },
+                        "orders": {
+                          "default": "0",
+                          "type": "string",
+                          "pattern": "^\\d{1,8}(\\.\\d{1,2})?$"
+                        },
+                        "revenue": {
+                          "default": "0",
+                          "type": "string",
+                          "pattern": "^\\d{1,8}(\\.\\d{1,2})?$"
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "campaign",
+                        "impressions",
+                        "clicks",
+                        "spend",
+                        "orders",
+                        "revenue"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "adAccountId",
+                  "rows"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Günlük kampanya raporu içe aktar (CSV / elle)",
+        "tags": [
+          "ads"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/overview": {
+      "get": {
+        "operationId": "AdsController_overview",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "ROAS, başa baş / hedef ROAS, kampanya kararları, bütçe sınırı durumu",
+        "tags": [
+          "ads"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/proposals": {
+      "get": {
+        "operationId": "AdsController_proposals",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "ads"
+        ]
+      },
+      "post": {
+        "operationId": "AdsController_createProposal",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "totalDailyBudget": {
+                    "type": "string",
+                    "pattern": "^\\d{1,8}(\\.\\d{1,2})?$"
+                  },
+                  "days": {
+                    "default": 30,
+                    "type": "integer",
+                    "minimum": 7,
+                    "maximum": 90
+                  }
+                },
+                "required": [
+                  "days"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sınır içinde bütçe dağıtım önerisi oluştur (hiçbir şey değişmez)",
+        "tags": [
+          "ads"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/proposals/{proposalId}/submit": {
+      "post": {
+        "operationId": "AdsController_submit",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "proposalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Bütçe dağıtımı için onay isteği",
+        "tags": [
+          "ads"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/etsy-ledger/types": {
+      "get": {
+        "operationId": "AdsController_ledgerTypes",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Etsy ödeme defterindeki kayıt türleri (Etsy Ads eşlemesi için)",
+        "tags": [
+          "ads"
+        ]
+      }
+    },
+    "/api/v1/stores/{storeId}/ads/etsy-ledger/mapping": {
+      "put": {
+        "operationId": "AdsController_ledgerMapping",
+        "parameters": [
+          {
+            "name": "storeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "types": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    }
+                  }
+                },
+                "required": [
+                  "types"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "ads"
         ]
       }
     }

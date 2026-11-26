@@ -13,6 +13,8 @@ export interface IntegrationDeps {
   printify?: PrintifyDeps | null;
   anthropic?: { apiKey: string; baseURL?: string | undefined } | null;
   store?: BlobStore | null;
+  /** Graph API base (tests point it at a stub); default graph.facebook.com */
+  metaBaseUrl?: string | undefined;
 }
 
 export function integrationDepsFromEnv(
@@ -43,7 +45,15 @@ export function integrationDepsFromEnv(
     ? { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }
     : null;
   const store = blobStoreFromEnv(env);
-  return { cipher, etsy, fetchImpl, printify, anthropic, store };
+  return {
+    cipher,
+    etsy,
+    fetchImpl,
+    printify,
+    anthropic,
+    store,
+    metaBaseUrl: env.META_GRAPH_BASE_URL,
+  };
 }
 
 export class IntegrationNotConfiguredError extends Error {}

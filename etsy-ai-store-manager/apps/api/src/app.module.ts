@@ -22,6 +22,7 @@ import { FinanceModule } from './finance/finance.module.js';
 import { MarketModule } from './market/market.module.js';
 import { DesignsModule } from './designs/designs.module.js';
 import { SeoModule } from './seo/seo.module.js';
+import { AdsModule } from './ads/ads.module.js';
 
 @Module({})
 export class AppModule {
@@ -52,6 +53,7 @@ export class AppModule {
         MarketModule,
         DesignsModule,
         SeoModule,
+        AdsModule,
       ],
       providers: [
         { provide: ENV, useValue: env },
