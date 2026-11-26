@@ -256,7 +256,11 @@ async function upsertProduct(
         p.id,
         p.blueprint_id,
         p.print_provider_id,
-        JSON.stringify({ tags: p.tags, printify_updated_at: p.updated_at }),
+        JSON.stringify({
+          tags: p.tags,
+          description: p.description,
+          printify_updated_at: p.updated_at,
+        }),
         p.visible,
         p.is_locked,
         external,

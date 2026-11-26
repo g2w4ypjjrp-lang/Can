@@ -25,7 +25,7 @@ export interface DesignDeps {
 /** Default print canvas when no print area was chosen yet (common Printify front placeholder, px at 300 DPI). */
 const DEFAULT_CANVAS = { width: 4500, height: 5400 };
 
-async function startTask(
+export async function startTask(
   pool: pg.Pool,
   storeId: string,
   type: string,
@@ -43,7 +43,7 @@ async function startTask(
   return r.rows[0].id as string;
 }
 
-async function finishTask(
+export async function finishTask(
   pool: pg.Pool,
   id: string,
   status: 'succeeded' | 'failed',

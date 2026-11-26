@@ -48,6 +48,8 @@ export interface EtsyStub {
   close(): Promise<void>;
   calls: Array<{ method: string; path: string; status: number }>;
   listings: Map<number, StubListing>;
+  translations: Map<string, Record<string, unknown>>;
+  draftForms: Array<Record<string, string>>;
   receipts: Array<Record<string, unknown>>;
   /** next N listing-page requests answer 429 with retry-after: 0 */
   rateLimitNext(n: number): void;
@@ -68,6 +70,8 @@ export async function startEtsyStub(
   const calls: EtsyStub['calls'] = [];
 
   const listings = new Map<number, StubListing>();
+  const translations = new Map<string, Record<string, unknown>>();
+  const draftForms: Array<Record<string, string>> = [];
   const count = opts.listingCount ?? 102;
   for (let i = 1; i <= count; i++) {
     const id = 900000 + i;
@@ -238,6 +242,39 @@ export async function startEtsyStub(
     if (url.pathname.startsWith('/v3/application/')) {
       if (req.headers['x-api-key'] !== `${STUB_APP.keystring}:${STUB_APP.sharedSecret}`)
         return send(403, { error: 'Invalid API key' });
+      // seller taxonomy: public, API key only
+      if (req.method === 'GET' && url.pathname === '/v3/application/seller-taxonomy/nodes') {
+        const leaf = (id: number, name: string, parent: number, path: number[]) => ({
+          id,
+          level: 2,
+          name,
+          parent_id: parent,
+          children: [],
+          full_path_taxonomy_ids: path,
+        });
+        return send(200, {
+          count: 1,
+          results: [
+            {
+              id: 1,
+              level: 0,
+              name: 'Clothing',
+              parent_id: null,
+              full_path_taxonomy_ids: [1],
+              children: [
+                {
+                  id: 449,
+                  level: 1,
+                  name: 'Tops & Tees',
+                  parent_id: 1,
+                  full_path_taxonomy_ids: [1, 449],
+                  children: [leaf(482, 'T-shirts', 449, [1, 449, 482])],
+                },
+              ],
+            },
+          ],
+        });
+      }
       // public marketplace search: API key only, no OAuth token (findAllListingsActive)
       if (req.method === 'GET' && url.pathname === '/v3/application/listings/active') {
         const kw = (url.searchParams.get('keywords') ?? '').toLowerCase();
@@ -383,6 +420,134 @@ export async function startEtsyStub(
       }
       if (
         req.method === 'GET' &&
+        url.pathname === `/v3/application/shops/${STUB_SHOP_ID}/shipping-profiles`
+      )
+        return send(
+          200,
+          { count: 1, results: [{ shipping_profile_id: 3001, title: 'Standard (Printify)' }] },
+          rl,
+        );
+      if (
+        req.method === 'GET' &&
+        url.pathname === `/v3/application/shops/${STUB_SHOP_ID}/policies/return`
+      )
+        return send(
+          200,
+          {
+            count: 1,
+            results: [
+              {
+                return_policy_id: 4001,
+                shop_id: STUB_SHOP_ID,
+                accepts_returns: true,
+                accepts_exchanges: true,
+                return_deadline: 30,
+              },
+            ],
+          },
+          rl,
+        );
+      if (
+        req.method === 'GET' &&
+        url.pathname === `/v3/application/shops/${STUB_SHOP_ID}/production-partners`
+      )
+        return send(
+          200,
+          {
+            count: 1,
+            results: [{ production_partner_id: 5001, partner_name: 'Printify', location: 'USA' }],
+          },
+          rl,
+        );
+      // createDraftListing (form body; required fields per the OAS schema)
+      if (
+        req.method === 'POST' &&
+        url.pathname === `/v3/application/shops/${STUB_SHOP_ID}/listings`
+      ) {
+        if (!String(req.headers['content-type']).startsWith('application/x-www-form-urlencoded'))
+          return send(400, { error: 'expected form body' });
+        const f = new URLSearchParams(body);
+        for (const k of [
+          'quantity',
+          'title',
+          'description',
+          'price',
+          'who_made',
+          'when_made',
+          'taxonomy_id',
+        ])
+          if (!f.get(k)) return send(400, { error: `${k} is required` });
+        if ((f.get('type') ?? 'physical') === 'physical' && !f.get('shipping_profile_id'))
+          return send(400, { error: 'shipping_profile_id is required for physical listings' });
+        if (/[^\p{L}\p{Nd}\p{P}\p{Sm}\p{Zs}™©®]/u.test(f.get('title')!))
+          return send(400, { error: 'invalid title' });
+        const id = 990000 + listings.size;
+        const l: StubListing = {
+          listing_id: id,
+          shop_id: STUB_SHOP_ID,
+          title: f.get('title')!,
+          description: f.get('description')!,
+          state: 'draft',
+          quantity: Number(f.get('quantity')),
+          url: `https://www.etsy.com/listing/${id}`,
+          num_favorers: 0,
+          tags: (f.get('tags') ?? '')
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean),
+          materials: (f.get('materials') ?? '')
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean),
+          shipping_profile_id: Number(f.get('shipping_profile_id')) || null,
+          shop_section_id: null,
+          taxonomy_id: Number(f.get('taxonomy_id')),
+          who_made: f.get('who_made')!,
+          when_made: f.get('when_made')!,
+          is_supply: f.get('is_supply') === 'true',
+          price: usd(Math.round(Number(f.get('price')) * 100)),
+          updated_timestamp: Math.floor(Date.now() / 1000),
+          has_variations: false,
+        };
+        listings.set(id, l);
+        draftForms.push(Object.fromEntries(f));
+        return send(201, l, rl);
+      }
+      const tm = url.pathname.match(
+        new RegExp(
+          `^/v3/application/shops/${STUB_SHOP_ID}/listings/(\\d+)/translations/([a-z]{2})$`,
+        ),
+      );
+      if (tm) {
+        const key = `${tm[1]}:${tm[2]}`;
+        if (!listings.has(Number(tm[1]))) return send(404, { error: 'listing not found' });
+        if (req.method === 'GET') {
+          const t = translations.get(key);
+          return t ? send(200, t, rl) : send(404, { error: 'translation not found' });
+        }
+        if (req.method === 'POST' || req.method === 'PUT') {
+          if (req.method === 'POST' && translations.has(key)) return send(409, { error: 'exists' });
+          if (req.method === 'PUT' && !translations.has(key))
+            return send(404, { error: 'translation not found' });
+          const f = new URLSearchParams(body);
+          if (!f.get('title') || !f.get('description'))
+            return send(400, { error: 'title and description required' });
+          const t = {
+            listing_id: Number(tm[1]),
+            language: tm[2],
+            title: f.get('title'),
+            description: f.get('description'),
+            tags: (f.get('tags') ?? '')
+              .split(',')
+              .map((x) => x.trim())
+              .filter(Boolean),
+          };
+          translations.set(key, t);
+          return send(req.method === 'POST' ? 201 : 200, t, rl);
+        }
+      }
+      if (
+        req.method === 'GET' &&
         url.pathname === `/v3/application/shops/${STUB_SHOP_ID}/receipts`
       ) {
         const limit = Number(url.searchParams.get('limit') ?? 25);
@@ -403,6 +568,8 @@ export async function startEtsyStub(
     close: () => new Promise((r) => server.close(() => r())),
     calls,
     listings,
+    translations,
+    draftForms,
     receipts,
     rateLimitNext: (n) => {
       rateLimitRemaining = n;

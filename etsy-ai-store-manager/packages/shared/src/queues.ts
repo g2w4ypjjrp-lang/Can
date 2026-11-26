@@ -22,6 +22,8 @@ export const JOBS = {
   marketResearch: 'market.research',
   designGenerate: 'design.generate',
   designIpReview: 'design.ip-review',
+  seoGenerate: 'seo.generate',
+  seoTranslate: 'seo.translate',
 } as const;
 export type JobName = (typeof JOBS)[keyof typeof JOBS];
 

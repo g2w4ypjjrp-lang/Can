@@ -120,7 +120,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'SEO Merkezi',
     icon: 'Search',
     phase: 7,
-    status: 'planned',
+    status: 'ready',
     description: 'Çok dilli başlık, açıklama ve etiket optimizasyonu',
   },
   {

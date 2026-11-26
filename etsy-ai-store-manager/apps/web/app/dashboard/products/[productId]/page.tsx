@@ -8,6 +8,7 @@ import { Card, PageHeader } from '@/components/ui';
 import { PublishRequestForm } from '@/components/printify-forms';
 import { PriceRecommendationForm } from '@/components/finance-forms';
 import { DecisionBadge } from '@/components/decision-badge';
+import { RequestSeoForm, SeoDraftCard, type SeoDraft } from '@/components/seo-forms';
 
 interface Profitability {
   country: string;
@@ -91,6 +92,10 @@ export default async function ProductPage({
     `/stores/${current.id}/products/${productId}/profitability?country=${country}`,
   );
   const warnings = [...new Set(prof.variants.flatMap((v) => v.result.warnings))];
+  const seoDrafts = await api<SeoDraft[]>(
+    `/stores/${current.id}/seo-drafts?productId=${productId}`,
+  );
+  const path = `/dashboard/products/${productId}`;
   return (
     <>
       <PageHeader
@@ -269,6 +274,37 @@ export default async function ProductPage({
           </ul>
         </Card>
       )}
+      <Card title="SEO (Printify ürünü)" className="mt-6">
+        {canPublish && (
+          <div className="mb-4">
+            <RequestSeoForm
+              storeId={current.id}
+              target={{ productId }}
+              languages={['en']}
+              path={path}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Onaylanınca başlık, açıklama ve etiketler Printify’da güncellenir; ürün Etsy’deyse
+              yalnızca bu alanlar yeniden gönderilir.
+            </p>
+          </div>
+        )}
+        {seoDrafts.length === 0 ? (
+          <p className="text-sm text-slate-500">Henüz öneri yok.</p>
+        ) : (
+          <div className="space-y-4">
+            {seoDrafts.slice(0, 3).map((d) => (
+              <SeoDraftCard
+                key={d.id}
+                storeId={current.id}
+                d={d}
+                canEdit={canPublish}
+                path={path}
+              />
+            ))}
+          </div>
+        )}
+      </Card>
     </>
   );
 }

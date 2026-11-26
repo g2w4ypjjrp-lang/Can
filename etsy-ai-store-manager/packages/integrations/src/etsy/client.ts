@@ -110,6 +110,44 @@ export interface EtsyReceipt {
   [key: string]: unknown;
 }
 
+export interface EtsyTaxonomyNode {
+  id: number;
+  level: number;
+  name: string;
+  parent_id: number | null;
+  children: EtsyTaxonomyNode[];
+  full_path_taxonomy_ids: number[];
+}
+
+export interface EtsyListingTranslation {
+  listing_id: number;
+  language: string;
+  title: string | null;
+  description: string | null;
+  tags: string[];
+}
+
+/** Fields of createDraftListing this platform sends (required ones are non-optional). */
+export interface EtsyDraftListingInput {
+  quantity: number;
+  title: string;
+  description: string;
+  price: number;
+  who_made: 'i_did' | 'someone_else' | 'collective';
+  when_made: string;
+  taxonomy_id: number;
+  is_supply: boolean;
+  type?: 'physical' | 'download' | 'both';
+  shipping_profile_id?: number;
+  return_policy_id?: number;
+  tags?: string[];
+  materials?: string[];
+  production_partner_ids?: number[];
+  processing_min?: number;
+  processing_max?: number;
+  readiness_state_id?: number;
+}
+
 interface Paged<T> {
   count: number;
   results: T[];
@@ -289,6 +327,70 @@ export class EtsyClient {
     return this.request('GET', `/v3/application/shops/${shopId}/shipping-profiles`);
   }
 
+  /** Seller taxonomy tree (public data; API key only). */
+  getSellerTaxonomyNodes(): Promise<Paged<EtsyTaxonomyNode>> {
+    return this.request('GET', '/v3/application/seller-taxonomy/nodes', {}, false);
+  }
+
+  getShopProductionPartners(
+    shopId: number | string,
+  ): Promise<Paged<{ production_partner_id: number; partner_name: string; location: string }>> {
+    return this.request('GET', `/v3/application/shops/${shopId}/production-partners`);
+  }
+
+  getShopReturnPolicies(shopId: number | string): Promise<
+    Paged<{
+      return_policy_id: number;
+      accepts_returns: boolean;
+      accepts_exchanges: boolean;
+      return_deadline: number | null;
+    }>
+  > {
+    return this.request('GET', `/v3/application/shops/${shopId}/policies/return`);
+  }
+
+  /**
+   * createDraftListing (listings_w). The listing is created in state "draft": it is not
+   * visible to buyers and Etsy charges the listing fee only when it is published.
+   */
+  createDraftListing(shopId: number | string, input: EtsyDraftListingInput): Promise<EtsyListing> {
+    return this.request('POST', `/v3/application/shops/${shopId}/listings`, {
+      form: toForm(input as unknown as Record<string, unknown>),
+    });
+  }
+
+  /** Returns null when the listing has no translation for this language (404). */
+  async getListingTranslation(
+    shopId: number | string,
+    listingId: number | string,
+    language: string,
+  ): Promise<EtsyListingTranslation | null> {
+    try {
+      return await this.request(
+        'GET',
+        `/v3/application/shops/${shopId}/listings/${listingId}/translations/${encodeURIComponent(language)}`,
+      );
+    } catch (err) {
+      if (err instanceof EtsyApiError && err.status === 404) return null;
+      throw err;
+    }
+  }
+
+  /** createListingTranslation (POST) or updateListingTranslation (PUT). */
+  saveListingTranslation(
+    shopId: number | string,
+    listingId: number | string,
+    language: string,
+    t: { title: string; description: string; tags: string[] },
+    exists: boolean,
+  ): Promise<EtsyListingTranslation> {
+    return this.request(
+      exists ? 'PUT' : 'POST',
+      `/v3/application/shops/${shopId}/listings/${listingId}/translations/${encodeURIComponent(language)}`,
+      { form: toForm(t) },
+    );
+  }
+
   private async request<T>(
     method: string,
     path: string,
@@ -357,6 +459,20 @@ export class EtsyClient {
       throw err;
     }
   }
+}
+
+/** Form-urlencoded body; arrays are sent comma-separated (as documented for tags). */
+function toForm(o: Record<string, unknown>): URLSearchParams {
+  const form = new URLSearchParams();
+  for (const [k, v] of Object.entries(o)) {
+    if (v === undefined || v === null) continue;
+    if (Array.isArray(v)) {
+      if (v.length) form.set(k, v.join(','));
+      continue;
+    }
+    form.set(k, String(v));
+  }
+  return form;
 }
 
 function numHeader(res: Response, name: string): number | null {

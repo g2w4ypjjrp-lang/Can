@@ -15,7 +15,13 @@ import type { RequestMeta } from '../common/request-meta.decorator.js';
 export const REAUTH_WINDOW_SECONDS = 5 * 60;
 
 /** Action types the executor can currently carry out through an official API. */
-const EXECUTABLE = new Set(['update_listing', 'publish_product', 'change_price']);
+const EXECUTABLE = new Set([
+  'update_listing',
+  'publish_product',
+  'change_price',
+  'create_listing',
+  'update_listing_translation',
+]);
 
 @Injectable()
 export class ApprovalsService {
@@ -76,6 +82,17 @@ export class ApprovalsService {
           where id = $1 returning *`,
         [approvalId, decision === 'approve' ? 'approved' : 'rejected', ctx.userId, note ?? null],
       );
+      if (decision === 'reject') {
+        // the proposal goes back to editable state
+        await db.query(
+          `update public.seo_drafts set status = 'draft' where approval_request_id = $1 and status = 'pending_approval'`,
+          [approvalId],
+        );
+        await db.query(
+          `update public.listing_translations set status = 'reviewed' where approval_request_id = $1 and status = 'pending_approval'`,
+          [approvalId],
+        );
+      }
       return r.rows[0];
     });
 

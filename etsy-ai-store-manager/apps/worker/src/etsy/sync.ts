@@ -45,6 +45,38 @@ export async function syncEtsyStore(
       shop.shop_name,
     ]);
 
+    // options needed to create listings (non-fatal: a missing scope must not stop the sync)
+    const options: Record<string, unknown> = { fetchedAt: new Date().toISOString() };
+    const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
+      try {
+        return await fn();
+      } catch {
+        return null;
+      }
+    };
+    const sp = await safe(() => client.getShopShippingProfiles(conn.shopId));
+    options.shippingProfiles = (sp?.results ?? []).map((x) => ({
+      id: x.shipping_profile_id,
+      title: x.title,
+    }));
+    const rp = await safe(() => client.getShopReturnPolicies(conn.shopId));
+    options.returnPolicies = (rp?.results ?? []).map((x) => ({
+      id: x.return_policy_id,
+      acceptsReturns: x.accepts_returns,
+      acceptsExchanges: x.accepts_exchanges,
+      deadlineDays: x.return_deadline,
+    }));
+    const pp = await safe(() => client.getShopProductionPartners(conn.shopId));
+    options.productionPartners = (pp?.results ?? []).map((x) => ({
+      id: x.production_partner_id,
+      name: x.partner_name,
+      location: x.location,
+    }));
+    await pool.query(
+      `update public.connected_accounts set metadata = metadata || jsonb_build_object('listing_options', $2::jsonb) where id = $1`,
+      [conn.accountId, JSON.stringify(options)],
+    );
+
     for (const state of LISTING_STATES) {
       for await (const raw of client.iterateListings(conn.shopId, state, ['Images'])) {
         await upsertListing(pool, storeId, mapListing(raw));

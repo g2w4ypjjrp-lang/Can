@@ -51,9 +51,9 @@ test.describe.serial('Faz 1 akışı (gerçek Supabase Auth + API + RLS)', () =>
     await logIn(page);
     const nav = page.getByRole('navigation');
     await expect(nav.getByRole('link')).toHaveCount(17);
-    await nav.getByRole('link', { name: /SEO Merkezi/ }).click();
-    await expect(page.getByRole('heading', { name: 'SEO Merkezi' })).toBeVisible();
-    await expect(page.getByText('FAZ 7')).toBeVisible();
+    await nav.getByRole('link', { name: /Reklam Yönetimi/ }).click();
+    await expect(page.getByRole('heading', { name: 'Reklam Yönetimi' })).toBeVisible();
+    await expect(page.getByText('FAZ 8')).toBeVisible();
     await expect(page.getByTestId('module-status')).toHaveText('Durum: Planlandı');
   });
 

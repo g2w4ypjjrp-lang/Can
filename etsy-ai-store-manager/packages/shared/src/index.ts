@@ -5,3 +5,4 @@ export * from './navigation.js';
 export * from './queues.js';
 export * from './api-types.js';
 export * from './listings.js';
+export * from './seo.js';

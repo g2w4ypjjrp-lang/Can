@@ -11,7 +11,7 @@ export interface AnthropicStub {
   close(): Promise<void>;
   requests: Array<{ headers: http.IncomingHttpHeaders; body: Record<string, unknown> }>;
   /** next analysis responses: 'ok' | 'refusal' */
-  mode: { analysis: 'ok' | 'refusal'; unsafeSvg?: boolean };
+  mode: { analysis: 'ok' | 'refusal'; unsafeSvg?: boolean; seoStuffedFirst?: boolean };
 }
 
 export const STUB_ANALYSIS = {
@@ -210,6 +210,95 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
           },
         ],
         usage: { input_tokens: 800, output_tokens: 1200 },
+      });
+    }
+    if (format?.type === 'json_schema' && props.includes('primaryKeyword')) {
+      const content = JSON.stringify(body.messages);
+      const repair = content.includes('previous attempt failed');
+      const stuffed = mode.seoStuffedFirst && !repair;
+      return send(200, {
+        ...base,
+        stop_reason: 'end_turn',
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              primaryKeyword: 'botanical t-shirt',
+              title: stuffed
+                ? 'Plant Shirt Plant Lover Plant Gift Plant Tee BEST SELLER'
+                : 'Botanical T-Shirt, Grow Slow Fern Tee, Minimal Plant Lover Gift for Gardeners',
+              description:
+                'Botanical t-shirt with a hand-drawn fern and the words GROW SLOW, for plant lovers who enjoy slow living.\n\n' +
+                '- Original design from our own concept\n- Soft unisex tee, printed on demand\n- Makes a calm gift for gardeners and houseplant fans\n\n' +
+                'Design note: this artwork was created by our shop from our own concept, with the help of AI tools.\n' +
+                'Made to order: printed and shipped by our production partner.',
+              tags: [
+                'botanical shirt',
+                'plant lover gift',
+                'fern t-shirt',
+                'gardener gift',
+                'grow slow',
+                'houseplant tee',
+                'minimal plant art',
+                'nature lover gift',
+                'plant mom shirt',
+                'slow living',
+                'green thumb gift',
+                'leaf graphic tee',
+                'Plant Lover Gift!',
+              ],
+              materials: ['cotton'],
+              rationale:
+                'Etsy verisinde "botanical shirt" yüksek favori ve orta rekabet gösteriyor.',
+            }),
+          },
+        ],
+        usage: { input_tokens: 1200, output_tokens: 600 },
+      });
+    }
+    if (format?.type === 'json_schema' && props.includes('backTranslation')) {
+      const content = JSON.stringify(body.messages);
+      const lang = /Target language: (\w+)/.exec(content)?.[1] ?? 'German';
+      const src = /Source description:\\n([\s\S]*?)\\n\\nSource tags/.exec(content)?.[1] ?? '';
+      const nums = (src.match(/\d+/g) ?? []).join(' ');
+      return send(200, {
+        ...base,
+        stop_reason: 'end_turn',
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              title: `Botanik T-Shirt, Grow Slow Farn Shirt, Geschenk für Pflanzenliebhaber (${lang})`,
+              description:
+                'Botanisches T-Shirt mit handgezeichnetem Farn und dem Schriftzug GROW SLOW, für Pflanzenliebhaber. ' +
+                'Originaldesign nach unserem eigenen Konzept, auf Bestellung gedruckt. ' +
+                nums,
+              tags: [
+                'botanik shirt',
+                'pflanzen geschenk',
+                'farn t-shirt',
+                'gärtner geschenk',
+                'grow slow',
+                'zimmerpflanzen',
+                'pflanzen liebhaber',
+                'natur geschenk',
+                'pflanzen mama',
+                'slow living',
+                'grüner daumen',
+                'blatt motiv shirt',
+                'minimalistisch',
+              ],
+              backTranslation: {
+                title: 'Botanical T-shirt, Grow Slow fern shirt, gift for plant lovers',
+                description: 'Botanical T-shirt with a hand-drawn fern and GROW SLOW.',
+              },
+              localizationNotes: [
+                '"Plant mom" → "Pflanzen Mama" (Almanya’da yaygın arama ifadesi)',
+              ],
+            }),
+          },
+        ],
+        usage: { input_tokens: 900, output_tokens: 500 },
       });
     }
     if (format?.type === 'json_schema' && props.includes('riskLevel')) {

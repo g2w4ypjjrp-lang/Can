@@ -511,7 +511,16 @@ describe('disconnect', () => {
       .set(auth(owner.token))
       .expect(200);
     expect(r.body.note).toMatch(/Etsy hesap ayarlarınızdan/);
-    expect((await pool.query(`select count(*)::int n from public.oauth_tokens`)).rows[0].n).toBe(0);
+    expect(
+      (
+        await pool.query(
+          `select count(*)::int n from public.oauth_tokens t
+             join public.connected_accounts ca on ca.id = t.connected_account_id
+            where ca.store_id = $1`,
+          [storeId],
+        )
+      ).rows[0].n,
+    ).toBe(0);
     expect(
       (
         await pool.query(`select count(*)::int n from public.listings where store_id = $1`, [

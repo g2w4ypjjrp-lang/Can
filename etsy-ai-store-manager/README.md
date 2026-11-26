@@ -17,7 +17,8 @@ işlem onay ister.
 | 4    | Profit Engine: katkı, ücret matrahları, döviz, karar, fiyat önerisi, P&L              | ✅ Test edildi (ücret oranları sizin doğrulamanızı bekliyor) |
 | 5    | AI pazar araştırması (gerçek Etsy verisi + Claude), ürün fırsatları, kâr filtresi     | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
 | 6    | AI Tasarım Stüdyosu: SVG üretimi, IP kontrolü, baskı dosyası, Printify taslağı        | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
-| 7–11 | SEO, reklam, sipariş, AI yönetici, production                                         | ⬜                                                           |
+| 7    | SEO, çok dilli içerik (kalite kontrollü çeviri), Etsy taslak ilan oluşturma           | ✅ Test edildi (Anthropic anahtarı bekliyor)                 |
+| 8–11 | Reklam, sipariş, AI yönetici, production                                              | ⬜                                                           |
 
 Ayrıntılı görev listesi ve API kısıtları: [docs/architecture/development-plan.md](docs/architecture/development-plan.md)
 

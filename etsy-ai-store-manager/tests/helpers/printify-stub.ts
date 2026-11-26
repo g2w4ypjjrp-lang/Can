@@ -313,7 +313,18 @@ export async function startPrintifyStub(opts: { port?: number } = {}): Promise<P
       if (!prod) return send(404, { error: 'not found' });
       const b = JSON.parse(raw) as {
         variants?: Array<{ id: number; price: number; is_enabled: boolean }>;
+        title?: string;
+        description?: string;
+        tags?: unknown;
       };
+      if (
+        b.tags !== undefined &&
+        (!Array.isArray(b.tags) || b.tags.some((t) => typeof t !== 'string'))
+      )
+        return send(400, { error: 'tags must be an array of strings' });
+      if (b.title !== undefined) prod.title = b.title;
+      if (b.description !== undefined) prod.description = b.description;
+      if (b.tags !== undefined) prod.tags = b.tags as string[];
       if (b.variants) {
         if (b.variants.length !== prod.variants.length)
           return send(400, { error: 'all variants must be included' });

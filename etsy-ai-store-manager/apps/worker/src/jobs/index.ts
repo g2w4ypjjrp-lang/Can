@@ -9,6 +9,7 @@ import { recomputeOrderSnapshots } from '../finance/recompute.js';
 import { refreshFxRates } from '../finance/fx.js';
 import { runMarketResearch } from '../market/research.js';
 import { generateDesign, reviewDesign } from '../designs/jobs.js';
+import { generateSeoDraft, generateTranslation } from '../seo/jobs.js';
 
 export interface JobContext {
   pool: pg.Pool;
@@ -240,7 +241,25 @@ const designIpReview: JobHandler = async ({ pool, deps }, payload) => {
   );
 };
 
+const seoGenerate: JobHandler = async ({ pool, deps }, payload) =>
+  generateSeoDraft(
+    pool,
+    { anthropic: deps.anthropic ?? null },
+    String(payload.draftId),
+    (payload.userId as string) ?? null,
+  );
+
+const seoTranslate: JobHandler = async ({ pool, deps }, payload) =>
+  generateTranslation(
+    pool,
+    { anthropic: deps.anthropic ?? null },
+    String(payload.translationId),
+    (payload.userId as string) ?? null,
+  );
+
 export const JOB_HANDLERS: Record<string, JobHandler> = {
+  [JOBS.seoGenerate]: seoGenerate,
+  [JOBS.seoTranslate]: seoTranslate,
   [JOBS.designGenerate]: designGenerate,
   [JOBS.designIpReview]: designIpReview,
   [JOBS.marketResearch]: marketResearch,

@@ -1,12 +1,20 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import type { ListingDto } from '@esm/shared';
+import type { ListingDto, StoreSettingsDto } from '@esm/shared';
 import { api, ApiError } from '@/lib/api';
 import { loadStores } from '@/lib/current-store';
 import { formatDate, formatMoney } from '@/lib/format';
 import { Card, Notice, PageHeader } from '@/components/ui';
 import { ListingChangeForm } from '@/components/etsy-forms';
+import {
+  RequestSeoForm,
+  SeoDraftCard,
+  TranslateForm,
+  TranslationCard,
+  type SeoDraft,
+  type Translation,
+} from '@/components/seo-forms';
 
 export const metadata: Metadata = { title: 'İlan' };
 
@@ -23,6 +31,13 @@ export default async function ListingPage({ params }: { params: Promise<{ listin
     throw e;
   }
   const canEdit = current.role === 'owner' || current.role === 'admin';
+  const [settings, drafts, translations] = await Promise.all([
+    api<StoreSettingsDto>(`/stores/${current.id}/settings`),
+    api<SeoDraft[]>(`/stores/${current.id}/seo-drafts?listingId=${listingId}`),
+    api<Translation[]>(`/stores/${current.id}/listings/${listingId}/translations`),
+  ]);
+  const path = `/dashboard/etsy/listings/${listingId}`;
+  const otherLanguages = settings.languages.filter((l) => l !== settings.defaultLanguage);
   return (
     <>
       <PageHeader
@@ -87,6 +102,53 @@ export default async function ListingPage({ params }: { params: Promise<{ listin
           )}
         </Card>
       </div>
+      <Card title="SEO önerileri" className="mt-6">
+        {canEdit && (
+          <div className="mb-4">
+            <RequestSeoForm
+              storeId={current.id}
+              target={{ listingId }}
+              languages={[settings.defaultLanguage]}
+              path={path}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Claude, mağazanızın gerçek Etsy anahtar kelime verisini (Pazar Araştırma) kullanır;
+              sonuç Etsy kuralları ve spam kontrolünden geçer. Uygulama yalnızca onaydan sonra
+              yapılır.
+            </p>
+          </div>
+        )}
+        {drafts.length === 0 ? (
+          <p className="text-sm text-slate-500">Henüz öneri yok.</p>
+        ) : (
+          <div className="space-y-4">
+            {drafts.slice(0, 5).map((d) => (
+              <SeoDraftCard key={d.id} storeId={current.id} d={d} canEdit={canEdit} path={path} />
+            ))}
+          </div>
+        )}
+      </Card>
+      <Card title={`Diller (ana dil: ${settings.defaultLanguage})`} className="mt-6">
+        {canEdit && (
+          <div className="mb-4">
+            <TranslateForm
+              storeId={current.id}
+              listingId={listingId}
+              languages={otherLanguages}
+              path={path}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Etiketler hedef dilde yeniden araştırılır. Sayılar ve ürün üzerindeki metin korunur;
+              her çeviri geri çeviri ile insan incelemesinden sonra onaya gider.
+            </p>
+          </div>
+        )}
+        <div className="grid gap-4 lg:grid-cols-2">
+          {translations.map((t) => (
+            <TranslationCard key={t.id} storeId={current.id} t={t} canEdit={canEdit} path={path} />
+          ))}
+        </div>
+      </Card>
     </>
   );
 }
