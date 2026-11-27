@@ -143,7 +143,7 @@ export default function Office3D({ agents, target, onPick, mode = "normal", shor
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     el.appendChild(renderer.domElement);
     const labels = new CSS2DRenderer(); labels.domElement.className = "o3-labels"; el.appendChild(labels.domElement);
@@ -156,10 +156,10 @@ export default function Office3D({ agents, target, onPick, mode = "normal", shor
     controls.minAzimuthAngle = Math.PI / 4 - 0.5; controls.maxAzimuthAngle = Math.PI / 4 + 0.5;
 
     // Işıklar
-    scene.add(new THREE.HemisphereLight("#ffffff", "#b6a28a", 1.5));
-    const sun = new THREE.DirectionalLight("#fff4e0", 2.2);
+    scene.add(new THREE.HemisphereLight("#ffffff", "#d8c8b0", 1.9));
+    const sun = new THREE.DirectionalLight("#fff6e8", 1.7);
     sun.position.set(-14, 26, 10); sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.radius = 4;
+    sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.radius = 8;
     Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 20, bottom: -20, near: 1, far: 80 });
     scene.add(sun);
 
@@ -168,7 +168,7 @@ export default function Office3D({ agents, target, onPick, mode = "normal", shor
     const floor = box(FLOOR_W, 0.3, FLOOR_D, new THREE.MeshStandardMaterial({ map: wood, roughness: 0.8 }), 0, -0.15, 0);
     scene.add(floor);
     scene.add(box(FLOOR_W + 0.6, 0.5, FLOOR_D + 0.6, mat("#f5f3ee"), 0, -0.42, 0));
-    const wallM = mat("#f8f7f4"), frame = mat("#111827", { roughness: 0.4 }),
+    const wallM = mat("#f8f7f4"), frame = mat("#475569", { roughness: 0.4 }),
       glassWin = new THREE.MeshStandardMaterial({ color: "#cfe6f7", emissive: "#bfe0ff", emissiveIntensity: 0.3, roughness: 0.1 });
     scene.add(box(FLOOR_W, 3.6, 0.3, wallM, 0, 1.8, -FLOOR_D / 2 - 0.15));
     scene.add(box(0.3, 3.6, FLOOR_D, wallM, -FLOOR_W / 2 - 0.15, 1.8, 0));
@@ -179,15 +179,15 @@ export default function Office3D({ agents, target, onPick, mode = "normal", shor
       for (let j = 0; j <= 2; j++) g.add(box(w + 0.06, 0.06, 0.08, frame, 0, -h / 2 + (h * j) / 2, 0.03));
       scene.add(g);
     };
-    for (let i = 0; i < 9; i++) gridWindow(2.4, 2, true, -FLOOR_W / 2 + 2.6 + i * (FLOOR_W - 5.2) / 8, 1.95, -FLOOR_D / 2 + 0.03);
-    for (let i = 0; i < 3; i++) gridWindow(2.4, 2, false, -FLOOR_W / 2 + 0.03, 1.95, -FLOOR_D / 2 + 3.4 + i * (FLOOR_D - 6.8) / 2);
+    for (let i = 0; i < 6; i++) gridWindow(3.2, 2, true, -FLOOR_W / 2 + 3.4 + i * (FLOOR_W - 6.8) / 5, 1.95, -FLOOR_D / 2 + 0.03);
+    for (let i = 0; i < 2; i++) gridWindow(3.2, 2, false, -FLOOR_W / 2 + 0.03, 1.95, -FLOOR_D / 2 + 5 + i * (FLOOR_D - 10));
     // Duvardaki logo
     const sign = document.createElement("div"); sign.className = "o3-sign"; sign.textContent = "AI BUSINESS CENTER";
     const signObj = new CSS2DObject(sign); signObj.position.set(FLOOR_W / 2 - LOUNGE_W / 2, 3.1, -FLOOR_D / 2 + 0.2); scene.add(signObj);
 
     // Odalar
-    const glassM = new THREE.MeshStandardMaterial({ color: "#e3f2fd", transparent: true, opacity: 0.22, roughness: 0.05, depthWrite: false });
-    const frameM = mat("#151a23", { roughness: 0.35, metalness: 0.3 });
+    const glassM = new THREE.MeshStandardMaterial({ color: "#dbeafe", transparent: true, opacity: 0.3, roughness: 0.05, depthWrite: false });
+    const frameM = mat("#ffffff", { roughness: 0.35 });
     const hatch = hatchTexture();
     const hatchM = new THREE.MeshStandardMaterial({ map: hatch, transparent: true, roughness: 0.9 });
     const roomCenters: THREE.Vector3[] = [];
@@ -197,30 +197,20 @@ export default function Office3D({ agents, target, onPick, mode = "normal", shor
       const cz = -FLOOR_D / 2 + 1 + ROOM_D / 2 + room.row * (ROOM_D + CORRIDOR);
       const g = new THREE.Group(); g.position.set(cx, 0, cz); scene.add(g);
       roomCenters.push(new THREE.Vector3(cx, 0, cz));
-      // Kapı önünde çizgili zemin işareti
-      const hm = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), hatchM);
-      hm.rotation.x = -Math.PI / 2; hm.position.set(0, 0.012, room.row === 0 ? ROOM_D / 2 + 0.85 : -ROOM_D / 2 - 0.85);
-      hm.receiveShadow = true; g.add(hm);
       // Cam bölmeler (koridor tarafında kapı boşluğu)
-      const H = 1.9;
+      const H = 1.35;
       const pane = (w: number, d: number, x: number, z: number) => {
         const p = new THREE.Mesh(new THREE.BoxGeometry(w, H, d), glassM); p.position.set(x, H / 2, z); g.add(p);
-        g.add(box(w + 0.04, 0.05, d + 0.04, frameM, x, H, z));
-        g.add(box(w + 0.04, 0.05, d + 0.04, frameM, x, 0.03, z));
-        const len = Math.max(w, d), n = Math.floor(len / 1.3);
-        for (let k = 1; k < n; k++) {
-          const t = -len / 2 + (len * k) / n;
-          g.add(box(0.035, H, 0.035, frameM, w > d ? x + t : x, H / 2, w > d ? z : z + t));
-        }
+        g.add(box(w + 0.03, 0.05, d + 0.03, frameM, x, H, z));
+        g.add(box(w + 0.03, 0.08, d + 0.03, frameM, x, 0.04, z));
       };
       const hw = ROOM_W / 2, hd = ROOM_D / 2, door = 1.6;
       const back = room.row === 0 ? -hd : hd, front = -back;
       pane(ROOM_W, 0.05, 0, back);
       pane((ROOM_W - door) / 2, 0.05, -hw + (ROOM_W - door) / 4, front); pane((ROOM_W - door) / 2, 0.05, hw - (ROOM_W - door) / 4, front);
       pane(0.05, ROOM_D, -hw, 0); pane(0.05, ROOM_D, hw, 0);
-      for (const [x, z] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd]]) g.add(box(0.08, H + 0.06, 0.08, frameM, x, (H + 0.06) / 2, z));
+      for (const [x, z] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd]]) g.add(box(0.05, H + 0.03, 0.05, frameM, x, (H + 0.03) / 2, z));
       g.add(plant(hw - 0.5, -hd + 0.5));
-      if (ri % 2 === 0) g.add(plant(-hw + 0.5, hd - 0.6, 0.8));
 
       // Oda etiketi
       const lab = document.createElement("div"); lab.className = "o3-room"; lab.style.setProperty("--tone", room.tone); lab.textContent = room.label;
@@ -262,7 +252,7 @@ export default function Office3D({ agents, target, onPick, mode = "normal", shor
         d.g.userData.code = code; pickables.push(d.g);
         const { wrap, chip, bubble } = chipEl(code);
         chip.addEventListener("click", () => pickRef.current?.(code));
-        const lo2 = new CSS2DObject(wrap); lo2.position.set(0, 1.85, 0.2); d.g.add(lo2);
+        const lo2 = new CSS2DObject(wrap); lo2.position.set(0, 1.72, 0.2); d.g.add(lo2);
         seats.current.set(code, { group: d.g, screen: d.screen, armL: d.armL, armR: d.armR, head: d.head,
           chip, bubble, phase: Math.random() * 6, working: false, real: false });
       });
@@ -294,10 +284,8 @@ export default function Office3D({ agents, target, onPick, mode = "normal", shor
     const bar = new THREE.Group(); bar.position.set(-LOUNGE_W / 2 + 1.6, 0, -FLOOR_D / 2 + 1); lounge.add(bar);
     bar.add(box(2.6, 0.95, 0.7, mat("#e7e5e4"), 0, 0.47, 0)); bar.add(box(0.45, 0.55, 0.4, mat("#1f2937"), -0.7, 1.22, 0));
     bar.add(box(0.12, 0.14, 0.12, mat("#f8fafc"), 0.3, 1.02, 0.1));
-    for (const [x, z, sc] of [[LOUNGE_W / 2 - 0.7, 4, 1.4], [-LOUNGE_W / 2 + 0.8, 4.2, 1.2], [LOUNGE_W / 2 - 0.7, -1.5, 1], [2.8, -FLOOR_D / 2 + 0.8, 1.1]])
+    for (const [x, z, sc] of [[LOUNGE_W / 2 - 0.8, 4.2, 1.3], [-LOUNGE_W / 2 + 0.9, 4.2, 1.1]])
       lounge.add(plant(x, z, sc));
-    // Koridor bitkileri
-    for (let i = 0; i < 4; i++) scene.add(plant(-FLOOR_W / 2 + 1 + ROOM_W + GAP / 2 + i * 0 + (ROOM_W + GAP) * i - ROOM_W / 2 - GAP / 2 + 0.2, 0, 0.6));
     const loungeLabel = document.createElement("div"); loungeLabel.className = "o3-room"; loungeLabel.style.setProperty("--tone", "#a16207");
     loungeLabel.textContent = "DİNLENME ALANI"; const llo = new CSS2DObject(loungeLabel); llo.position.set(0, 0.05, 4.9); lounge.add(llo);
 
@@ -387,7 +375,7 @@ export default function Office3D({ agents, target, onPick, mode = "normal", shor
       s.chip.classList.toggle("is-working", s.working);
       s.chip.classList.toggle("is-selected", target === code);
       s.chip.disabled = !pickRef.current;
-      s.bubble.style.display = s.working ? "" : "none";
+      s.bubble.style.display = s.working && (!shortLabels || (demo && !s.real)) ? "" : "none";
       s.screen.emissive.set(s.working ? "#3b82f6" : "#000000");
       s.screen.color.set(s.working ? "#1d4ed8" : "#0f172a");
       s.group.visible = !!a;

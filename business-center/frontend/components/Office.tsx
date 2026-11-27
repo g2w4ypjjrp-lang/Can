@@ -25,7 +25,7 @@ export function Office({ orgId, initialAgents, initialTasks, canCommand }:
   const [tab, setTab] = useState<Tab>("tasks");
   const [gl, setGl] = useState<boolean | null>(null);
   const [mode, setMode] = useState<"normal" | "cinema" | "tour">("normal");
-  const [shortLabels, setShortLabels] = useState(false);
+  const [shortLabels, setShortLabels] = useState(true);
   const [resetKey, setResetKey] = useState(0);
   const [demo, setDemo] = useState<string[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
@@ -79,7 +79,7 @@ export function Office({ orgId, initialAgents, initialTasks, canCommand }:
                 <button type="button" aria-pressed={mode === "tour"} onClick={() => setMode(mode === "tour" ? "normal" : "tour")}>⇄ Tanıtım turu</button>
                 <button type="button" aria-pressed={mode === "cinema"} onClick={() => setMode(mode === "cinema" ? "normal" : "cinema")}>◎ Sinema</button>
                 <button type="button" onClick={() => { setMode("normal"); setResetKey((k) => k + 1); }}>⌂ Görünümü sıfırla</button>
-                <button type="button" aria-pressed={shortLabels} onClick={() => setShortLabels(!shortLabels)}>◌ Kısa etiket</button>
+                <button type="button" aria-pressed={!shortLabels} onClick={() => setShortLabels(!shortLabels)}>Aa İsimler</button>
               </div>
             )}
           </header>

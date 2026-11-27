@@ -94,16 +94,20 @@ body { background: var(--color-canvas); color: var(--color-ink); }
 .o3-chip.is-selected { outline: 2px solid var(--color-brand); outline-offset: 2px; }
 .o3-bubble { font: 700 9.5px/1 var(--font-sans); color: #065f46; background: #d1fae5; padding: 4px 7px; border-radius: 8px;
   box-shadow: 0 2px 6px rgba(0,0,0,.12); }
-.o3-room { white-space: nowrap; font: 800 10px/1 var(--font-sans); letter-spacing: .1em; color: #fff; background: #161b26;
-  padding: 6px 9px; border-radius: 7px; border-left: 4px solid var(--tone); box-shadow: 0 3px 10px rgba(0,0,0,.25); }
-.o3-sign { font: 800 13px/1 var(--font-sans); letter-spacing: .25em; color: #fff; background: #3b2a20; padding: 10px 14px; border-radius: 4px;
+.o3-room { white-space: nowrap; font: 700 10px/1 var(--font-sans); letter-spacing: .14em; color: #1f2937; background: rgba(255,255,255,.92);
+  padding: 6px 10px 6px 8px; border-radius: 999px; box-shadow: 0 4px 14px rgba(15,23,42,.12); display: inline-flex; align-items: center; gap: 7px; }
+.o3-room::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--tone); }
+.o3-sign { font: 700 12px/1 var(--font-sans); letter-spacing: .3em; color: #fff; background: #1f2937; padding: 9px 14px; border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,.25); }
 @keyframes o3-pulse { 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
 @media (prefers-reduced-motion: reduce) { .o3-chip.is-working i { animation: none; } }
 
 .o3-bubble.is-demo { color: #6b21a8; background: #f3e8ff; }
-.o3-label.is-short .o3-chip span { display: none; }
-.o3-label.is-short .o3-chip { padding: 5px; }
+.o3-label.is-short .o3-chip span { max-width: 0; opacity: 0; overflow: hidden; transition: max-width .2s, opacity .2s; }
+.o3-label.is-short .o3-chip { padding: 0; gap: 0; background: transparent; box-shadow: none; }
+.o3-label.is-short .o3-chip i { width: 10px; height: 10px; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(15,23,42,.35); }
+.o3-label.is-short .o3-chip:hover { padding: 4px 8px; gap: 6px; background: rgba(255,255,255,.96); box-shadow: 0 2px 8px rgba(15,23,42,.18); }
+.o3-label.is-short .o3-chip:hover span { max-width: 200px; opacity: 1; }
 .o3-toolbar button { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 6px 10px; border-radius: 8px; color: var(--color-ink); }
 .o3-toolbar button:hover { background: var(--color-canvas); }
 .o3-toolbar button[aria-pressed="true"] { background: var(--color-brand); color: #fff; }
