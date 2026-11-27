@@ -4,7 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { clientApi } from "@/lib/client-api";
 import { ROOMS, shortName, type Agent, type Room } from "@/lib/office";
 import { ACTIVE, STATUS, type TaskRow } from "@/lib/tasks";
+import dynamic from "next/dynamic";
 import { StatusBadge } from "./StatusBadge";
+
+const Office3D = dynamic(() => import("./Office3D"), { ssr: false, loading: () => <div className="h-full animate-pulse" /> });
+
+function hasWebGL() {
+  try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); }
+  catch { return false; }
+}
 
 const FLOOR_W = 1240, FLOOR_H = 820, GAP = 22, PAD = 30;
 const ROOM_W = (FLOOR_W - PAD * 2 - GAP * 3) / 4, ROOM_H = (FLOOR_H - PAD * 2 - GAP) / 2;
@@ -15,6 +23,8 @@ export function Office({ orgId, initialAgents, initialTasks, canCommand }:
   const [tasks, setTasks] = useState(initialTasks);
   const [target, setTarget] = useState("ceo");
   const [tab, setTab] = useState<"tasks" | "team">("tasks");
+  const [gl, setGl] = useState<boolean | null>(null);
+  useEffect(() => setGl(hasWebGL()), []);
 
   // Canlı durum: aktif görev varken 3 sn, yokken 15 sn'de bir yenile.
   const busy = tasks.some((t) => ACTIVE.has(t.status));
@@ -45,7 +55,11 @@ export function Office({ orgId, initialAgents, initialTasks, canCommand }:
               {working ? `${working} ajan çalışıyor` : "Ekip hazır"} · {agents.length} ajan
             </span>
           </header>
-          <IsoFloor byCode={byCode} target={target} onPick={canCommand ? setTarget : undefined} />
+          {gl === false
+            ? <IsoFloor byCode={byCode} target={target} onPick={canCommand ? setTarget : undefined} />
+            : <div className="hidden h-[620px] md:block lg:h-[calc(100vh-7rem)]">
+                {gl && <Office3D agents={agents} target={target} onPick={canCommand ? setTarget : undefined} />}
+              </div>}
           <FlatFloor byCode={byCode} target={target} onPick={canCommand ? setTarget : undefined} />
         </div>
         <SidePanel tab={tab} setTab={setTab} tasks={tasks} agents={agents} />

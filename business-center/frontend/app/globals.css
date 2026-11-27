@@ -78,3 +78,25 @@ body { background: var(--color-canvas); color: var(--color-ink); }
 .iso-bubble { position: absolute; top: -20px; left: 50%; translate: -50% 0; white-space: nowrap; font: 700 10px/1 var(--font-sans);
   color: #065f46; background: #d1fae5; padding: 4px 7px; border-radius: 7px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 @media (prefers-reduced-motion: reduce) { .iso-person.is-working, .animate-pulse { animation: none; } }
+
+/* ---------- 3D ofis ---------- */
+.o3-host { position: relative; width: 100%; height: 100%; }
+.o3-host canvas { display: block; }
+.o3-labels { position: absolute; inset: 0; }
+.o3-label { display: flex; flex-direction: column; align-items: center; gap: 4px; transform: translateY(-50%); }
+.o3-chip { pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer;
+  font: 600 10.5px/1 var(--font-sans); color: #0f172a; background: rgba(255,255,255,.96); border: 0;
+  padding: 4px 8px; border-radius: 999px; box-shadow: 0 2px 8px rgba(15,23,42,.18); transition: transform .15s; }
+.o3-chip:hover:not(:disabled) { transform: translateY(-2px); }
+.o3-chip:disabled { cursor: default; }
+.o3-chip i { width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1; }
+.o3-chip.is-working i { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.25); animation: o3-pulse 1.4s infinite; }
+.o3-chip.is-selected { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+.o3-bubble { font: 700 9.5px/1 var(--font-sans); color: #065f46; background: #d1fae5; padding: 4px 7px; border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+.o3-room { white-space: nowrap; font: 800 10px/1 var(--font-sans); letter-spacing: .1em; color: #fff; background: #161b26;
+  padding: 6px 9px; border-radius: 7px; border-left: 4px solid var(--tone); box-shadow: 0 3px 10px rgba(0,0,0,.25); }
+.o3-sign { font: 800 13px/1 var(--font-sans); letter-spacing: .25em; color: #fff; background: #3b2a20; padding: 10px 14px; border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+@keyframes o3-pulse { 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
+@media (prefers-reduced-motion: reduce) { .o3-chip.is-working i { animation: none; } }
