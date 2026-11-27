@@ -27,11 +27,18 @@ Mimari ve yol haritası: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 "API anahtarı yapılandırılmadı" hatasıyla durur. YouTube, Etsy ve Printify bağlantıları Phase 3 ve 4'te gelecek. Panelde bu bölümler
 "Phase N" etiketiyle açıkça işaretli.
 
+## Phase 5-6 ve Finans
+
+* Kalite kontrol döngüsü: kalırsa bir kez düzeltme, sonuç her durumda raporlanır, telif riskinde insan incelemesi
+* Automation: 10 hazır şablon (günlük, haftalık, aylık), özel cron kuralları, varsayılan kapalı
+* Notifications: görev bitti/başarısız, atlanan otomasyon
+* Financial Reports: YouTube, Etsy ve birleşik kâr-zarar, manuel kayıt, eksik veri uyarıları, doğrulanmış rapor
+
 ## Kurulum
 
 ### 1. Supabase
 1. [supabase.com](https://supabase.com) üzerinde bir proje oluşturun.
-2. SQL Editor'da `supabase/migrations/0001_core.sql` dosyasını çalıştırın.
+2. SQL Editor'da `supabase/migrations/` içindeki dosyaları sırayla (0001, 0002) çalıştırın.
 3. `.env.example` dosyasını `.env` olarak kopyalayın ve değerleri doldurun.
 4. Frontend için aynı `NEXT_PUBLIC_*` değerlerini `frontend/.env.local` dosyasına yazın.
 

@@ -9,8 +9,8 @@ export function TaskList({ tasks }: { tasks: TaskRow[] }) {
       {tasks.map((t) => (
         <li key={t.id}>
           <Link href={`/tasks/${t.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 hover:bg-canvas">
+            <span className="min-w-0 flex-1 basis-full truncate font-medium sm:basis-auto">{t.title}</span>
             <StatusBadge status={t.status} />
-            <span className="min-w-0 flex-1 truncate font-medium">{t.title}</span>
             <span className="text-xs text-muted">
               {t.current_agent && t.status === "running" ? `${t.current_agent} · ` : ""}
               {t.cost_usd ? `$${Number(t.cost_usd).toFixed(4)} · ` : ""}

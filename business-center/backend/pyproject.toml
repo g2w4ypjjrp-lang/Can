@@ -13,6 +13,7 @@ dependencies = [
     "pyjwt[crypto]>=2.9",
     "anthropic>=2.14.0",
     "celery[redis]>=5.7.0",
+    "croniter>=7.0.0",
 ]
 
 [project.scripts]
@@ -44,4 +45,4 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "SIM"]
 ignore = ["B008"]  # FastAPI Depends() deyimi
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106", "UP031", "SIM117", "E501"]
+"tests/**" = ["S101", "S105", "S106", "UP031", "SIM117", "E501", "F811"]  # F811: pytest fixture içe aktarımı

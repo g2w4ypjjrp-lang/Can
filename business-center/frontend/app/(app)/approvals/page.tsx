@@ -6,6 +6,8 @@ type Approval = { id: string; platform: string; action: string; reason: string; 
   risk_level: string; cost_amount: string | null; cost_currency: string | null; before_state: unknown;
   after_state: unknown; status: string; decision_note: string | null; expires_at: string; created_at: string };
 
+const STATUS_TR: Record<string, string> = { pending: "Bekliyor", approved: "Onaylandı", rejected: "Reddedildi",
+  expired: "Süresi doldu", executed: "Uygulandı", failed: "Başarısız" };
 const RISK: Record<string, string> = { low: "Düşük", medium: "Orta", high: "Yüksek", critical: "Kritik" };
 
 export default async function Approvals() {
@@ -26,7 +28,7 @@ export default async function Approvals() {
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded bg-canvas px-2 py-0.5 uppercase">{a.platform}</span>
               <span className="rounded bg-canvas px-2 py-0.5">Risk: {RISK[a.risk_level]}</span>
-              <span className="rounded bg-canvas px-2 py-0.5">Durum: {a.status}</span>
+              <span className="rounded bg-canvas px-2 py-0.5">Durum: {STATUS_TR[a.status] ?? a.status}</span>
               <span className="text-muted">Son: {new Date(a.expires_at).toLocaleString("tr-TR")}</span>
             </div>
             <h2 className="mt-2 font-semibold">{a.action}</h2>

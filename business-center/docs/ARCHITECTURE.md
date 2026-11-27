@@ -129,12 +129,32 @@ bir blokta modele verilir. Talimat olarak yorumlanmaz ve araç yetkisini genişl
 
 ## 7. Yol haritası ve durum
 
+Sıra kararı: dış platform bağlantıları (YouTube, Etsy, Printify OAuth ve senkronları) en sona bırakıldı.
+
 | Faz | Kapsam | Durum |
 |---|---|---|
 | **P1 Foundation** | Klasör yapısı, şema + RLS, backend, frontend, auth, dashboard, onay çekirdeği, Docker, CI | ✅ Kod + testler hazır. Supabase projesi bağlanmadı, Docker yerelde çalıştırılamadı |
 | **P2 AI Core** | CEO, registry, Claude API, görev kuyruğu (Celery/Redis), ajan logları, CEO Komut Merkezi | ✅ Kod + testler (sahte model ile) hazır; gerçek Claude çağrısı API anahtarı bekliyor |
 | P3 YouTube | OAuth, kanal senkronu, trend, senaryo, üretim iş akışı, thumbnail, SEO, yayın onayı, analytics | ⏳ |
+| **Finans motoru** | Kâr-zarar, manuel kayıt, doğrulanmış rapor | ✅ (P4'ün entegrasyondan bağımsız kısmı) |
 | P4 Etsy | OAuth, Printify, araştırma, tasarım, SEO, listeleme, siparişler, finans, yayın onayı | ⏳ |
-| P5 Kalite Kontrol | QC ajanları, telif riski, finansal doğrulama, test otomasyonu | ⏳ |
-| P6 Otomasyon | Zamanlanmış görevler, günlük/haftalık/aylık raporlar, bildirimler | ⏳ |
+| **P5 Kalite Kontrol** | QC ajanları, telif riski, finansal doğrulama, test otomasyonu | ✅ QC döngüsü (kalırsa 1 düzeltme), telif riskinde insan incelemesi, CI |
+| **P6 Otomasyon** | Zamanlanmış görevler, günlük/haftalık/aylık raporlar, bildirimler | ✅ Cron kuralları (10 şablon, varsayılan kapalı), Celery beat, onay süre aşımı, bildirimler |
 | P7 Production | Performans, güvenlik testi, yedekleme, izleme, dağıtım, dokümantasyon | ⏳ |
+
+### Kalite kontrol akışı (P5)
+QC ajanları yapılandırılmış karar döndürür: `verdict` (pass/fail), `issues`, `needs_human_review`.
+Kalırsa önceki üretici ajan sorunlarla birlikte bir kez yeniden çalıştırılır ve QC tekrarlanır. Yine
+kalırsa görev tamamlanır ama `qc_passed=false` olarak işaretlenir; sonuç gizlenmez. Telif ajanı
+kalırsa her zaman insan incelemesi istenir.
+
+### Otomasyon (P6)
+`automation_rules` cron + saat dilimi ile çalışır. Celery beat her dakika `tick` çalıştırır: süresi
+dolan onayları kapatır (`expired`) ve vadesi gelen kuralları görev olarak başlatır. Eşzamanlı görev
+sınırı doluysa çalıştırma atlanır ve bildirim gönderilir. Kurallar kapalı oluşturulur, çünkü her
+çalıştırma ücretli model çağrısı yapar.
+
+### Finans (P4 çekirdeği)
+`finance.py` saf fonksiyonlarla hesaplar. Para birimleri birleştirilmez, vergi ayrı raporlanır.
+Eksik veri (Etsy ücretleri, Printify maliyeti, çoklu para birimi) listelenir. Kayıtlı rapor
+yalnızca eksik veri yoksa `verified=true` olur ve dashboard yalnızca doğrulanmış kârı gösterir.

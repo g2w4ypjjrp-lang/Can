@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     max_task_cost_usd: float = 2.0       # tek görevin harcayabileceği üst sınır
     max_active_tasks_per_org: int = 3    # eşzamanlı görev sınırı (kontrolsüz harcamayı önler)
     max_web_searches_per_call: int = 5
+    inline_scheduler: bool = False      # Redis yokken zamanlayıcıyı API süreci içinde çalıştır (geliştirme)
     redis_url: str = ""                  # boşsa görevler API süreci içinde çalışır (geliştirme)
 
 

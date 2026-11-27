@@ -16,8 +16,9 @@ from bizcenter.main import create_app
 class FakeLLM:
     """Gerçek Claude çağrısı yapmaz; istekleri kaydeder ve sıradaki cevabı verir."""
 
-    def __init__(self, plan=None, fail_on_call=None, cost="0.010000", on_call=None):
+    def __init__(self, plan=None, fail_on_call=None, cost="0.010000", on_call=None, qc=None):
         self.calls = []
+        self.qc = list(qc or [])  # sırayla dönecek QC kararları
         self.plan = plan or {"summary": "Ürün araştır, kontrol et",
                              "steps": [{"agent_code": "etsy_product_research", "instruction": "20 ürün bul"},
                                        {"agent_code": "olmayan_ajan", "instruction": "x"},
@@ -33,6 +34,10 @@ class FakeLLM:
             await self.on_call(n)
         if self.fail_on_call == n:
             raise LLMError("Anthropic hız sınırına takıldı; daha sonra tekrar deneyin")
+        if kw.get("schema") and "verdict" in kw["schema"]["properties"]:
+            v = self.qc.pop(0) if self.qc else {"verdict": "pass", "issues": [], "needs_human_review": False}
+            v = {"report": f"qc {n}", **v}
+            return LLMResult(text=json.dumps(v), data=v, model="claude-opus-5-5", cost_usd=self.cost)
         if kw.get("schema"):
             return LLMResult(text=json.dumps(self.plan), data=self.plan, model="claude-opus-5-5",
                              input_tokens=100, output_tokens=50, cost_usd=self.cost)
@@ -81,6 +86,7 @@ async def test_ceo_runs_full_task(env, admin):
     assert all(s["status"] == "done" for s in t["steps"])
     assert t["steps"][0]["output"]["sources"][0]["url"] == "https://e.x"
     assert t["result"]["report"] == "çıktı 4"
+    assert t["result"]["qc_passed"] is True and t["result"]["needs_human_review"] is False
     assert t["result"]["total_cost_usd"] == "0.040000"
     assert len(t["runs"]) == 4 and all(r["status"] == "succeeded" for r in t["runs"])
     # Komut güvenilmeyen veri olarak sarılır; kapanış etiketi kaçırılamaz.
@@ -88,8 +94,46 @@ async def test_ceo_runs_full_task(env, admin):
     assert first.startswith('<untrusted_data source="user_command">')
     assert first.count("</untrusted_data>") == 1
     # Araştırma ajanı web aramalı, QC ajanı değil; ikinci ajan önceki çıktıyı görür.
-    assert llm.calls[1]["web_search"] is True and llm.calls[2]["web_search"] is False
+    assert llm.calls[1]["web_search"] is True and llm.calls[2].get("web_search", False) is False
     assert "çıktı 2" in llm.calls[2]["user"]
+
+
+FAIL = {"verdict": "fail", "issues": ["Kaynak yok"], "needs_human_review": False}
+
+
+async def _run_one(env, admin, email, llm):
+    app, disp = await env(llm)
+    async with app.router.lifespan_context(app), AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        uid, org = await setup_org(c, admin, email)
+        tid = (await c.post(f"/api/organizations/{org}/tasks", headers=auth(uid), json={"command": "bir iş"})).json()["id"]
+        await disp.drain()
+        return (await c.get(f"/api/tasks/{tid}", headers=auth(uid))).json()
+
+
+async def test_qc_fail_triggers_one_revision_then_pass(env, admin):
+    llm = FakeLLM(qc=[FAIL])
+    t = await _run_one(env, admin, "q1@test", llm)
+    assert t["status"] == "completed" and t["result"]["qc_passed"] is True
+    assert t["result"]["qc"][0]["revisions"] == 1
+    # plan, üretim, qc(kaldı), düzeltme, qc(geçti), rapor
+    assert len(llm.calls) == 6
+    assert "Kaynak yok" in llm.calls[3]["user"] and llm.calls[3]["system"] == llm.calls[1]["system"]
+    assert [s["status"] for s in t["steps"]] == ["done", "done"]
+
+
+async def test_qc_fails_twice_is_reported_not_hidden(env, admin):
+    t = await _run_one(env, admin, "q2@test", FakeLLM(qc=[FAIL, FAIL]))
+    assert t["status"] == "completed"
+    assert t["result"]["qc_passed"] is False
+    assert t["steps"][1]["status"] == "failed" and t["steps"][1]["output"]["qc"]["issues"] == ["Kaynak yok"]
+
+
+async def test_copyright_risk_requires_human(env, admin):
+    plan = {"summary": "", "steps": [{"agent_code": "etsy_design", "instruction": "tasarım"},
+                                     {"agent_code": "qc_copyright", "instruction": "telif"}]}
+    risky = {"verdict": "fail", "issues": ["Marka adı kullanılmış"], "needs_human_review": False}
+    t = await _run_one(env, admin, "q3@test", FakeLLM(plan=plan, qc=[risky, risky]))
+    assert t["result"]["needs_human_review"] is True and t["result"]["qc_passed"] is False
 
 
 async def test_budget_stops_task(env, admin):

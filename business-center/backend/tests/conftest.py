@@ -44,7 +44,7 @@ def dsn() -> str:
     base["dbname"] = name
     test_dsn = psycopg.conninfo.make_conninfo(**base)
     with psycopg.connect(test_dsn, autocommit=True) as c:
-        for f in ("supabase/test/supabase_stub.sql", "supabase/migrations/0001_core.sql"):
+        for f in ("supabase/test/supabase_stub.sql", *sorted(str(p.relative_to(ROOT)) for p in (ROOT / "supabase/migrations").glob("*.sql"))):
             c.execute((ROOT / f).read_text())
     yield test_dsn
     with psycopg.connect(ADMIN_DSN, autocommit=True) as c:
