@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Yapay Zekâ Ofisi</title>
+<style>
+:root{--bg:#eef0f3;--card:#fff;--ink:#1d2433;--mut:#6b7385;--floor:#e0a35a;--wall:#f7f7f5;--glass:rgba(160,190,210,.25);--acc:#2f5bff;--line:#d6d9e0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171d;--card:#1e222b;--ink:#e8ebf2;--mut:#9aa2b3;--floor:#8a5c2c;--wall:#2a2f39;--glass:rgba(120,150,180,.18);--acc:#6f8cff;--line:#323846}}
+:root[data-theme="dark"]{--bg:#14171d;--card:#1e222b;--ink:#e8ebf2;--mut:#9aa2b3;--floor:#8a5c2c;--wall:#2a2f39;--glass:rgba(120,150,180,.18);--acc:#6f8cff;--line:#323846}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:16px;letter-spacing:.3em;font-size:12px;color:var(--mut)}
+.wrap{display:grid;grid-template-columns:1fr 320px;gap:16px;padding:0 16px 140px}
+@media(max-width:860px){.wrap{grid-template-columns:1fr}}
+.stage{overflow:hidden;min-height:520px;display:flex;align-items:center;justify-content:center}
+.floor{transform:rotateX(55deg) rotateZ(-35deg);transform-style:preserve-3d;display:grid;grid-template-columns:repeat(3,200px);gap:14px;padding:18px;background:var(--floor);border:10px solid var(--wall);border-radius:6px;box-shadow:0 40px 60px rgba(0,0,0,.25)}
+@media(max-width:860px){.floor{grid-template-columns:repeat(2,150px)}}
+.room{background:var(--glass);border:2px solid rgba(255,255,255,.7);border-radius:4px;padding:8px;min-height:150px;cursor:pointer;transition:.2s;position:relative}
+.room:hover,.room.on{background:rgba(47,91,255,.25)}
+.room h3{margin:0 0 6px;font-size:11px;background:#1d2433;color:#fff;display:inline-block;padding:2px 6px;border-radius:4px;letter-spacing:.05em}
+.agent{display:flex;align-items:center;gap:5px;background:#fff;color:#1d2433;border-radius:10px;padding:2px 7px;margin:4px 0;font-size:11px;width:max-content}
+.agent i{width:7px;height:7px;border-radius:50%;background:#9aa2b3}
+.agent.busy i{background:#21c45d;box-shadow:0 0 6px #21c45d}
+aside{background:var(--card);border-radius:14px;padding:12px;border:1px solid var(--line);max-height:640px;overflow:auto}
+.task{border:1px solid var(--line);border-radius:10px;padding:8px;margin-bottom:8px}
+.task b{font-size:10px;color:var(--acc)}.task small{color:var(--mut);display:block}
+.bar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(680px,calc(100% - 32px));background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.15)}
+.bar textarea{width:100%;border:0;background:transparent;color:var(--ink);font:inherit;resize:none;outline:none}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+select,button{font:inherit;border-radius:8px;border:1px solid var(--line);padding:6px 10px;background:var(--bg);color:var(--ink)}
+button{background:var(--acc);color:#fff;border:0;margin-left:auto;cursor:pointer}
+code{display:block;margin-top:8px;font-size:12px;background:var(--bg);padding:8px;border-radius:8px;white-space:pre-wrap;word-break:break-word}
+</style>
+</head>
+<body>
+<header>ETSY &amp; YOUTUBE · YAPAY ZEKÂ EKİBİ</header>
+<div class="wrap">
+  <div class="stage"><div class="floor" id="floor"></div></div>
+  <aside><strong>Görevler</strong><div id="tasks" style="margin-top:8px"></div></aside>
+</div>
+<div class="bar">
+  <textarea id="q" rows="2" placeholder='Ekibine bir görev ver… örn. "Yılbaşı için 5 ürün fikri bul, listinglerini yaz ve tanıtım videosu senaryosu hazırla"'></textarea>
+  <div class="row">
+    <span style="color:var(--mut)">Kime</span>
+    <select id="who"></select>
+    <button id="go">Görevi ver →</button>
+  </div>
+  <code id="cmd" hidden></code>
+</div>
+<script>
+const rooms=[
+ ["YÖNETİM",[["genel-mudur","Genel Müdür"]]],
+ ["ETSY MAĞAZA",[["magaza-muduru","Mağaza Müdürü"],["musteri-hizmetleri","Müşteri Hizmetleri"]]],
+ ["ETSY ÜRÜN",[["urun-arastirmaci","Ürün Araştırmacı"],["etsy-listing-yazari","Listing Yazarı"],["etsy-seo-uzmani","Etsy SEO"]]],
+ ["BEYİN TAKIMI",[["icerik-avcisi","İçerik Avcısı"],["senarist","Senarist"]]],
+ ["PRODÜKSİYON",[["video-editor","Video Editör"],["thumbnail-tasarimci","Thumbnail"],["gorsel-tasarimci","Görsel Tasarımcı"]]],
+ ["YOUTUBE",[["youtube-seo-uzmani","YouTube SEO"]]],
+ ["ÖLÇÜM & ANALİZ",[["analiz-uzmani","Analiz Uzmanı"]]],
+ ["FİNANS",[["muhasebeci","Muhasebeci"]]]];
+const floor=document.getElementById('floor'),who=document.getElementById('who');
+who.innerHTML='<option value="genel-mudur">Genel müdür karar versin</option>';
+rooms.forEach(([n,a])=>{const r=document.createElement('div');r.className='room';
+ r.innerHTML='<h3>'+n+'</h3>'+a.map(([id,l])=>'<div class="agent" data-id="'+id+'"><i></i>'+l+'</div>').join('');
+ r.onclick=()=>{who.value=a[0][0]};floor.appendChild(r);
+ a.forEach(([id,l])=>{if(id!=='genel-mudur')who.innerHTML+='<option value="'+id+'">'+l+'</option>'})});
+let list=[];try{list=JSON.parse(localStorage.getItem('gorevler')||'[]')}catch(e){}
+function draw(){document.getElementById('tasks').innerHTML=list.length?list.map(t=>'<div class="task"><b>'+t.d+'</b><div>'+t.q.replace(/</g,'&lt;')+'</div><small>'+t.w+'</small></div>').join(''):'<small style="color:var(--mut)">Henüz görev yok.</small>'}
+draw();
+document.getElementById('go').onclick=()=>{const q=document.getElementById('q').value.trim();if(!q)return;const w=who.value;
+ list.unshift({q,w,d:new Date().toLocaleString('tr-TR')});list=list.slice(0,30);try{localStorage.setItem('gorevler',JSON.stringify(list))}catch(e){}draw();
+ document.querySelectorAll('.agent').forEach(e=>e.classList.toggle('busy',w==='genel-mudur'||e.dataset.id===w));
+ const c=document.getElementById('cmd');c.hidden=false;c.textContent='Claude Code\'a yapıştır:\n'+w+' ajanını kullan: '+q;
+ try{navigator.clipboard.writeText(w+' ajanını kullan: '+q)}catch(e){}};
+</script>
+</body>
+</html>
