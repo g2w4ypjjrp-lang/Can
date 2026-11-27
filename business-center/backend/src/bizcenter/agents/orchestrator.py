@@ -115,13 +115,12 @@ class Orchestrator:
     async def run(self, task_id: UUID) -> None:
         rows = await self._exec(
             "update tasks set status='running', updated_at=now() where id=%s and status='queued'"
-            " returning id, organization_id, command, title, created_by", task_id)
+            " returning id, organization_id, command, title, created_by, result", task_id)
         if not rows:
             log.info("task %s not queued; skipping", task_id)
             return
         task = rows[0]
         spent = [Decimal(0)]
-        step_id: UUID | None = None
         try:
             agents = {a["code"]: a for a in await self._exec(
                 "select id, code, name, description from agents where organization_id=%s and enabled",
@@ -132,6 +131,14 @@ class Orchestrator:
             roster = {c: a for c, a in agents.items() if c in SPECS}
             await self._exec("update tasks set assigned_agent_id=%s where id=%s", ceo["id"], task_id)
 
+            direct = (task.get("result") or {}).get("direct_agent")
+            if direct:
+                if direct not in roster:
+                    raise LLMError("Seçilen ajan kullanılamıyor")
+                plan: dict[str, Any] = {"summary": "Doğrudan atanan görev",
+                                        "steps": [{"agent_code": direct, "instruction": task["command"]}]}
+                await self._run_steps(task, plan, roster, ceo, spent, report=False)
+                return
             # 1) Plan
             roster_txt = "\n".join(f"- {c}: {a['description']}" for c, a in roster.items())
             plan_res = await self._call(
@@ -139,79 +146,88 @@ class Orchestrator:
                 system=f"{COMMON}\n\nRolün: {CEO_ROLE.format(max_steps=MAX_STEPS)}\n\nAjanlar:\n{roster_txt}",
                 user=_untrusted("user_command", task["command"]))
             plan = plan_res.data or {}
-            steps = [s for s in plan.get("steps", []) if s.get("agent_code") in roster][:MAX_STEPS]
-            if not steps:
-                raise LLMError("CEO geçerli bir plan oluşturamadı")
-            for i, s in enumerate(steps, 1):
-                await self._exec(
-                    "insert into task_steps(task_id, position, agent_id, description) values (%s,%s,%s,%s)",
-                    task_id, i, roster[s["agent_code"]]["id"], s["instruction"][:4000])
-
-            # 2) Uzmanlar sırayla; qc_* adımları önceki üretimi denetler, gerekirse düzeltme ister.
-            outputs: list[tuple[str, str]] = []
-            last_producer: tuple[dict[str, Any], int, str] | None = None  # (ajan, outputs sırası, talimat)
-            qc_results: list[dict[str, Any]] = []
-            for i, s in enumerate(steps, 1):
-                if await self._status(task_id) == "cancelled":
-                    await self._exec("update task_steps set status='skipped' where task_id=%s and status='pending'",
-                                     task_id)
-                    return
-                code = s["agent_code"]
-                agent, spec = roster[code], SPECS[code]
-                step_id = (await self._exec(
-                    "update task_steps set status='running', updated_at=now() where task_id=%s and position=%s"
-                    " returning id", task_id, i))[0]["id"]
-                is_qc = code.startswith("qc_")
-                await self._exec("update tasks set assigned_agent_id=%s, status=%s where id=%s and status not in"
-                                 " ('cancelled')", agent["id"], "waiting_qc" if is_qc else "running", task_id)
-                if not is_qc:
-                    res = await self._produce(task, agent, spec, s["instruction"], outputs, spent)
-                    outputs.append((agent["name"], res.text))
-                    last_producer = (agent, len(outputs) - 1, s["instruction"])
-                    out = {"text": res.text, "sources": res.sources, "cost_usd": str(res.cost_usd)}
-                else:
-                    verdict, revisions = await self._qc(task, agent, spec, s["instruction"], outputs, spent), 0
-                    while verdict["verdict"] == "fail" and last_producer and revisions < MAX_REVISIONS:
-                        revisions += 1
-                        p_agent, p_idx, p_instr = last_producer
-                        fix = (f"{p_instr}\n\nKalite kontrol bu sorunları buldu, düzelterek çıktını YENİDEN yaz:\n- "
-                               + "\n- ".join(verdict["issues"]))
-                        res = await self._produce(task, p_agent, SPECS[p_agent["code"]], fix, outputs[:p_idx], spent)
-                        outputs[p_idx] = (p_agent["name"], res.text)
-                        verdict = await self._qc(task, agent, spec, s["instruction"], outputs, spent)
-                    verdict["revisions"] = revisions
-                    qc_results.append({"agent": agent["name"], **verdict})
-                    outputs.append((agent["name"], verdict["report"]))
-                    out = {"text": verdict["report"], "sources": [], "qc": verdict}
-                    await self._exec("update tasks set status='running' where id=%s and status='waiting_qc'", task_id)
-                await self._exec("update task_steps set status=%s, output=%s, updated_at=now() where id=%s",
-                                 "failed" if is_qc and out["qc"]["verdict"] == "fail" else "done", Jsonb(out), step_id)
-                step_id = None
-
-            # 3) CEO birleşik rapor
-            report = await self._call(
-                task, ceo, spent, effort="medium", system=f"{COMMON}\n\nRolün: CEO Agent. Ekibin çıktılarını "
-                "kullanıcıya tek, kısa ve uygulanabilir bir rapor olarak birleştir: Özet, Bulgular, "
-                "Onaya sunulacak öneriler, Eksik veriler ve sonraki adımlar.",
-                user=_untrusted("user_command", task["command"]) + "\n\n" + "\n\n".join(
-                    _untrusted(name, out) for name, out in outputs))
-            await self._exec(
-                "update tasks set status='completed', completed_at=now(), assigned_agent_id=%s, result=%s"
-                " where id=%s and status in ('running','waiting_qc')",
-                ceo["id"], Jsonb({"plan_summary": plan.get("summary", ""), "report": report.text,
-                                  "total_cost_usd": str(spent[0]), "qc": qc_results,
-                                  "qc_passed": all(q["verdict"] == "pass" for q in qc_results),
-                                  "needs_human_review": any(q["needs_human_review"] for q in qc_results)}), task_id)
-            review = any(q["needs_human_review"] for q in qc_results)
-            await self._notify(task, "task_completed", f"Görev tamamlandı: {task['title']}",
-                               "İnsan incelemesi gerekiyor." if review else "CEO raporu hazır.")
+            await self._run_steps(task, plan, roster, ceo, spent, report=True)
         except BudgetExceeded:
-            await self._fail(task_id, step_id, f"Görev bütçesi aşıldı (üst sınır {self.max_cost} USD)", spent)
+            await self._fail(task_id, f"Görev bütçesi aşıldı (üst sınır {self.max_cost} USD)", spent)
         except LLMError as exc:
-            await self._fail(task_id, step_id, str(exc), spent)
+            await self._fail(task_id, str(exc), spent)
         except Exception:
             log.exception("task %s crashed", task_id)
-            await self._fail(task_id, step_id, "Beklenmeyen sistem hatası", spent)
+            await self._fail(task_id, "Beklenmeyen sistem hatası", spent)
+
+    async def _run_steps(self, task: dict[str, Any], plan: dict[str, Any], roster: dict[str, dict[str, Any]],
+                         ceo: dict[str, Any], spent: list[Decimal], report: bool) -> None:
+        task_id = task["id"]
+        steps = [s for s in plan.get("steps", []) if s.get("agent_code") in roster][:MAX_STEPS]
+        if not steps:
+            raise LLMError("CEO geçerli bir plan oluşturamadı")
+        for i, s in enumerate(steps, 1):
+            await self._exec(
+                "insert into task_steps(task_id, position, agent_id, description) values (%s,%s,%s,%s)",
+                task_id, i, roster[s["agent_code"]]["id"], s["instruction"][:4000])
+
+        # 2) Uzmanlar sırayla; qc_* adımları önceki üretimi denetler, gerekirse düzeltme ister.
+        outputs: list[tuple[str, str]] = []
+        last_producer: tuple[dict[str, Any], int, str] | None = None  # (ajan, outputs sırası, talimat)
+        qc_results: list[dict[str, Any]] = []
+        for i, s in enumerate(steps, 1):
+            if await self._status(task_id) == "cancelled":
+                await self._exec("update task_steps set status='skipped' where task_id=%s and status='pending'",
+                                 task_id)
+                return
+            code = s["agent_code"]
+            agent, spec = roster[code], SPECS[code]
+            step_id = (await self._exec(
+                "update task_steps set status='running', updated_at=now() where task_id=%s and position=%s"
+                " returning id", task_id, i))[0]["id"]
+            is_qc = code.startswith("qc_")
+            await self._exec("update tasks set assigned_agent_id=%s, status=%s where id=%s and status not in"
+                             " ('cancelled')", agent["id"], "waiting_qc" if is_qc else "running", task_id)
+            if not is_qc:
+                res = await self._produce(task, agent, spec, s["instruction"], outputs, spent)
+                outputs.append((agent["name"], res.text))
+                last_producer = (agent, len(outputs) - 1, s["instruction"])
+                out = {"text": res.text, "sources": res.sources, "cost_usd": str(res.cost_usd)}
+            else:
+                verdict, revisions = await self._qc(task, agent, spec, s["instruction"], outputs, spent), 0
+                while verdict["verdict"] == "fail" and last_producer and revisions < MAX_REVISIONS:
+                    revisions += 1
+                    p_agent, p_idx, p_instr = last_producer
+                    fix = (f"{p_instr}\n\nKalite kontrol bu sorunları buldu, düzelterek çıktını YENİDEN yaz:\n- "
+                           + "\n- ".join(verdict["issues"]))
+                    res = await self._produce(task, p_agent, SPECS[p_agent["code"]], fix, outputs[:p_idx], spent)
+                    outputs[p_idx] = (p_agent["name"], res.text)
+                    verdict = await self._qc(task, agent, spec, s["instruction"], outputs, spent)
+                verdict["revisions"] = revisions
+                qc_results.append({"agent": agent["name"], **verdict})
+                outputs.append((agent["name"], verdict["report"]))
+                out = {"text": verdict["report"], "sources": [], "qc": verdict}
+                await self._exec("update tasks set status='running' where id=%s and status='waiting_qc'", task_id)
+            await self._exec("update task_steps set status=%s, output=%s, updated_at=now() where id=%s",
+                             "failed" if is_qc and out["qc"]["verdict"] == "fail" else "done", Jsonb(out), step_id)
+            step_id = None
+
+        # 3) CEO birleşik rapor (doğrudan atanan görevde ajanın çıktısı rapordur)
+        if not report:
+            final_text, final_agent = outputs[0][1] if outputs else "", roster[steps[0]["agent_code"]]["id"]
+        else:
+            final_agent = ceo["id"]
+            final_text = (await self._call(
+            task, ceo, spent, effort="medium", system=f"{COMMON}\n\nRolün: CEO Agent. Ekibin çıktılarını "
+            "kullanıcıya tek, kısa ve uygulanabilir bir rapor olarak birleştir: Özet, Bulgular, "
+            "Onaya sunulacak öneriler, Eksik veriler ve sonraki adımlar.",
+            user=_untrusted("user_command", task["command"]) + "\n\n" + "\n\n".join(
+                _untrusted(name, out) for name, out in outputs))).text
+        await self._exec(
+            "update tasks set status='completed', completed_at=now(), assigned_agent_id=%s, result=%s"
+            " where id=%s and status in ('running','waiting_qc')",
+            final_agent, Jsonb({"plan_summary": plan.get("summary", ""), "report": final_text,
+                              "total_cost_usd": str(spent[0]), "qc": qc_results,
+                              "qc_passed": all(q["verdict"] == "pass" for q in qc_results),
+                              "needs_human_review": any(q["needs_human_review"] for q in qc_results)}), task_id)
+        review = any(q["needs_human_review"] for q in qc_results)
+        await self._notify(task, "task_completed", f"Görev tamamlandı: {task['title']}",
+                           "İnsan incelemesi gerekiyor." if review else "Rapor hazır.")
 
     async def _produce(self, task: dict[str, Any], agent: dict[str, Any], spec: Any, instruction: str,
                        outputs: list[tuple[str, str]], spent: list[Decimal]) -> LLMResult:
@@ -241,9 +257,9 @@ class Orchestrator:
             "insert into notifications(organization_id, user_id, kind, title, body, link) values (%s,%s,%s,%s,%s,%s)",
             task["organization_id"], task.get("created_by"), kind, title[:200], body, f"/tasks/{task['id']}")
 
-    async def _fail(self, task_id: UUID, step_id: UUID | None, msg: str, spent: list[Decimal]) -> None:
-        if step_id:
-            await self._exec("update task_steps set status='failed', updated_at=now() where id=%s", step_id)
+    async def _fail(self, task_id: UUID, msg: str, spent: list[Decimal]) -> None:
+        await self._exec("update task_steps set status='failed', updated_at=now()"
+                         " where task_id=%s and status='running'", task_id)
         await self._exec("update task_steps set status='skipped' where task_id=%s and status='pending'", task_id)
         rows = await self._exec(
             "update tasks set status='failed', error=%s, result=%s, updated_at=now()"

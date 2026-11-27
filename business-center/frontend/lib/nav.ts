@@ -1,6 +1,7 @@
 export type NavItem = { slug: string; label: string; phase: number; ready: boolean };
 
 export const NAV: NavItem[] = [
+  { slug: "office", label: "AI Ofis", phase: 2, ready: true },
   { slug: "dashboard", label: "Dashboard", phase: 1, ready: true },
   { slug: "ai-employees", label: "AI Employees", phase: 1, ready: true },
   { slug: "ceo", label: "CEO Command Center", phase: 2, ready: true },

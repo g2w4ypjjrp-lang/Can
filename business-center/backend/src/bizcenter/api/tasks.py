@@ -2,8 +2,10 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
+from ..agents.registry import SPECS
 from ..auth import CurrentUser, current_user
 from ..db import Database
 from ..deps import get_db
@@ -16,6 +18,7 @@ ACTIVE = ("queued", "running", "waiting_qc", "waiting_approval")
 
 class TaskCreate(BaseModel):
     command: str = Field(min_length=3, max_length=4000)
+    agent_code: str | None = Field(default=None, max_length=60)  # boşsa CEO karar verir
 
 
 @router.post("/organizations/{org_id}/tasks", status_code=201)
@@ -34,9 +37,21 @@ async def create_task(org_id: UUID, body: TaskCreate, request: Request,
                 raise HTTPException(403, "Görev vermek için yönetici yetkisi gerekli")
             if row["active"] >= settings.max_active_tasks_per_org:
                 raise HTTPException(429, f"Aynı anda en fazla {settings.max_active_tasks_per_org} görev çalışabilir")
+            direct = None
+            if body.agent_code and body.agent_code != "ceo":
+                if body.agent_code not in SPECS:
+                    raise HTTPException(422, "Bilinmeyen ajan")
+                ag = await (await conn.execute(
+                    "select id from agents where organization_id=%s and code=%s and enabled",
+                    (org_id, body.agent_code))).fetchone()
+                if ag is None:
+                    raise HTTPException(422, "Ajan bulunamadı veya devre dışı")
+                direct = ag["id"]
             cur = await conn.execute(
-                "insert into tasks(organization_id, title, command, created_by) values (%s,%s,%s,%s)"
-                " returning id, status, created_at", (org_id, cmd[:120], cmd, user.id))
+                "insert into tasks(organization_id, title, command, created_by, assigned_agent_id, result)"
+                " values (%s,%s,%s,%s,%s,%s) returning id, status, created_at",
+                (org_id, cmd[:120], cmd, user.id, direct,
+                 Jsonb({"direct_agent": body.agent_code}) if direct else None))
             task = await cur.fetchone()
     except HTTPException:
         raise

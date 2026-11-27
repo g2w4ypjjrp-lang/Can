@@ -264,3 +264,21 @@ async def test_claude_client_bad_stops(stop, msg):
 def test_claude_client_requires_key():
     with pytest.raises(LLMError):
         ClaudeLLM("", "claude-opus-5-5")
+
+
+async def test_direct_agent_assignment_skips_ceo(env, admin):
+    llm = FakeLLM()
+    app, disp = await env(llm)
+    async with app.router.lifespan_context(app), AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        uid, org = await setup_org(c, admin, "direct@test")
+        bad = await c.post(f"/api/organizations/{org}/tasks", headers=auth(uid),
+                           json={"command": "bir iş", "agent_code": "hacker"})
+        assert bad.status_code == 422
+        r = await c.post(f"/api/organizations/{org}/tasks", headers=auth(uid),
+                         json={"command": "5 başlık öner", "agent_code": "yt_seo"})
+        await disp.drain()
+        t = (await c.get(f"/api/tasks/{r.json()['id']}", headers=auth(uid))).json()
+    assert t["status"] == "completed"
+    assert len(llm.calls) == 1 and "schema" not in llm.calls[0]  # CEO planı yok
+    assert [s["agent_code"] for s in t["steps"]] == ["yt_seo"]
+    assert t["result"]["report"] == "çıktı 1" and t["current_agent"] == "YouTube SEO Agent"
