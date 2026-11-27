@@ -3,6 +3,8 @@ services:
   backend:
     build: ./backend
     env_file: .env
+    environment:
+      BC_REDIS_URL: redis://redis:6379/0
     ports: ["8000:8000"]
     restart: unless-stopped
     depends_on: [redis]
@@ -20,7 +22,16 @@ services:
     restart: unless-stopped
     depends_on: [backend]
 
-  # Phase 2'de Celery görev kuyruğu ve dağıtık hız sınırı için kullanılacak.
+  # Ajan görevlerini çalıştırır (CEO + uzmanlar). Ölçeklemek için: docker compose up --scale worker=3
+  worker:
+    build: ./backend
+    env_file: .env
+    environment:
+      BC_REDIS_URL: redis://redis:6379/0
+    command: ["celery", "-A", "bizcenter.worker", "worker", "-l", "info", "--concurrency", "2"]
+    restart: unless-stopped
+    depends_on: [redis]
+
   redis:
     image: redis:7.4-alpine
     command: ["redis-server", "--appendonly", "yes"]

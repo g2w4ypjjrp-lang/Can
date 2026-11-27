@@ -15,8 +15,16 @@ Mimari ve yol haritası: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 * Güvenlik: JWT doğrulama, RLS, rate limit, güvenlik başlıkları, yalnızca eklemeye açık denetim kaydı
 * Docker Compose ve CI iş akışı
 
-**Henüz yok:** Ajanlar şu an çalışmıyor; Claude API bağlantısı Phase 2'de gelecek. YouTube,
-Etsy ve Printify bağlantıları da yok, Phase 3 ve 4'te gelecek. Panelde bu bölümler
+## Phase 2 (AI Core)
+
+* CEO Komut Merkezi: doğal dilde komut. CEO planlar, uzman ajanlara dağıtır, kalite kontrol ekler ve tek rapor sunar
+* Görev Yönetimi: adım adım canlı ilerleme, ajan çıktıları, kaynaklar, iptal
+* System Logs: her ajan çağrısının token kullanımı ve maliyeti
+* Görev başına harcama üst sınırı ve eşzamanlı görev sınırı
+* Celery + Redis çalışanı (Docker Compose içinde `worker`)
+
+**Henüz yok:** Gerçek Claude çağrısı için `BC_ANTHROPIC_API_KEY` gerekli. Anahtar yoksa görevler
+"API anahtarı yapılandırılmadı" hatasıyla durur. YouTube, Etsy ve Printify bağlantıları Phase 3 ve 4'te gelecek. Panelde bu bölümler
 "Phase N" etiketiyle açıkça işaretli.
 
 ## Kurulum

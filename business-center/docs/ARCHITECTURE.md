@@ -11,7 +11,7 @@
 ┌────────────────────────── Backend (FastAPI) ──────────────────────────┐   ┌──────────────┐
 │ auth (JWT doğrulama) · rate limit · audit · hata eşleme               │   │ Supabase     │
 │ api/  dashboard · organizations · approvals · (P2+) tasks, ceo, ...   │◄─►│ Postgres+RLS │
-│ agents/ (P2)  CEO + 20 uzman + 5 QC ajanı · registry · araç yetkileri  │   │ Storage, Auth│
+│ agents/       CEO + 15 uzman + 5 QC ajanı · registry · llm · orchestrator│   │ Storage, Auth│
 │ approvals/ (P1 çekirdek) · executor (P3/P4: onaylı işlemi yürütür)    │   └──────────────┘
 │ integrations/ (P3/P4) youtube · etsy · printify · anthropic           │
 └───────────────┬───────────────────────────────────────────────────────┘
@@ -38,9 +38,10 @@ business-center/
 │   │   ├── middleware.py    istek kimliği, JSON log, güvenlik başlıkları, rate limit
 │   │   ├── errors.py        DB kural ihlali → güvenli HTTP hatası
 │   │   ├── api/             health, organizations, dashboard, approvals
-│   │   ├── agents/          (P2) registry, ceo, youtube/, etsy/, quality/
+│   │   ├── agents/          llm.py (Claude), registry.py (rol/araç), orchestrator.py (CEO akışı)
+│   │   ├── dispatch.py      Celery veya süreç içi görev dağıtımı
+│   │   ├── worker.py        Celery çalışanı
 │   │   ├── integrations/    (P3/P4) youtube.py, etsy.py, printify.py
-│   │   └── worker/          (P2/P6) Celery görevleri ve zamanlayıcı
 │   └── tests/               gerçek PostgreSQL üzerinde API + RLS + onay testleri
 ├── frontend/                Next.js 16 / TypeScript / Tailwind 4
 │   ├── app/(app)/           dashboard, ai-employees, approvals, [section] (yapılmamış bölümler)
@@ -76,6 +77,17 @@ uygulanır. Ajanlar API'ye doğrudan yazamaz; yalnızca okuma araçları ve "ona
 4. Çıktı ilgili QC ajanına gider (`waiting_qc`). Hata varsa adım geri gönderilir.
 5. Kritik işlem gerekiyorsa `approvals` kaydı açılır (`waiting_approval`).
 6. CEO sonuçları tek rapor olarak birleştirir.
+
+### Uygulanan ayrıntılar (P2)
+* Model: `claude-opus-5-5` (`BC_LLM_MODEL`). CEO planı yapılandırılmış çıktıyla (JSON şema) alınır;
+  plandaki bilinmeyen ajan kodları atılır, en fazla 8 adım.
+* Araştırma ajanları Anthropic web arama aracını kullanır (çağrı başına en fazla 5 arama); kaynak
+  bağlantıları adım çıktısına kaydedilir.
+* Güvenlik sınıflandırıcısı reddederse sunucu tarafı yedek model (`fallbacks: "default"`) devreye girer;
+  yine reddedilirse görev açık bir mesajla başarısız olur.
+* Maliyet: her çağrının token ve tahmini USD maliyeti `agent_runs` tablosuna yazılır. Görev
+  `BC_MAX_TASK_COST_USD` üst sınırını aşarsa durdurulur. Organizasyon başına eşzamanlı görev sınırı vardır.
+* İptal: her adım öncesi kontrol edilir. Hata olursa adım `failed`, kalanlar `skipped` olur.
 
 Harici içerik (web sayfaları, rakip listelemeleri, yorumlar) **güvenilmeyen veri** olarak ayrı
 bir blokta modele verilir. Talimat olarak yorumlanmaz ve araç yetkisini genişletemez.
@@ -120,7 +132,7 @@ bir blokta modele verilir. Talimat olarak yorumlanmaz ve araç yetkisini genişl
 | Faz | Kapsam | Durum |
 |---|---|---|
 | **P1 Foundation** | Klasör yapısı, şema + RLS, backend, frontend, auth, dashboard, onay çekirdeği, Docker, CI | ✅ Kod + testler hazır. Supabase projesi bağlanmadı, Docker yerelde çalıştırılamadı |
-| P2 AI Core | CEO, registry, Claude API, görev kuyruğu (Celery/Redis), ajan logları, CEO Komut Merkezi | ⏳ |
+| **P2 AI Core** | CEO, registry, Claude API, görev kuyruğu (Celery/Redis), ajan logları, CEO Komut Merkezi | ✅ Kod + testler (sahte model ile) hazır; gerçek Claude çağrısı API anahtarı bekliyor |
 | P3 YouTube | OAuth, kanal senkronu, trend, senaryo, üretim iş akışı, thumbnail, SEO, yayın onayı, analytics | ⏳ |
 | P4 Etsy | OAuth, Printify, araştırma, tasarım, SEO, listeleme, siparişler, finans, yayın onayı | ⏳ |
 | P5 Kalite Kontrol | QC ajanları, telif riski, finansal doğrulama, test otomasyonu | ⏳ |

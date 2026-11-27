@@ -4,14 +4,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import approvals, dashboard, health, organizations
+from .api import approvals, dashboard, health, organizations, tasks
 from .auth import TokenVerifier
 from .config import Settings, get_settings
 from .db import Database
+from .dispatch import CeleryDispatcher, Dispatcher, InlineDispatcher, make_orchestrator
 from .middleware import RateLimitMiddleware, RequestContextMiddleware, setup_logging
 
 
-def create_app(settings: Settings | None = None, db: Database | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, db: Database | None = None,
+               dispatcher: Dispatcher | None = None) -> FastAPI:
     settings = settings or get_settings()
     database = db or Database(settings.database_url, settings.db_pool_max)
 
@@ -19,6 +21,8 @@ def create_app(settings: Settings | None = None, db: Database | None = None) -> 
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await database.open()
         yield
+        if isinstance(app.state.dispatcher, InlineDispatcher):
+            await app.state.dispatcher.drain()
         await database.close()
 
     docs = None if settings.environment == "production" else "/docs"
@@ -26,12 +30,15 @@ def create_app(settings: Settings | None = None, db: Database | None = None) -> 
                   docs_url=docs, redoc_url=None, openapi_url=docs and "/openapi.json")
     app.state.db = database
     app.state.verifier = TokenVerifier(settings)
+    app.state.settings = settings
+    app.state.dispatcher = dispatcher or (
+        CeleryDispatcher() if settings.redis_url else InlineDispatcher(make_orchestrator(settings, database)))
     app.add_middleware(RateLimitMiddleware, per_minute=settings.rate_limit_per_minute)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
                        allow_methods=["GET", "POST", "PATCH", "DELETE"],
                        allow_headers=["authorization", "content-type", "x-request-id"])
     app.add_middleware(RequestContextMiddleware)
-    for r in (health.router, organizations.router, dashboard.router, approvals.router):
+    for r in (health.router, organizations.router, dashboard.router, approvals.router, tasks.router):
         app.include_router(r)
     return app
 
