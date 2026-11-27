@@ -100,3 +100,10 @@ body { background: var(--color-canvas); color: var(--color-ink); }
   box-shadow: 0 4px 12px rgba(0,0,0,.25); }
 @keyframes o3-pulse { 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
 @media (prefers-reduced-motion: reduce) { .o3-chip.is-working i { animation: none; } }
+
+.o3-bubble.is-demo { color: #6b21a8; background: #f3e8ff; }
+.o3-label.is-short .o3-chip span { display: none; }
+.o3-label.is-short .o3-chip { padding: 5px; }
+.o3-toolbar button { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 6px 10px; border-radius: 8px; color: var(--color-ink); }
+.o3-toolbar button:hover { background: var(--color-canvas); }
+.o3-toolbar button[aria-pressed="true"] { background: var(--color-brand); color: #fff; }

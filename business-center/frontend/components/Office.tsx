@@ -22,8 +22,23 @@ export function Office({ orgId, initialAgents, initialTasks, canCommand }:
   const [agents, setAgents] = useState(initialAgents);
   const [tasks, setTasks] = useState(initialTasks);
   const [target, setTarget] = useState("ceo");
-  const [tab, setTab] = useState<"tasks" | "team">("tasks");
+  const [tab, setTab] = useState<Tab>("tasks");
   const [gl, setGl] = useState<boolean | null>(null);
+  const [mode, setMode] = useState<"normal" | "cinema" | "tour">("normal");
+  const [shortLabels, setShortLabels] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
+  const [demo, setDemo] = useState<string[]>([]);
+  const [runs, setRuns] = useState<Run[]>([]);
+
+  // Demo görev: yalnızca görsel canlandırma; görev oluşturmaz, model çağırmaz, para harcamaz.
+  const demoTimer = useRef<ReturnType<typeof setTimeout>[]>([]);
+  function playDemo() {
+    demoTimer.current.forEach(clearTimeout);
+    const chain = ["ceo", "yt_trend_research", "yt_script_writer", "yt_video_production", "yt_thumbnail_designer", "yt_seo", "qc_content", "ceo"];
+    chain.forEach((code, i) => demoTimer.current.push(setTimeout(() => setDemo([code]), i * 2200)));
+    demoTimer.current.push(setTimeout(() => setDemo([]), chain.length * 2200));
+  }
+  useEffect(() => () => demoTimer.current.forEach(clearTimeout), []);
   useEffect(() => setGl(hasWebGL()), []);
 
   // Canlı durum: aktif görev varken 3 sn, yokken 15 sn'de bir yenile.
@@ -31,12 +46,15 @@ export function Office({ orgId, initialAgents, initialTasks, canCommand }:
   useEffect(() => {
     let stop = false;
     const tick = async () => {
-      const [a, t] = await Promise.all([
-        clientApi(`/api/organizations/${orgId}/agents`), clientApi(`/api/organizations/${orgId}/tasks`)]);
+      const [a, t, r] = await Promise.all([
+        clientApi(`/api/organizations/${orgId}/agents`), clientApi(`/api/organizations/${orgId}/tasks`),
+        clientApi(`/api/organizations/${orgId}/agent-runs`)]);
       if (stop) return;
+      if (r.ok) setRuns(r.data);
       if (a.ok) setAgents(a.data);
       if (t.ok) setTasks(t.data);
     };
+    tick();
     const id = setInterval(tick, busy ? 3000 : 15000);
     return () => { stop = true; clearInterval(id); };
   }, [orgId, busy]);
@@ -48,21 +66,32 @@ export function Office({ orgId, initialAgents, initialTasks, canCommand }:
     <div className="relative -m-4 min-h-[calc(100vh-0px)] overflow-hidden bg-[#eef0f4] md:-m-8 dark:bg-[#0f131c]">
       <div className="flex flex-col xl:flex-row">
         <div className="relative min-w-0 flex-1 pb-44">
-          <header className="flex items-center gap-3 px-4 pt-4 md:px-8 md:pt-6">
+          <header className="flex flex-wrap items-center gap-3 px-4 pt-4 md:px-8 md:pt-6">
             <p className="text-[11px] font-semibold tracking-[.3em] text-muted">AI OFİS</p>
             <span className="rounded-full bg-panel px-3 py-1 text-xs shadow-sm">
               <span className={`mr-1.5 inline-block h-2 w-2 rounded-full ${working ? "animate-pulse bg-emerald-500" : "bg-slate-300"}`} />
               {working ? `${working} ajan çalışıyor` : "Ekip hazır"} · {agents.length} ajan
             </span>
+            {demo.length > 0 && <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-800">DEMO oynatılıyor (görev açılmaz, ücret yok)</span>}
+            {gl && (
+              <div className="o3-toolbar ml-auto hidden items-center gap-1 rounded-xl border border-line bg-panel p-1 shadow-sm md:flex">
+                <button type="button" onClick={playDemo}>▶ Demo görev</button>
+                <button type="button" aria-pressed={mode === "tour"} onClick={() => setMode(mode === "tour" ? "normal" : "tour")}>⇄ Tanıtım turu</button>
+                <button type="button" aria-pressed={mode === "cinema"} onClick={() => setMode(mode === "cinema" ? "normal" : "cinema")}>◎ Sinema</button>
+                <button type="button" onClick={() => { setMode("normal"); setResetKey((k) => k + 1); }}>⌂ Görünümü sıfırla</button>
+                <button type="button" aria-pressed={shortLabels} onClick={() => setShortLabels(!shortLabels)}>◌ Kısa etiket</button>
+              </div>
+            )}
           </header>
           {gl === false
             ? <IsoFloor byCode={byCode} target={target} onPick={canCommand ? setTarget : undefined} />
             : <div className="hidden h-[620px] md:block lg:h-[calc(100vh-7rem)]">
-                {gl && <Office3D agents={agents} target={target} onPick={canCommand ? setTarget : undefined} />}
+                {gl && <Office3D agents={agents} target={target} onPick={canCommand ? setTarget : undefined}
+                  mode={mode} shortLabels={shortLabels} demoCodes={demo} resetKey={resetKey} />}
               </div>}
           <FlatFloor byCode={byCode} target={target} onPick={canCommand ? setTarget : undefined} />
         </div>
-        <SidePanel tab={tab} setTab={setTab} tasks={tasks} agents={agents} />
+        <SidePanel tab={tab} setTab={setTab} tasks={tasks} agents={agents} runs={runs} />
       </div>
       {canCommand && <CommandBar orgId={orgId} agents={agents} target={target} setTarget={setTarget}
         onSent={(t) => setTasks((prev) => [t, ...prev])} />}
@@ -167,19 +196,24 @@ function FlatFloor({ byCode, target, onPick }: { byCode: Record<string, Agent>; 
 
 /* ---------------- sağ panel ---------------- */
 
-function SidePanel({ tab, setTab, tasks, agents }:
-  { tab: "tasks" | "team"; setTab: (t: "tasks" | "team") => void; tasks: TaskRow[]; agents: Agent[] }) {
+type Tab = "team" | "feed" | "tasks";
+type Run = { id: string; task_id: string | null; agent: string; status: string; input_tokens: number | null;
+  output_tokens: number | null; cost_usd: string | null; error: string | null; started_at: string };
+const TABS: [Tab, string][] = [["team", "Ekip"], ["feed", "Canlı akış"], ["tasks", "Görevler"]];
+
+function SidePanel({ tab, setTab, tasks, agents, runs }:
+  { tab: Tab; setTab: (t: Tab) => void; tasks: TaskRow[]; agents: Agent[]; runs: Run[] }) {
   return (
     <aside className="mx-4 mb-44 rounded-2xl border border-line bg-panel/90 p-3 shadow-sm backdrop-blur xl:sticky xl:top-4 xl:mx-0 xl:mr-4 xl:mt-4 xl:mb-0 xl:h-[calc(100vh-11rem)] xl:w-80 xl:overflow-y-auto">
-      <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-canvas p-1 text-sm" role="tablist">
-        {(["tasks", "team"] as const).map((t) => (
+      <div className="mb-3 grid grid-cols-3 gap-1 rounded-lg bg-canvas p-1 text-sm" role="tablist">
+        {TABS.map(([t, label]) => (
           <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
             className={`rounded-md py-1.5 ${tab === t ? "bg-panel font-medium shadow-sm" : "text-muted"}`}>
-            {t === "tasks" ? `Görevler (${tasks.length})` : "Ekip"}
+            {label}{t === "tasks" ? ` (${tasks.length})` : ""}
           </button>
         ))}
       </div>
-      {tab === "tasks" ? (
+      {tab === "tasks" && (
         <ul className="space-y-2">
           {!tasks.length && <li className="p-3 text-sm text-muted">Henüz görev yok. Aşağıdan ekibe bir görev verin.</li>}
           {tasks.slice(0, 30).map((t) => (
@@ -197,7 +231,29 @@ function SidePanel({ tab, setTab, tasks, agents }:
             </li>
           ))}
         </ul>
-      ) : (
+      )}
+      {tab === "feed" && (
+        <ol className="space-y-3 text-sm">
+          {!runs.length && <li className="text-muted">Henüz ajan çalışmadı. Her model çağrısı burada canlı görünür.</li>}
+          {runs.slice(0, 40).map((r) => (
+            <li key={r.id} className="flex gap-3">
+              <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+                r.status === "running" ? "animate-pulse bg-indigo-500" : r.status === "failed" ? "bg-rose-500" : "bg-emerald-500"}`} />
+              <div className="min-w-0">
+                <p className="font-medium">{r.agent}</p>
+                <p className="text-[11px] text-muted">
+                  {new Date(r.started_at).toLocaleTimeString("tr-TR")} · {STATUS[r.status]?.label ?? r.status}
+                  {r.output_tokens != null && ` · ${((r.input_tokens ?? 0) + r.output_tokens).toLocaleString("tr-TR")} token`}
+                  {r.cost_usd && ` · $${Number(r.cost_usd).toFixed(4)}`}
+                </p>
+                {r.error && <p className="text-[11px] text-rose-700">{r.error}</p>}
+                {r.task_id && <Link href={`/tasks/${r.task_id}`} className="text-[11px] text-brand underline">Göreve git</Link>}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+      {tab === "team" && (
         <ul className="space-y-1 text-sm">
           {agents.map((a) => (
             <li key={a.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5">

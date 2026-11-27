@@ -9,13 +9,16 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { ROOMS, shortName, type Agent } from "@/lib/office";
 
-const ROOM_W = 7.4, ROOM_D = 8.2, GAP = 1.2, CORRIDOR = 2.4;
-const FLOOR_W = ROOM_W * 4 + GAP * 3 + 2, FLOOR_D = ROOM_D * 2 + CORRIDOR + 2;
+const ROOM_W = 7.4, ROOM_D = 8.2, GAP = 1.2, CORRIDOR = 2.6, LOUNGE_W = 11;
+const FLOOR_W = ROOM_W * 4 + GAP * 3 + 2 + LOUNGE_W, FLOOR_D = ROOM_D * 2 + CORRIDOR + 2;
+
+export type OfficeMode = "normal" | "cinema" | "tour";
+export type OfficeHandle = { reset: () => void };
 const SKIN = ["#f1c9a5", "#e0ac83", "#c68a5e", "#8d5a3b", "#f5d6bd"];
 const HAIR = ["#2b1d16", "#5a3825", "#111111", "#a0642c", "#d9b26a", "#6b4a3a"];
 
 type Seat = { group: THREE.Group; screen: THREE.MeshStandardMaterial; armL: THREE.Object3D; armR: THREE.Object3D;
-  head: THREE.Object3D; chip: HTMLButtonElement; bubble: HTMLElement; phase: number; working: boolean };
+  head: THREE.Object3D; chip: HTMLButtonElement; bubble: HTMLElement; phase: number; working: boolean; real: boolean };
 
 const mat = (color: string, o: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
   new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.02, ...o });
@@ -40,6 +43,15 @@ function woodTexture() {
   }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(6, 4);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+
+function hatchTexture() {
+  const c = document.createElement("canvas"); c.width = 128; c.height = 128;
+  const g = c.getContext("2d")!;
+  g.strokeStyle = "rgba(40,30,20,.55)"; g.lineWidth = 7;
+  for (let i = -128; i < 256; i += 26) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 128, 128); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
@@ -112,8 +124,10 @@ function chipEl(name: string) {
   return { wrap, chip, bubble };
 }
 
-export default function Office3D({ agents, target, onPick }:
-  { agents: Agent[]; target: string; onPick?: (code: string) => void }) {
+export default function Office3D({ agents, target, onPick, mode = "normal", shortLabels = false, demoCodes = [], resetKey = 0 }:
+  { agents: Agent[]; target: string; onPick?: (code: string) => void; mode?: OfficeMode; shortLabels?: boolean;
+    demoCodes?: string[]; resetKey?: number }) {
+  const ctl = useRef<{ controls: OrbitControls; camera: THREE.OrthographicCamera; rooms: THREE.Vector3[]; home: () => void } | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const seats = useRef<Map<string, Seat>>(new Map());
   const pickRef = useRef(onPick); pickRef.current = onPick;
@@ -135,9 +149,9 @@ export default function Office3D({ agents, target, onPick }:
     const labels = new CSS2DRenderer(); labels.domElement.className = "o3-labels"; el.appendChild(labels.domElement);
 
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
-    camera.position.set(26, 26, 26); camera.lookAt(0, 0, 0);
+    camera.position.set(29, 26, 26); camera.lookAt(3, 0, 0);
     const controls = new OrbitControls(camera, labels.domElement);
-    controls.enableDamping = true; controls.minZoom = 0.7; controls.maxZoom = 3; controls.screenSpacePanning = true;
+    controls.target.set(3, 0, 0); controls.enableDamping = true; controls.minZoom = 0.5; controls.maxZoom = 3; controls.screenSpacePanning = true;
     controls.minPolarAngle = Math.PI / 5; controls.maxPolarAngle = Math.PI / 3.2;
     controls.minAzimuthAngle = Math.PI / 4 - 0.5; controls.maxAzimuthAngle = Math.PI / 4 + 0.5;
 
@@ -154,46 +168,57 @@ export default function Office3D({ agents, target, onPick }:
     const floor = box(FLOOR_W, 0.3, FLOOR_D, new THREE.MeshStandardMaterial({ map: wood, roughness: 0.8 }), 0, -0.15, 0);
     scene.add(floor);
     scene.add(box(FLOOR_W + 0.6, 0.5, FLOOR_D + 0.6, mat("#f5f3ee"), 0, -0.42, 0));
-    const wallM = mat("#f7f5f1"), frame = mat("#cbd5e1"), glassWin = new THREE.MeshStandardMaterial({ color: "#bfe3ff", emissive: "#9fd2ff", emissiveIntensity: 0.25, roughness: 0.1 });
-    scene.add(box(FLOOR_W, 3.4, 0.3, wallM, 0, 1.7, -FLOOR_D / 2 - 0.15));
-    scene.add(box(0.3, 3.4, FLOOR_D, wallM, -FLOOR_W / 2 - 0.15, 1.7, 0));
-    for (let i = 0; i < 7; i++) {
-      const x = -FLOOR_W / 2 + 3 + i * (FLOOR_W - 6) / 6;
-      scene.add(box(2.2, 1.7, 0.06, glassWin, x, 1.9, -FLOOR_D / 2 + 0.02));
-      scene.add(box(2.3, 0.08, 0.1, frame, x, 1.03, -FLOOR_D / 2 + 0.05));
-      scene.add(box(0.06, 1.7, 0.1, frame, x, 1.9, -FLOOR_D / 2 + 0.05));
-    }
-    for (let i = 0; i < 3; i++) {
-      const z = -FLOOR_D / 2 + 3.5 + i * (FLOOR_D - 7) / 2;
-      scene.add(box(0.06, 1.7, 2.4, glassWin, -FLOOR_W / 2 + 0.02, 1.9, z));
-      scene.add(box(0.1, 0.08, 2.5, frame, -FLOOR_W / 2 + 0.05, 1.03, z));
-    }
+    const wallM = mat("#f8f7f4"), frame = mat("#111827", { roughness: 0.4 }),
+      glassWin = new THREE.MeshStandardMaterial({ color: "#cfe6f7", emissive: "#bfe0ff", emissiveIntensity: 0.3, roughness: 0.1 });
+    scene.add(box(FLOOR_W, 3.6, 0.3, wallM, 0, 1.8, -FLOOR_D / 2 - 0.15));
+    scene.add(box(0.3, 3.6, FLOOR_D, wallM, -FLOOR_W / 2 - 0.15, 1.8, 0));
+    const gridWindow = (w: number, h: number, alongX: boolean, x: number, y: number, z: number) => {
+      const g = new THREE.Group(); g.position.set(x, y, z); if (!alongX) g.rotation.y = Math.PI / 2;
+      g.add(box(w, h, 0.04, glassWin, 0, 0, 0));
+      for (let i = 0; i <= 3; i++) g.add(box(0.06, h + 0.06, 0.08, frame, -w / 2 + (w * i) / 3, 0, 0.03));
+      for (let j = 0; j <= 2; j++) g.add(box(w + 0.06, 0.06, 0.08, frame, 0, -h / 2 + (h * j) / 2, 0.03));
+      scene.add(g);
+    };
+    for (let i = 0; i < 9; i++) gridWindow(2.4, 2, true, -FLOOR_W / 2 + 2.6 + i * (FLOOR_W - 5.2) / 8, 1.95, -FLOOR_D / 2 + 0.03);
+    for (let i = 0; i < 3; i++) gridWindow(2.4, 2, false, -FLOOR_W / 2 + 0.03, 1.95, -FLOOR_D / 2 + 3.4 + i * (FLOOR_D - 6.8) / 2);
     // Duvardaki logo
     const sign = document.createElement("div"); sign.className = "o3-sign"; sign.textContent = "AI BUSINESS CENTER";
-    const signObj = new CSS2DObject(sign); signObj.position.set(-FLOOR_W / 2 + 0.2, 3.05, -2); scene.add(signObj);
+    const signObj = new CSS2DObject(sign); signObj.position.set(FLOOR_W / 2 - LOUNGE_W / 2, 3.1, -FLOOR_D / 2 + 0.2); scene.add(signObj);
 
     // Odalar
-    const glassM = new THREE.MeshStandardMaterial({ color: "#dff1ff", transparent: true, opacity: 0.28, roughness: 0.05, depthWrite: false });
-    const frameM = mat("#ffffff", { roughness: 0.3 });
+    const glassM = new THREE.MeshStandardMaterial({ color: "#e3f2fd", transparent: true, opacity: 0.22, roughness: 0.05, depthWrite: false });
+    const frameM = mat("#151a23", { roughness: 0.35, metalness: 0.3 });
+    const hatch = hatchTexture();
+    const hatchM = new THREE.MeshStandardMaterial({ map: hatch, transparent: true, roughness: 0.9 });
+    const roomCenters: THREE.Vector3[] = [];
     const pickables: THREE.Object3D[] = [];
     ROOMS.forEach((room, ri) => {
       const cx = -FLOOR_W / 2 + 1 + ROOM_W / 2 + room.col * (ROOM_W + GAP);
       const cz = -FLOOR_D / 2 + 1 + ROOM_D / 2 + room.row * (ROOM_D + CORRIDOR);
       const g = new THREE.Group(); g.position.set(cx, 0, cz); scene.add(g);
-      const rug = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W - 0.6, 0.02, ROOM_D - 0.6),
-        mat(new THREE.Color(room.tone).lerp(new THREE.Color("#fff7ec"), 0.8).getStyle(), { roughness: 1 }));
-      rug.position.y = 0.01; rug.receiveShadow = true; g.add(rug);
+      roomCenters.push(new THREE.Vector3(cx, 0, cz));
+      // Kapı önünde çizgili zemin işareti
+      const hm = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), hatchM);
+      hm.rotation.x = -Math.PI / 2; hm.position.set(0, 0.012, room.row === 0 ? ROOM_D / 2 + 0.85 : -ROOM_D / 2 - 0.85);
+      hm.receiveShadow = true; g.add(hm);
       // Cam bölmeler (koridor tarafında kapı boşluğu)
-      const H = 1.25;
+      const H = 1.9;
       const pane = (w: number, d: number, x: number, z: number) => {
         const p = new THREE.Mesh(new THREE.BoxGeometry(w, H, d), glassM); p.position.set(x, H / 2, z); g.add(p);
-        g.add(box(w + 0.04, 0.06, d + 0.04, frameM, x, H, z));
+        g.add(box(w + 0.04, 0.05, d + 0.04, frameM, x, H, z));
+        g.add(box(w + 0.04, 0.05, d + 0.04, frameM, x, 0.03, z));
+        const len = Math.max(w, d), n = Math.floor(len / 1.3);
+        for (let k = 1; k < n; k++) {
+          const t = -len / 2 + (len * k) / n;
+          g.add(box(0.035, H, 0.035, frameM, w > d ? x + t : x, H / 2, w > d ? z : z + t));
+        }
       };
       const hw = ROOM_W / 2, hd = ROOM_D / 2, door = 1.6;
-      pane(ROOM_W, 0.05, 0, -hd);
-      pane((ROOM_W - door) / 2, 0.05, -hw + (ROOM_W - door) / 4, hd); pane((ROOM_W - door) / 2, 0.05, hw - (ROOM_W - door) / 4, hd);
+      const back = room.row === 0 ? -hd : hd, front = -back;
+      pane(ROOM_W, 0.05, 0, back);
+      pane((ROOM_W - door) / 2, 0.05, -hw + (ROOM_W - door) / 4, front); pane((ROOM_W - door) / 2, 0.05, hw - (ROOM_W - door) / 4, front);
       pane(0.05, ROOM_D, -hw, 0); pane(0.05, ROOM_D, hw, 0);
-      for (const [x, z] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd]]) g.add(box(0.1, H + 0.06, 0.1, frameM, x, (H + 0.06) / 2, z));
+      for (const [x, z] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd]]) g.add(box(0.08, H + 0.06, 0.08, frameM, x, (H + 0.06) / 2, z));
       g.add(plant(hw - 0.5, -hd + 0.5));
       if (ri % 2 === 0) g.add(plant(-hw + 0.5, hd - 0.6, 0.8));
 
@@ -239,20 +264,42 @@ export default function Office3D({ agents, target, onPick }:
         chip.addEventListener("click", () => pickRef.current?.(code));
         const lo2 = new CSS2DObject(wrap); lo2.position.set(0, 1.85, 0.2); d.g.add(lo2);
         seats.current.set(code, { group: d.g, screen: d.screen, armL: d.armL, armR: d.armR, head: d.head,
-          chip, bubble, phase: Math.random() * 6, working: false });
+          chip, bubble, phase: Math.random() * 6, working: false, real: false });
       });
     });
 
-    // Koridorda dinlenme alanı
-    const lounge = new THREE.Group(); lounge.position.set(FLOOR_W / 2 - 4.5, 0, 0.1);
-    const sofaM = mat("#64748b", { roughness: 0.9 });
-    lounge.add(box(3, 0.42, 0.9, sofaM, 0, 0.3, -0.5)); lounge.add(box(3, 0.6, 0.25, sofaM, 0, 0.7, -0.85));
-    lounge.add(box(1.2, 0.06, 0.6, mat("#e7e5e4", { roughness: 0.3 }), 0, 0.42, 0.45));
-    lounge.add(box(0.08, 0.4, 0.08, mat("#78716c"), 0, 0.2, 0.45));
-    scene.add(lounge); scene.add(plant(FLOOR_W / 2 - 1.2, 0.2, 1.2)); scene.add(plant(-FLOOR_W / 2 + 1.3, 0.2, 1.1));
-    const coffee = new THREE.Group(); coffee.position.set(-FLOOR_W / 2 + 4, 0, 0.1);
-    coffee.add(box(1.6, 0.9, 0.6, mat("#e2e8f0"), 0, 0.45, 0)); coffee.add(box(0.4, 0.5, 0.35, mat("#1f2937"), -0.4, 1.15, 0));
-    scene.add(coffee);
+    // Sağda açık dinlenme alanı
+    const lx = FLOOR_W / 2 - LOUNGE_W / 2, lounge = new THREE.Group(); lounge.position.set(lx, 0, 0); scene.add(lounge);
+    const rugM = mat("#d6cfc4", { roughness: 1 }), sofaM = mat("#3f4654", { roughness: 0.9 }), cushion = mat("#e8d9c0", { roughness: 1 });
+    const rug2 = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.02, 48), rugM); rug2.position.set(0, 0.01, 1.5); rug2.receiveShadow = true; lounge.add(rug2);
+    lounge.add(box(3.6, 0.45, 1, sofaM, 0, 0.3, 3.6)); lounge.add(box(3.6, 0.7, 0.28, sofaM, 0, 0.7, 4));
+    lounge.add(box(0.3, 0.6, 1, sofaM, -1.8, 0.45, 3.6)); lounge.add(box(0.3, 0.6, 1, sofaM, 1.8, 0.45, 3.6));
+    for (const x of [-1, 0.2, 1.2]) lounge.add(box(0.6, 0.4, 0.15, cushion, x, 0.75, 3.8));
+    lounge.add(box(1.6, 0.06, 0.8, mat("#2b2f38", { roughness: 0.3 }), 0, 0.42, 1.6));
+    for (const [x, z] of [[-0.7, 1.3], [0.7, 1.3], [-0.7, 1.9], [0.7, 1.9]]) lounge.add(box(0.05, 0.4, 0.05, mat("#111827"), x, 0.2, z));
+    for (const [x, r] of [[-2.6, 0.6], [2.6, -0.6]]) {
+      const a = new THREE.Group(); a.position.set(x, 0, 1.3); a.rotation.y = r;
+      a.add(box(0.9, 0.4, 0.9, mat("#b4876a"), 0, 0.3, 0)); a.add(box(0.9, 0.6, 0.2, mat("#b4876a"), 0, 0.65, 0.4)); lounge.add(a);
+    }
+    // TV duvarı ve raflar
+    lounge.add(box(4.4, 1.2, 0.5, mat("#f1f0ec"), 0, 0.6, -FLOOR_D / 2 + 0.55));
+    const tv = new THREE.Mesh(new THREE.BoxGeometry(3, 1.7, 0.08), new THREE.MeshStandardMaterial({ color: "#0b1220", emissive: "#1e3a8a", emissiveIntensity: 0.35, roughness: 0.2 }));
+    tv.position.set(0, 2.15, -FLOOR_D / 2 + 0.1); lounge.add(tv);
+    const shelf = new THREE.Group(); shelf.position.set(LOUNGE_W / 2 - 0.5, 0, -FLOOR_D / 2 + 2.5); lounge.add(shelf);
+    for (let k = 0; k < 4; k++) shelf.add(box(0.5, 0.05, 2.2, mat("#7c5a3c"), 0, 0.4 + k * 0.55, 0));
+    shelf.add(box(0.5, 2.1, 0.05, mat("#7c5a3c"), 0, 1.05, -1.1)); shelf.add(box(0.5, 2.1, 0.05, mat("#7c5a3c"), 0, 1.05, 1.1));
+    const deco = ["#f59e0b", "#e11d48", "#10b981", "#6366f1", "#f8fafc"];
+    for (let k = 0; k < 3; k++) for (let b = 0; b < 4; b++) shelf.add(box(0.3, 0.3, 0.3, mat(deco[(k + b) % 5]), 0, 0.6 + k * 0.55, -0.8 + b * 0.5));
+    // Kahve köşesi ve bitkiler
+    const bar = new THREE.Group(); bar.position.set(-LOUNGE_W / 2 + 1.6, 0, -FLOOR_D / 2 + 1); lounge.add(bar);
+    bar.add(box(2.6, 0.95, 0.7, mat("#e7e5e4"), 0, 0.47, 0)); bar.add(box(0.45, 0.55, 0.4, mat("#1f2937"), -0.7, 1.22, 0));
+    bar.add(box(0.12, 0.14, 0.12, mat("#f8fafc"), 0.3, 1.02, 0.1));
+    for (const [x, z, sc] of [[LOUNGE_W / 2 - 0.7, 4, 1.4], [-LOUNGE_W / 2 + 0.8, 4.2, 1.2], [LOUNGE_W / 2 - 0.7, -1.5, 1], [2.8, -FLOOR_D / 2 + 0.8, 1.1]])
+      lounge.add(plant(x, z, sc));
+    // Koridor bitkileri
+    for (let i = 0; i < 4; i++) scene.add(plant(-FLOOR_W / 2 + 1 + ROOM_W + GAP / 2 + i * 0 + (ROOM_W + GAP) * i - ROOM_W / 2 - GAP / 2 + 0.2, 0, 0.6));
+    const loungeLabel = document.createElement("div"); loungeLabel.className = "o3-room"; loungeLabel.style.setProperty("--tone", "#a16207");
+    loungeLabel.textContent = "DİNLENME ALANI"; const llo = new CSS2DObject(loungeLabel); llo.position.set(0, 0.05, 4.9); lounge.add(llo);
 
     // Boyut ve kamera sığdırma
     const fit = () => {
@@ -260,11 +307,15 @@ export default function Office3D({ agents, target, onPick }:
       renderer.setSize(w, h); labels.setSize(w, h);
       const aspect = w / h, view = 13;
       Object.assign(camera, { left: -view * aspect, right: view * aspect, top: view, bottom: -view });
-      camera.zoom = Math.max(0.6, Math.min(1.2, w / 1300));
+      camera.zoom = Math.max(0.55, Math.min(1.1, w / 1600));
       camera.updateProjectionMatrix();
     };
     fit();
     const ro = new ResizeObserver(fit); ro.observe(el);
+    const home = () => {
+      camera.position.set(29, 26, 26); controls.target.set(3, 0, 0); fit(); controls.update();
+    };
+    ctl.current = { controls, camera, rooms: roomCenters, home };
 
     // Tıklama ile ajan seçimi
     const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
@@ -315,7 +366,7 @@ export default function Office3D({ agents, target, onPick }:
         m.geometry?.dispose();
         (Array.isArray(m.material) ? m.material : m.material ? [m.material] : []).forEach((x) => x.dispose());
       });
-      wood.dispose(); renderer.dispose();
+      wood.dispose(); hatch.dispose(); renderer.dispose(); ctl.current = null;
       el.replaceChildren(); seats.current.clear();
     };
   }, []);
@@ -325,7 +376,12 @@ export default function Office3D({ agents, target, onPick }:
     const byCode = new Map(agents.map((a) => [a.code, a]));
     for (const [code, s] of seats.current) {
       const a = byCode.get(code);
-      s.working = !!a && a.active_tasks > 0;
+      s.real = !!a && a.active_tasks > 0;
+      const demo = demoCodes.includes(code);
+      s.working = s.real || demo;
+      s.bubble.textContent = s.real ? "çalışıyor…" : "DEMO";
+      s.bubble.classList.toggle("is-demo", demo && !s.real);
+      s.chip.parentElement?.classList.toggle("is-short", shortLabels && !s.working && target !== code);
       (s.chip.querySelector("span") as HTMLElement).textContent = a ? shortName(a.name) : code;
       s.chip.title = a ? `${a.name}: ${a.description}` : code;
       s.chip.classList.toggle("is-working", s.working);
@@ -336,7 +392,32 @@ export default function Office3D({ agents, target, onPick }:
       s.screen.color.set(s.working ? "#1d4ed8" : "#0f172a");
       s.group.visible = !!a;
     }
-  }, [agents, target]);
+  }, [agents, target, demoCodes, shortLabels]);
+
+  // Kamera modları: sinema (yavaş dönüş), tur (odaları sırayla gezer)
+  useEffect(() => {
+    const c = ctl.current;
+    if (!c) return;
+    const { controls, camera } = c;
+    controls.autoRotate = mode === "cinema"; controls.autoRotateSpeed = 0.6;
+    controls.minAzimuthAngle = mode === "cinema" ? -Infinity : Math.PI / 4 - 0.5;
+    controls.maxAzimuthAngle = mode === "cinema" ? Infinity : Math.PI / 4 + 0.5;
+    if (mode !== "tour") return;
+    let i = 0, raf = 0, from = controls.target.clone(), to = c.rooms[0], t0 = performance.now(), z0 = camera.zoom;
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / 1400), e = k * k * (3 - 2 * k);
+      const delta = from.clone().lerp(to, e).sub(controls.target);
+      controls.target.add(delta); camera.position.add(delta);
+      camera.zoom = z0 + (2.1 - z0) * e; camera.updateProjectionMatrix();
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    const next = () => { from = controls.target.clone(); to = c.rooms[i++ % c.rooms.length]; t0 = performance.now(); z0 = camera.zoom; step(); };
+    next();
+    const id = setInterval(next, 3200);
+    return () => { clearInterval(id); cancelAnimationFrame(raf); };
+  }, [mode]);
+
+  useEffect(() => { if (resetKey) ctl.current?.home(); }, [resetKey]);
 
   return <div ref={host} className="o3-host" aria-label="3D ofis görünümü. Fareyle yakınlaştırın ve kaydırın." />;
 }
