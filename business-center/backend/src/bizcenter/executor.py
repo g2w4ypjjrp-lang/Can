@@ -31,7 +31,9 @@ log = logging.getLogger("bizcenter.executor")
 ACTIONS = {
     "etsy.listing.update": {"platform": "etsy", "scope": "listings_w", "risk": "medium"},
     "youtube.video.update_metadata": {"platform": "youtube", "scope": yt.WRITE_SCOPE, "risk": "medium"},
+    "etsy.listing.create_draft": {"platform": "etsy", "scope": "listings_w", "risk": "low"},
 }
+WHO_MADE = ("i_did", "someone_else", "collective")
 EDITABLE = ("title", "description", "tags")
 
 
@@ -40,9 +42,36 @@ def payload_hash(action: str, payload: dict[str, Any]) -> str:
                                      ensure_ascii=False).encode()).hexdigest()
 
 
+def validate_draft(d: Any) -> None:
+    if not isinstance(d, dict):
+        raise ValueError("Taslak bilgisi eksik")
+    if not (isinstance(d.get("title"), str) and 1 <= len(d["title"].strip()) <= 140):
+        raise ValueError("Başlık 1-140 karakter olmalı")
+    if not (isinstance(d.get("description"), str) and 1 <= len(d["description"].strip()) <= 20000):
+        raise ValueError("Açıklama gerekli")
+    try:
+        price = float(d.get("price"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Fiyat sayı olmalı") from exc
+    if not 0.2 <= price <= 50000:
+        raise ValueError("Fiyat 0.20 ile 50000 arasında olmalı")
+    if not (isinstance(d.get("quantity"), int) and 1 <= d["quantity"] <= 999):
+        raise ValueError("Adet 1-999 olmalı")
+    if d.get("who_made") not in WHO_MADE or d.get("when_made") != "made_to_order":
+        raise ValueError("who_made (i_did/someone_else/collective) ve when_made=made_to_order olmalı")
+    if not (isinstance(d.get("taxonomy_id"), int) and d["taxonomy_id"] > 0):
+        raise ValueError("Etsy kategori kimliği (taxonomy_id) gerekli")
+    tags = d.get("tags") or []
+    if not isinstance(tags, list) or len(tags) > 13 or any(not isinstance(t, str) or len(t) > 20 for t in tags):
+        raise ValueError("En fazla 13 etiket, her biri en fazla 20 karakter")
+
+
 def validate_payload(action: str, p: dict[str, Any]) -> None:
     if action not in ACTIONS:
         raise ValueError("Desteklenmeyen işlem")
+    if action == "etsy.listing.create_draft":
+        validate_draft(p.get("draft"))
+        return
     changes = p.get("changes")
     if not isinstance(changes, dict) or not changes or set(changes) - set(EDITABLE):
         raise ValueError("Değişiklikler yalnızca başlık, açıklama ve etiket olabilir")
@@ -111,6 +140,18 @@ class Executor:
     async def _dispatch(self, a: dict[str, Any]) -> dict[str, Any]:
         p, org, spec = a["payload"], a["organization_id"], ACTIONS[a["action"]]
         token, account = await self._token(org, spec["platform"], spec["scope"])
+        if a["action"] == "etsy.listing.create_draft":
+            d = p["draft"]
+            async with EtsyClient(self.s.etsy_api_key, token, self.transport) as ec:
+                res = await ec.create_draft_listing(int(account), d)
+            shop = await self._q("select id from etsy_shops where organization_id=%s and etsy_shop_id=%s", org, int(account))
+            if shop and res.get("listing_id"):
+                await self._q(
+                    """insert into etsy_listings(organization_id, shop_id, etsy_listing_id, title, description, tags, price_amount,
+                           quantity, state, synced_at) values (%s,%s,%s,%s,%s,%s,%s,%s,'draft',now())
+                       on conflict (shop_id, etsy_listing_id) do nothing""",
+                    org, shop[0]["id"], res["listing_id"], d["title"], d["description"], d.get("tags") or [], d["price"], d["quantity"])
+            return {"listing_id": res.get("listing_id"), "state": res.get("state", "draft")}
         if a["action"] == "etsy.listing.update":
             own = await self._q("select 1 from etsy_listings where organization_id=%s and etsy_listing_id=%s", org, int(p["listing_id"]))
             if not own:
@@ -155,6 +196,8 @@ async def create_proposal(db: Database, org: Any, action: str, target_id: str, c
     """Onay önerisi oluşturur (API ve ajanlar ortak kullanır). 'Öncesi' durumu veritabanından okunur."""
     if action not in ACTIONS:
         raise ProposalError("Desteklenmeyen işlem")
+    if action == "etsy.listing.create_draft":
+        return await _create_draft_proposal(db, org, changes, reason, expected, expires_hours, user_id, agent_id, task_id)
     is_etsy = action.startswith("etsy")
     tid: Any = int(target_id) if is_etsy and str(target_id).isdigit() else str(target_id)
     payload = {("listing_id" if is_etsy else "video_id"): tid, "changes": changes}
@@ -176,6 +219,33 @@ async def create_proposal(db: Database, org: Any, action: str, target_id: str, c
             (org, task_id, agent_id, ACTIONS[action]["platform"], action, reason[:2000], expected[:2000], ACTIONS[action]["risk"],
              Jsonb({k: cur[k] for k in changes}), Jsonb(changes), Jsonb(payload), payload_hash(action, payload),
              expires_hours))).fetchone()
+        await conn.execute("insert into audit_logs(organization_id, actor_user_id, actor_agent_id, action, target_type, target_id)"
+                           " values (%s,%s,%s,'approval.proposed','approval',%s)", (org, user_id, agent_id, str(row["id"])))
+        await conn.commit()
+    return row["id"]
+
+
+async def _create_draft_proposal(db: Database, org: Any, draft: dict[str, Any], reason: str, expected: str, expires_hours: int,
+                                 user_id: str | None, agent_id: Any, task_id: Any) -> Any:
+    action = "etsy.listing.create_draft"
+    draft = {**draft, "title": str(draft.get("title", "")).strip(), "when_made": draft.get("when_made", "made_to_order"),
+             "who_made": draft.get("who_made", "i_did")}
+    payload = {"draft": draft}
+    try:
+        validate_payload(action, payload)
+    except ValueError as exc:
+        raise ProposalError(str(exc)) from exc
+    async with db.pool.connection() as conn:
+        shop = await (await conn.execute("select 1 from integrations where organization_id=%s and provider='etsy'"
+                                         " and status='connected'", (org,))).fetchone()
+        if not shop:
+            raise ProposalError("Etsy bağlı değil", 409)
+        row = await (await conn.execute(
+            """insert into approvals(organization_id, task_id, requested_by_agent_id, platform, action, reason, expected_outcome,
+                   risk_level, before_state, after_state, payload, payload_hash, expires_at)
+               values (%s,%s,%s,'etsy',%s,%s,%s,'low',null,%s,%s,%s, now() + make_interval(hours => %s)) returning id""",
+            (org, task_id, agent_id, action, reason[:2000], expected[:2000], Jsonb(draft), Jsonb(payload),
+             payload_hash(action, payload), expires_hours))).fetchone()
         await conn.execute("insert into audit_logs(organization_id, actor_user_id, actor_agent_id, action, target_type, target_id)"
                            " values (%s,%s,%s,'approval.proposed','approval',%s)", (org, user_id, agent_id, str(row["id"])))
         await conn.commit()

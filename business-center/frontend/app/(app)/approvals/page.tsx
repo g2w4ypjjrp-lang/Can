@@ -9,7 +9,8 @@ type Approval = { id: string; platform: string; action: string; reason: string; 
 const STATUS_TR: Record<string, string> = { pending: "Bekliyor", approved: "Onaylandı", rejected: "Reddedildi",
   expired: "Süresi doldu", executed: "Uygulandı", failed: "Başarısız" };
 const ACTION_TR: Record<string, string> = { "etsy.listing.update": "Etsy listelemesini güncelle",
-  "youtube.video.update_metadata": "YouTube video bilgilerini güncelle" };
+  "youtube.video.update_metadata": "YouTube video bilgilerini güncelle",
+  "etsy.listing.create_draft": "Etsy'de taslak listeleme oluştur" };
 const RISK: Record<string, string> = { low: "Düşük", medium: "Orta", high: "Yüksek", critical: "Kritik" };
 
 export default async function Approvals() {

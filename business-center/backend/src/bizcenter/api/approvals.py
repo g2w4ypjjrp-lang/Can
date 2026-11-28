@@ -43,6 +43,34 @@ async def propose(org_id: UUID, body: Proposal, user: CurrentUser = Depends(curr
     return {"id": aid, "status": "pending"}
 
 
+class DraftListing(BaseModel):
+    title: str = Field(min_length=1, max_length=140)
+    description: str = Field(min_length=1, max_length=20000)
+    price: float = Field(ge=0.2, le=50000)
+    quantity: int = Field(default=999, ge=1, le=999)
+    taxonomy_id: int = Field(gt=0)
+    tags: list[str] = Field(default_factory=list, max_length=13)
+    who_made: str = "i_did"
+    reason: str = Field(default="Yeni ürün", max_length=2000)
+
+
+@router.post("/organizations/{org_id}/approvals/etsy-draft", status_code=201)
+async def propose_draft(org_id: UUID, body: DraftListing, user: CurrentUser = Depends(current_user),
+                        db: Database = Depends(get_db)) -> dict[str, Any]:
+    from ..executor import ProposalError, create_proposal
+    async with db.user_tx(user) as conn:
+        ok = await (await conn.execute("select app.has_role(%s, array['owner','admin']) as ok", (org_id,))).fetchone()
+        if not ok or not ok["ok"]:
+            raise HTTPException(403, "Yönetici yetkisi gerekli")
+    draft = body.model_dump(exclude={"reason"}) | {"when_made": "made_to_order"}
+    try:
+        aid = await create_proposal(db, org_id, "etsy.listing.create_draft", "", draft, body.reason,
+                                    "Etsy'de taslak listeleme oluşur (yayınlanmaz)", user_id=user.id)
+    except ProposalError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
+    return {"id": aid, "status": "pending"}
+
+
 class Decision(BaseModel):
     approve: bool
     note: str | None = Field(default=None, max_length=2000)

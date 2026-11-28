@@ -1,3 +1,4 @@
+import { DraftListingForm } from "@/components/DraftListingForm";
 import { NotConnected, PageHeader, Stat, n } from "@/components/Page";
 import { ProposeEdit } from "@/components/ProposeEdit";
 import { QuickTask } from "@/components/QuickTask";
@@ -24,6 +25,7 @@ export default async function Etsy() {
         </>}
       </PageHeader>
       {!d.shop ? <NotConnected what="Etsy mağazası" /> : <>
+        {admin && <DraftListingForm orgId={org.id} currency={d.shop.currency} />}
         <div className="grid gap-4 sm:grid-cols-3">
           <Stat label="Aktif listeleme" value={n(d.listings.length)} />
           <Stat label="Son siparişler" value={n(d.orders.length)} />

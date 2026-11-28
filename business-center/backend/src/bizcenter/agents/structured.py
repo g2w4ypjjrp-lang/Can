@@ -31,6 +31,9 @@ SCHEMAS: dict[str, dict[str, Any]] = {
         {"title": _STR, "summary": _STR, "score": {"type": "integer"}, "sources": {"type": "array", "items": _STR}})}}),
     "etsy_proposals": _obj({"report": _STR, "proposals": {"type": "array", "items": _obj(
         {"listing_id": _STR, "new_title": _STR, "new_tags": _TAGS, "reason": _STR})}}),
+    "listing_drafts": _obj({"report": _STR, "drafts": {"type": "array", "items": _obj(
+        {"title": _STR, "description": _STR, "price": {"type": "number"}, "tags": _TAGS,
+         "taxonomy_id": {"type": "integer"}, "reason": _STR})}}),
     "yt_proposals": _obj({"report": _STR, "proposals": {"type": "array", "items": _obj(
         {"video_id": _STR, "new_title": _STR, "new_tags": _TAGS, "reason": _STR})}}),
 }
@@ -41,6 +44,9 @@ INSTRUCTIONS = {
     "etsy_proposals": ("Aşağıdaki GERÇEK listelemeleri incele. İyileştirilebilecek olanlar için 'proposals' ekle: listing_id verilen "
                        "listeden olmalı; değişmeyecek alan için new_title boş metin, new_tags boş liste olsun. Başlık ≤ 140 karakter, "
                        "tam 13 etiket, her etiket ≤ 20 karakter. En fazla 10 öneri. Bunlar yalnızca kullanıcı onayına sunulur."),
+    "listing_drafts": ("Hazırladığın her listelemeyi 'drafts' listesine ekle (en fazla 5). Başlık ≤ 140, en fazla 13 etiket "
+                       "(≤ 20 karakter), fiyat profildeki para biriminde, taxonomy_id Etsy kategori kimliği (emin değilsen "
+                       "raporda belirt). Bunlar Etsy'de yalnızca TASLAK olarak, kullanıcı onayından sonra oluşturulur."),
     "yt_proposals": ("Aşağıdaki GERÇEK videoları incele. İyileştirilebilecek olanlar için 'proposals' ekle: video_id verilen listeden "
                      "olmalı; değişmeyecek alan için new_title boş metin, new_tags boş liste olsun. Başlık ≤ 100 karakter. "
                      "En fazla 10 öneri. Bunlar yalnızca kullanıcı onayına sunulur."),
@@ -91,6 +97,18 @@ async def persist(db: Database, task: dict[str, Any], agent: dict[str, Any], kin
                      Jsonb([str(e)[:500] for e in i.get("sources", [])][:10])))
                 saved += 1
         await conn.commit()
+    if kind == "listing_drafts":
+        for d in (data.get("drafts") or [])[:5]:
+            draft = {"title": str(d.get("title", "")), "description": str(d.get("description", "")), "price": d.get("price"),
+                     "quantity": 999, "taxonomy_id": d.get("taxonomy_id"), "tags": [str(t) for t in d.get("tags") or []]}
+            try:
+                await create_proposal(db, org, "etsy.listing.create_draft", "", draft,
+                                      f"{agent['name']}: {str(d.get('reason', ''))[:1500]}",
+                                      "Etsy'de taslak listeleme oluşur (yayınlanmaz)", agent_id=agent["id"], task_id=task["id"])
+                proposed += 1
+            except ProposalError as exc:
+                rejected += 1
+                log.info("agent draft rejected: %s", exc)
     if kind in ("etsy_proposals", "yt_proposals"):
         action = "etsy.listing.update" if kind == "etsy_proposals" else "youtube.video.update_metadata"
         key = "listing_id" if kind == "etsy_proposals" else "video_id"

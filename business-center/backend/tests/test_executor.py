@@ -21,6 +21,9 @@ class FakeApis:
             self.writes.append((req.method, req.url.path, req.content.decode()))
         if req.url.path == "/v3/application/shops/555/listings/9001" and req.method == "PATCH":
             return httpx.Response(200, json={"listing_id": 9001, "title": "Yeni Başlık"})
+        if req.url.path == "/v3/application/shops/555/listings" and req.method == "POST":
+            self.writes.append(("POST", req.url.path, req.content.decode()))
+            return httpx.Response(201, json={"listing_id": 777, "state": "draft"})
         if req.url.path == "/youtube/v3/videos" and req.method == "GET":
             return httpx.Response(200, json={"items": [{"id": "v1", "snippet": {"title": "Eski", "description": "d",
                                                                                   "tags": ["a"], "categoryId": "22"}}]})
@@ -125,3 +128,23 @@ async def test_rejected_tampered_or_unauthorized_never_execute(dsn, admin):
         admin.execute("insert into organization_members values (%s,%s,'viewer',now())", (org, viewer))
         assert (await c.post(f"/api/organizations/{org}/approvals", headers=auth(viewer),
                              json=body("etsy.listing.update", "9001", {"title": "x"}))).status_code == 403
+
+
+async def test_etsy_draft_listing_is_created_only_as_draft_after_approval(dsn, admin):
+    from urllib.parse import parse_qs
+    fake = FakeApis()
+    app = await make(dsn, fake)
+    async with app.router.lifespan_context(app), AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        uid, org = await setup(c, admin, "ex3@test", ["listings_w"], [])
+        draft = {"title": "Minimalist Dağ Posteri", "description": "A4 / A3 baskı", "price": 24.9, "quantity": 50,
+                 "taxonomy_id": 1027, "tags": ["poster", "dağ"]}
+        bad = await c.post(f"/api/organizations/{org}/approvals/etsy-draft", headers=auth(uid), json={**draft, "tags": ["x" * 21]})
+        assert bad.status_code == 422
+        r = await c.post(f"/api/organizations/{org}/approvals/etsy-draft", headers=auth(uid), json=draft)
+        assert r.status_code == 201 and fake.writes == []
+        d = (await c.post(f"/api/approvals/{r.json()['id']}/decision", headers=auth(uid), json={"approve": True})).json()
+        assert d["status"] == "executed"
+        form = parse_qs(fake.writes[-1][2])
+        assert form["state"] == ["draft"] and form["title"] == ["Minimalist Dağ Posteri"] and form["when_made"] == ["made_to_order"]
+        row = admin.execute("select state, title from etsy_listings where etsy_listing_id=777 and organization_id=%s", (org,)).fetchone()
+        assert row["state"] == "draft"

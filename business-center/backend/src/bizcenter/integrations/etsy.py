@@ -115,5 +115,14 @@ class EtsyClient:
             data["tags"] = ",".join(fields["tags"])
         return await self._req("PATCH", f"{API}/application/shops/{shop_id}/listings/{listing_id}", data=data)
 
+    async def create_draft_listing(self, shop_id: int, d: dict[str, Any]) -> dict[str, Any]:
+        """Etsy'de TASLAK listeleme oluşturur (yayınlanmaz). listings_w izni gerekir."""
+        data = {"quantity": d["quantity"], "title": d["title"], "description": d["description"], "price": d["price"],
+                "who_made": d["who_made"], "when_made": d["when_made"], "taxonomy_id": d["taxonomy_id"],
+                "is_supply": "false", "type": "physical", "state": "draft"}
+        if d.get("tags"):
+            data["tags"] = ",".join(d["tags"])
+        return await self._req("POST", f"{API}/application/shops/{shop_id}/listings", data=data)
+
     async def receipts(self, shop_id: int, min_created: int, max_items: int = 2000) -> list[dict[str, Any]]:
         return await self._paged(f"{API}/application/shops/{shop_id}/receipts", {"min_created": min_created}, max_items)

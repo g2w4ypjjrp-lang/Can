@@ -174,7 +174,8 @@ _SPECS = [
          "Yayını 'Onaya sunulacak öneri' olarak hazırla"],
         ["Listeleme taslağı (tüm alanlar)", "Varyasyon ve fiyat tablosu", "Fotoğraf sırası",
          "Onay paketi: işlem, neden, beklenen sonuç, risk"],
-        ["Fiyat maliyetin altına düşüyor mu?", "Tüm zorunlu alanlar dolu mu?"]),
+        ["Fiyat maliyetin altına düşüyor mu?", "Tüm zorunlu alanlar dolu mu?"],
+        structured="listing_drafts"),
     AgentSpec(
         "printify", "Printify Agent",
         ["Printify kataloğu: blueprint, baskı sağlayıcı, üretim süresi, kalite farkları",

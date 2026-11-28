@@ -113,7 +113,7 @@ bir blokta modele verilir. Talimat olarak yorumlanmaz ve araç yetkisini genişl
 | Gizli bilgiler | Yalnızca ortam değişkenleri. Frontend'e sadece `NEXT_PUBLIC_*` herkese açık değerler gider. |
 | CSRF | API çerez değil Bearer token kullanır. CORS yalnızca tanımlı kökenlere açık. |
 | XSS | React kaçışlaması, `dangerouslySetInnerHTML` yok, CSP ve güvenlik başlıkları. |
-| Rate limit | IP başına dakikalık sınır (P1: süreç içi; P2: Redis). |
+| Rate limit | IP başına dakikalık sınır; Redis varsa tüm kopyalar arasında ortak, Redis erişilemezse hizmet kesilmez. |
 | Prompt injection | Harici veri ayrı blokta, ajanlarda en az araç yetkisi, kritik işlemler onay kapısında. |
 
 ## 6. Entegrasyon gerçekleri (bağlamadan önce doğrulanacak)
@@ -162,7 +162,7 @@ Eksik veri (Etsy ücretleri, Printify maliyeti, çoklu para birimi) listelenir. 
 yalnızca eksik veri yoksa `verified=true` olur ve dashboard yalnızca doğrulanmış kârı gösterir.
 
 ### Onaylı yazma işlemleri
-Desteklenen otomatik işlemler: `etsy.listing.update` ve `youtube.video.update_metadata` (başlık, açıklama, etiket).
+Desteklenen otomatik işlemler: `etsy.listing.update`, `youtube.video.update_metadata` (başlık, açıklama, etiket) ve `etsy.listing.create_draft` (yalnızca taslak; yayına alma ve fotoğraf Etsy panelinden).
 Akış: öneri (`POST /organizations/{id}/approvals`; "öncesi" veritabanından okunur) → kullanıcı onayı → `Executor`.
 Executor çağrıdan önce şunları yeniden doğrular: durum, payload parmak izi, işlem şeması, entegrasyonun yazma izni
 (`listings_w` / `youtube.force-ssl`), hedefin organizasyona ait olması. Sonuç `executed`/`failed` olarak, nedeniyle

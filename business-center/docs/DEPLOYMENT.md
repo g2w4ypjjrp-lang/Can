@@ -65,7 +65,6 @@ Yeni migration varsa önce yedek alın, sonra SQL Editor'da çalıştırın.
 - [ ] Yedek geri yükleme provası yapıldı
 
 ## Bilinen sınırlar
-* Hız sınırı süreç içidir; birden fazla backend kopyasında Redis tabanlı sınıra geçilmeli.
 * Bağlantılar yalnızca okuma yapar. Video yayınlama, listeleme oluşturma ve fiyat değişikliği gibi yazma işlemleri henüz yok.
 
 ## 8. Platform bağlantıları

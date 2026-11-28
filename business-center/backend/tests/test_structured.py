@@ -50,3 +50,15 @@ async def test_seo_agent_sees_real_listings_and_proposes_for_approval(env, admin
     # öneri hiçbir şeyi değiştirmedi
     assert admin.execute("select title from etsy_listings where etsy_listing_id=501 and organization_id=%s",
                          (org,)).fetchone()["title"] == "Poster"
+
+
+async def test_listing_manager_drafts_go_to_approval(env, admin):
+    def seed(org):
+        admin.execute("insert into integrations(organization_id, provider, status) values (%s,'etsy','connected')", (org,))
+    llm = FakeLLM(structured={"drafts": [
+        {"title": "Minimalist Dağ Posteri", "description": "Baskı", "price": 24.9, "tags": ["poster"], "taxonomy_id": 1027, "reason": "Yeni seri"},
+        {"title": "x" * 200, "description": "d", "price": 10, "tags": [], "taxonomy_id": 1, "reason": "kural dışı"}]})
+    _, t, approvals = await run_direct(env, admin, "st3@test", "etsy_listing_manager", llm, seed)
+    assert len(approvals) == 1 and approvals[0]["action"] == "etsy.listing.create_draft"
+    assert approvals[0]["before_state"] is None and approvals[0]["after_state"]["title"] == "Minimalist Dağ Posteri"
+    assert "1 öneri kurallara uymadığı" in t["result"]["report"]

@@ -2,6 +2,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +17,7 @@ from .scheduler import tick
 
 
 def create_app(settings: Settings | None = None, db: Database | None = None,
-               dispatcher: Dispatcher | None = None) -> FastAPI:
+               dispatcher: Dispatcher | None = None, redis: Any = None) -> FastAPI:
     settings = settings or get_settings()
     problems = settings.production_problems()
     if problems:
@@ -44,7 +45,10 @@ def create_app(settings: Settings | None = None, db: Database | None = None,
     app.state.settings = settings
     app.state.dispatcher = dispatcher or (
         CeleryDispatcher() if settings.redis_url else InlineDispatcher(make_orchestrator(settings, database)))
-    app.add_middleware(RateLimitMiddleware, per_minute=settings.rate_limit_per_minute)
+    if redis is None and settings.redis_url:
+        from redis.asyncio import Redis
+        redis = Redis.from_url(settings.redis_url, socket_timeout=0.5, socket_connect_timeout=0.5)
+    app.add_middleware(RateLimitMiddleware, per_minute=settings.rate_limit_per_minute, redis=redis)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
                        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
                        allow_headers=["authorization", "content-type", "x-request-id"])

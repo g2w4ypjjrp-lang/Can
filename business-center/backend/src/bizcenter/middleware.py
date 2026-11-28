@@ -3,6 +3,7 @@ import logging
 import time
 import uuid
 from collections import deque
+from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -53,17 +54,36 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """İstemci IP'si başına kayan pencere sınırı (tek süreç). Çok süreçte Redis'e taşınacak."""
+    """İstemci IP'si başına dakikalık sınır. Redis varsa tüm kopyalar arasında ortak (sabit pencere),
+    yoksa süreç içi kayan pencere. Redis erişilemezse istek geçirilir (hizmet kesilmez) ve loglanır."""
 
-    def __init__(self, app, per_minute: int) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, app, per_minute: int, redis: Any = None) -> None:  # type: ignore[no-untyped-def]
         super().__init__(app)
         self.limit = per_minute
         self.hits: dict[str, deque[float]] = {}
+        self.redis = redis
+
+    async def _redis_count(self, key: str) -> int | None:
+        bucket = f"rl:{key}:{int(time.time() // 60)}"
+        try:
+            pipe = self.redis.pipeline()
+            pipe.incr(bucket)
+            pipe.expire(bucket, 70)
+            count, _ = await pipe.execute()
+            return int(count)
+        except Exception:
+            log.warning("rate limit redis unavailable; allowing request")
+            return None
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.url.path.startswith("/health"):
             return await call_next(request)
         key = request.client.host if request.client else "unknown"
+        if self.redis is not None:
+            count = await self._redis_count(key)
+            if count is not None and count > self.limit:
+                return JSONResponse({"detail": "Çok fazla istek"}, status_code=429, headers={"retry-after": "60"})
+            return await call_next(request)
         now = time.monotonic()
         q = self.hits.setdefault(key, deque())
         while q and now - q[0] > 60:
