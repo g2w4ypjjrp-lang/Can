@@ -178,7 +178,7 @@ def _etsy_settings(request: Request) -> Any:
 
 
 @router.post("/organizations/{org_id}/integrations/etsy/start")
-async def etsy_start(org_id: UUID, request: Request, user: CurrentUser = Depends(current_user),
+async def etsy_start(org_id: UUID, request: Request, write: bool = False, user: CurrentUser = Depends(current_user),
                      db: Database = Depends(get_db)) -> dict[str, str]:
     s, cipher = _etsy_settings(request), _cipher(request)
     verifier, challenge = pkce_pair()
@@ -190,8 +190,9 @@ async def etsy_start(org_id: UUID, request: Request, user: CurrentUser = Depends
             " on conflict (organization_id, key) do update set value=excluded.value, updated_by=excluded.updated_by,"
             " updated_at=now()",
             (org_id, Jsonb({"state_hash": hashlib.sha256(state.encode()).hexdigest(), "user": user.id,
-                            "verifier": cipher.encrypt(verifier).decode(), "exp": int(time.time()) + 600}), user.id))
-    return {"url": authorize_url(s.etsy_keystring, s.etsy_redirect_uri, state, challenge)}
+                            "verifier": cipher.encrypt(verifier).decode(), "exp": int(time.time()) + 600,
+                            "write": write}), user.id))
+    return {"url": authorize_url(s.etsy_keystring, s.etsy_redirect_uri, state, challenge, write)}
 
 
 class EtsyCallback(BaseModel):
@@ -231,7 +232,8 @@ async def etsy_callback(org_id: UUID, body: EtsyCallback, request: Request, user
                on conflict (organization_id, provider) do update set status='connected',
                  external_account_id=excluded.external_account_id, display_name=excluded.display_name,
                  scopes=excluded.scopes, last_error=null returning id""",
-            (org_id, str(me["shop_id"]), shop.get("shop_name", ""), ["shops_r", "listings_r", "transactions_r"]))).fetchone()
+            (org_id, str(me["shop_id"]), shop.get("shop_name", ""),
+             ["shops_r", "listings_r", "transactions_r"] + (["listings_w"] if p.get("write") else [])))).fetchone()
         await conn.execute(
             """insert into etsy_shops(organization_id, integration_id, etsy_shop_id, name, currency) values (%s,%s,%s,%s,%s)
                on conflict (organization_id, etsy_shop_id) do update set name=excluded.name, currency=excluded.currency,
@@ -364,7 +366,7 @@ def _yt_settings(request: Request) -> Any:
 
 
 @router.post("/organizations/{org_id}/integrations/youtube/start")
-async def youtube_start(org_id: UUID, request: Request, user: CurrentUser = Depends(current_user),
+async def youtube_start(org_id: UUID, request: Request, write: bool = False, user: CurrentUser = Depends(current_user),
                         db: Database = Depends(get_db)) -> dict[str, str]:
     s, cipher = _yt_settings(request), _cipher(request)
     verifier, challenge = pkce_pair()
@@ -376,8 +378,9 @@ async def youtube_start(org_id: UUID, request: Request, user: CurrentUser = Depe
             " on conflict (organization_id, key) do update set value=excluded.value, updated_by=excluded.updated_by,"
             " updated_at=now()",
             (org_id, Jsonb({"state_hash": hashlib.sha256(state.encode()).hexdigest(), "user": user.id,
-                            "verifier": cipher.encrypt(verifier).decode(), "exp": int(time.time()) + 600}), user.id))
-    return {"url": yt.authorize_url(s.google_client_id, s.youtube_redirect_uri, state, challenge)}
+                            "verifier": cipher.encrypt(verifier).decode(), "exp": int(time.time()) + 600,
+                            "write": write}), user.id))
+    return {"url": yt.authorize_url(s.google_client_id, s.youtube_redirect_uri, state, challenge, write)}
 
 
 @router.post("/organizations/{org_id}/integrations/youtube/callback")

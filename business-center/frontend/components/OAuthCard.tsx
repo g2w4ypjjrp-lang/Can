@@ -21,9 +21,9 @@ export function OAuthCard({ provider, orgId, state, canEdit }: { provider: Provi
   const base = `/api/organizations/${orgId}/integrations/${provider}`;
   const connected = state.status === "connected" || state.status === "error";
 
-  async function start() {
+  async function start(write = false) {
     setBusy(true); setMsg(null);
-    const r = await clientApi(base + "/start", { method: "POST" });
+    const r = await clientApi(base + `/start${write ? "?write=true" : ""}`, { method: "POST" });
     if (!r.ok) { setBusy(false); return setMsg({ ok: false, text: r.error ?? "Başlatılamadı" }); }
     window.location.assign(r.data.url);   // platformun izin sayfası
   }
@@ -45,13 +45,15 @@ export function OAuthCard({ provider, orgId, state, canEdit }: { provider: Provi
                 className="rounded-xl bg-brand px-4 py-2 text-white disabled:opacity-60">{busy ? "Çalışıyor…" : "Senkronla"}</button>
               <button disabled={busy} onClick={() => confirm(`${t.name} bağlantısı kesilsin ve tokenlar silinsin mi?`) && act("", "DELETE", () => "Bağlantı kesildi")}
                 className="rounded-xl border border-line px-4 py-2">Bağlantıyı kes</button>
+              <button disabled={busy} onClick={() => start(true)} title="Onayladığınız başlık/açıklama/etiket değişikliklerinin uygulanabilmesi için"
+                className="rounded-xl border border-line px-4 py-2">Yazma izniyle yeniden bağlan</button>
             </div>
           )}
         </>
       ) : canEdit ? (
         <>
           <p className="text-muted">{t.intro}</p>
-          <button disabled={busy} onClick={start} className="rounded-xl bg-brand px-4 py-2 text-white disabled:opacity-60">
+          <button disabled={busy} onClick={() => start()} className="rounded-xl bg-brand px-4 py-2 text-white disabled:opacity-60">
             {busy ? "Yönlendiriliyor…" : `${t.name} bağla`}</button>
         </>
       ) : <p className="text-muted">Bağlamak için yönetici yetkisi gerekir.</p>}

@@ -15,6 +15,7 @@ ANALYTICS = "https://youtubeanalytics.googleapis.com/v2/reports"
 SCOPES = ["https://www.googleapis.com/auth/youtube.readonly",
           "https://www.googleapis.com/auth/yt-analytics.readonly",
           "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"]
+WRITE_SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl"
 
 
 class YouTubeError(Exception):
@@ -23,9 +24,10 @@ class YouTubeError(Exception):
         self.status = status
 
 
-def authorize_url(client_id: str, redirect_uri: str, state: str, challenge: str) -> str:
+def authorize_url(client_id: str, redirect_uri: str, state: str, challenge: str, write: bool = False) -> str:
     return AUTH_URL + "?" + urlencode({
-        "client_id": client_id, "redirect_uri": redirect_uri, "response_type": "code", "scope": " ".join(SCOPES),
+        "client_id": client_id, "redirect_uri": redirect_uri, "response_type": "code",
+        "scope": " ".join(SCOPES + ([WRITE_SCOPE] if write else [])),
         "access_type": "offline", "prompt": "consent", "include_granted_scopes": "true", "state": state,
         "code_challenge": challenge, "code_challenge_method": "S256"})
 
@@ -83,6 +85,19 @@ class YouTubeClient:
             return []
         data = await self._req("GET", f"{DATA}/videos", params={"part": "snippet,statistics,status", "id": ",".join(ids)})
         return data.get("items", [])
+
+    async def update_video_snippet(self, video_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """Başlık/açıklama/etiket günceller. snippet tamamen gönderilmeli; önce mevcut hali okunur."""
+        cur = await self._req("GET", f"{DATA}/videos", params={"part": "snippet", "id": video_id})
+        items = cur.get("items") or []
+        if not items:
+            raise YouTubeError("Video bulunamadı", 404)
+        sn = items[0]["snippet"]
+        body = {"id": video_id, "snippet": {"title": fields.get("title", sn["title"]),
+                                             "description": fields.get("description", sn.get("description", "")),
+                                             "tags": fields.get("tags", sn.get("tags", [])),
+                                             "categoryId": sn["categoryId"]}}
+        return await self._req("PUT", f"{DATA}/videos", params={"part": "snippet"}, json=body)
 
     async def daily_report(self, start: str, end: str, with_revenue: bool) -> dict[str, Any]:
         metrics = "views,estimatedMinutesWatched,subscribersGained,subscribersLost"

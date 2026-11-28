@@ -1,4 +1,5 @@
 import { NotConnected, PageHeader, Stat, n } from "@/components/Page";
+import { ProposeEdit } from "@/components/ProposeEdit";
 import { QuickTask } from "@/components/QuickTask";
 import { api } from "@/lib/api";
 import { appContext } from "@/lib/context";
@@ -33,10 +34,12 @@ export default async function Etsy() {
             <h2 className="border-b border-line p-4 font-semibold">Listelemeler</h2>
             <ul className="max-h-[480px] divide-y divide-line overflow-auto">
               {d.listings.map((l) => (
-                <li key={l.etsy_listing_id} className="flex items-center gap-3 p-3 text-sm">
+                <li key={l.etsy_listing_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3 text-sm">
                   <a href={`https://www.etsy.com/listing/${l.etsy_listing_id}`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate hover:underline">{l.title}</a>
                   <span className={`text-xs ${(l.tags?.length ?? 0) < 13 ? "text-amber-700" : "text-muted"}`}>{l.tags?.length ?? 0}/13 etiket</span>
                   <span className="tabular-nums">{money(l.price_amount, l.currency)}</span>
+                  {admin && <div className="w-full"><ProposeEdit orgId={org.id} action="etsy.listing.update" targetId={String(l.etsy_listing_id)}
+                    title={l.title} tags={l.tags ?? []} maxTitle={140} maxTags={13} /></div>}
                 </li>
               ))}
               {!d.listings.length && <li className="p-4 text-sm text-muted">Listeleme yok. API Integrations'tan senkronlayın.</li>}

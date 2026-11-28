@@ -160,3 +160,11 @@ sınırı doluysa çalıştırma atlanır ve bildirim gönderilir. Kurallar kapa
 `finance.py` saf fonksiyonlarla hesaplar. Para birimleri birleştirilmez, vergi ayrı raporlanır.
 Eksik veri (Etsy ücretleri, Printify maliyeti, çoklu para birimi) listelenir. Kayıtlı rapor
 yalnızca eksik veri yoksa `verified=true` olur ve dashboard yalnızca doğrulanmış kârı gösterir.
+
+### Onaylı yazma işlemleri
+Desteklenen otomatik işlemler: `etsy.listing.update` ve `youtube.video.update_metadata` (başlık, açıklama, etiket).
+Akış: öneri (`POST /organizations/{id}/approvals`; "öncesi" veritabanından okunur) → kullanıcı onayı → `Executor`.
+Executor çağrıdan önce şunları yeniden doğrular: durum, payload parmak izi, işlem şeması, entegrasyonun yazma izni
+(`listings_w` / `youtube.force-ssl`), hedefin organizasyona ait olması. Sonuç `executed`/`failed` olarak, nedeniyle
+birlikte kaydedilir. Yürütücüsü olmayan işlemler (ör. fiyat değişikliği) onaylansa da otomatik uygulanmaz; elle yapılır.
+Yazma izni varsayılan olarak istenmez; "Yazma izniyle yeniden bağlan" ile ayrıca verilir.

@@ -8,6 +8,8 @@ type Approval = { id: string; platform: string; action: string; reason: string; 
 
 const STATUS_TR: Record<string, string> = { pending: "Bekliyor", approved: "Onaylandı", rejected: "Reddedildi",
   expired: "Süresi doldu", executed: "Uygulandı", failed: "Başarısız" };
+const ACTION_TR: Record<string, string> = { "etsy.listing.update": "Etsy listelemesini güncelle",
+  "youtube.video.update_metadata": "YouTube video bilgilerini güncelle" };
 const RISK: Record<string, string> = { low: "Düşük", medium: "Orta", high: "Yüksek", critical: "Kritik" };
 
 export default async function Approvals() {
@@ -31,7 +33,7 @@ export default async function Approvals() {
               <span className="rounded bg-canvas px-2 py-0.5">Durum: {STATUS_TR[a.status] ?? a.status}</span>
               <span className="text-muted">Son: {new Date(a.expires_at).toLocaleString("tr-TR")}</span>
             </div>
-            <h2 className="mt-2 font-semibold">{a.action}</h2>
+            <h2 className="mt-2 font-semibold">{ACTION_TR[a.action] ?? a.action}</h2>
             <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
               <div><dt className="text-muted">Neden</dt><dd>{a.reason}</dd></div>
               <div><dt className="text-muted">Beklenen sonuç</dt><dd>{a.expected_outcome}</dd></div>

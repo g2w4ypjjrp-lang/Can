@@ -16,6 +16,7 @@ import httpx
 AUTH_URL = "https://www.etsy.com/oauth/connect"
 API = "https://api.etsy.com/v3"
 SCOPES = ["shops_r", "listings_r", "transactions_r"]
+WRITE_SCOPES = ["listings_w"]
 
 
 class EtsyError(Exception):
@@ -28,9 +29,10 @@ def pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
-def authorize_url(keystring: str, redirect_uri: str, state: str, challenge: str) -> str:
+def authorize_url(keystring: str, redirect_uri: str, state: str, challenge: str, write: bool = False) -> str:
     return AUTH_URL + "?" + urlencode({
-        "response_type": "code", "client_id": keystring, "redirect_uri": redirect_uri, "scope": " ".join(SCOPES),
+        "response_type": "code", "client_id": keystring, "redirect_uri": redirect_uri,
+        "scope": " ".join(SCOPES + (WRITE_SCOPES if write else [])),
         "state": state, "code_challenge": challenge, "code_challenge_method": "S256"})
 
 
@@ -102,6 +104,16 @@ class EtsyClient:
 
     async def listings(self, shop_id: int, max_items: int = 1000) -> list[dict[str, Any]]:
         return await self._paged(f"{API}/application/shops/{shop_id}/listings", {"state": "active"}, max_items)
+
+    async def get_listing(self, listing_id: int) -> dict[str, Any]:
+        return await self._req("GET", f"{API}/application/listings/{listing_id}")
+
+    async def update_listing(self, shop_id: int, listing_id: int, fields: dict[str, Any]) -> dict[str, Any]:
+        """Başlık / açıklama / etiket günceller (listings_w izni gerekir)."""
+        data: dict[str, Any] = {k: v for k, v in fields.items() if k in ("title", "description")}
+        if "tags" in fields:
+            data["tags"] = ",".join(fields["tags"])
+        return await self._req("PATCH", f"{API}/application/shops/{shop_id}/listings/{listing_id}", data=data)
 
     async def receipts(self, shop_id: int, min_created: int, max_items: int = 2000) -> list[dict[str, Any]]:
         return await self._paged(f"{API}/application/shops/{shop_id}/receipts", {"min_created": min_created}, max_items)
