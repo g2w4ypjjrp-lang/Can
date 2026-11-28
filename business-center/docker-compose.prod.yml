@@ -1,0 +1,26 @@
+# Production eki:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+services:
+  backend:
+    ports: !reset []
+    environment:
+      BC_ENVIRONMENT: production
+  frontend:
+    ports: !reset []
+  worker:
+    environment:
+      BC_ENVIRONMENT: production
+  beat:
+    environment:
+      BC_ENVIRONMENT: production
+  caddy:
+    image: caddy:2.8-alpine
+    ports: ["80:80", "443:443"]
+    env_file: .env
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    restart: unless-stopped
+    depends_on: [frontend, backend]
+
+volumes:
+  caddy-data:

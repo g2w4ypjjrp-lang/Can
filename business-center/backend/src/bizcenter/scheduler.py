@@ -51,11 +51,28 @@ def valid_cron(cron: str) -> bool:
     return croniter.is_valid(cron) and len(cron.split()) == 5
 
 
-async def tick(db: Database, dispatcher: Dispatcher, max_active: int, now: datetime | None = None) -> dict[str, Any]:
+async def tick(db: Database, dispatcher: Dispatcher, max_active: int, now: datetime | None = None,
+               task_timeout_minutes: int = 30) -> dict[str, Any]:
     now = now or datetime.now(UTC)
     started: list[Any] = []
     skipped = 0
     async with db.pool.connection() as conn:
+        # Takılı görevler: çalışan çöktüyse görev sonsuza kadar "çalışıyor" görünmesin.
+        cur = await conn.execute(
+            """update tasks set status='failed', error='Zaman aşımı: görev ' || %s || ' dakikada tamamlanmadı',
+                      updated_at=now()
+                where status in ('running','waiting_qc') and updated_at < %s - make_interval(mins => %s)
+                returning id, organization_id, title, created_by""", (task_timeout_minutes, now, task_timeout_minutes))
+        reaped = await cur.fetchall()
+        for t in reaped:
+            await conn.execute("update agent_runs set status='failed', error='Zaman aşımı', finished_at=now()"
+                               " where task_id=%s and status='running'", (t["id"],))
+            await conn.execute("update task_steps set status='failed', updated_at=now()"
+                               " where task_id=%s and status='running'", (t["id"],))
+            await conn.execute(
+                "insert into notifications(organization_id, user_id, kind, title, body, link)"
+                " values (%s,%s,'task_failed',%s,'Görev zaman aşımına uğradı.',%s)",
+                (t["organization_id"], t["created_by"], f"Görev başarısız: {t['title']}"[:200], f"/tasks/{t['id']}"))
         cur = await conn.execute("select app.expire_approvals() as n")
         expired = (await cur.fetchone() or {}).get("n", 0)
         cur = await conn.execute(
@@ -104,4 +121,4 @@ async def tick(db: Database, dispatcher: Dispatcher, max_active: int, now: datet
     if expired or started or skipped:
         log.info("scheduler tick", extra={"extra_fields": {"expired": expired, "started": len(started),
                                                             "skipped": skipped}})
-    return {"expired_approvals": expired, "started": started, "skipped": skipped}
+    return {"expired_approvals": expired, "started": started, "skipped": skipped, "reaped": len(reaped)}

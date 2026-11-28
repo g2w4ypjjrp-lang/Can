@@ -1,0 +1,15 @@
+# Otomatik HTTPS (Let's Encrypt). PANEL_DOMAIN ve API_DOMAIN .env içinde tanımlanır.
+{$PANEL_DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	reverse_proxy frontend:3000
+}
+
+{$API_DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	request_body {
+		max_size 1MB
+	}
+	reverse_proxy backend:8000
+}

@@ -18,6 +18,9 @@ from .scheduler import tick
 def create_app(settings: Settings | None = None, db: Database | None = None,
                dispatcher: Dispatcher | None = None) -> FastAPI:
     settings = settings or get_settings()
+    problems = settings.production_problems()
+    if problems:
+        raise RuntimeError("Güvensiz production ayarları:\n- " + "\n- ".join(problems))
     database = db or Database(settings.database_url, settings.db_pool_max)
 
     @asynccontextmanager
@@ -55,7 +58,8 @@ def create_app(settings: Settings | None = None, db: Database | None = None,
 async def _scheduler_loop(app: FastAPI) -> None:
     while True:
         try:
-            await tick(app.state.db, app.state.dispatcher, app.state.settings.max_active_tasks_per_org)
+            await tick(app.state.db, app.state.dispatcher, app.state.settings.max_active_tasks_per_org,
+                       task_timeout_minutes=app.state.settings.task_timeout_minutes)
         except Exception:
             logging.getLogger("bizcenter.scheduler").exception("scheduler tick failed")
         await asyncio.sleep(60)

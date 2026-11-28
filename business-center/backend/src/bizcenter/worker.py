@@ -37,7 +37,8 @@ async def _tick() -> None:
     db = Database(settings.database_url, 2)
     await db.open()
     try:
-        await tick(db, CeleryDispatcher(), settings.max_active_tasks_per_org)
+        await tick(db, CeleryDispatcher(), settings.max_active_tasks_per_org,
+                   task_timeout_minutes=settings.task_timeout_minutes)
     finally:
         await db.close()
 

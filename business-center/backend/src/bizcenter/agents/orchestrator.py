@@ -112,6 +112,7 @@ class Orchestrator:
         """Bir ajan çağrısı: agent_runs kaydı + bütçe kontrolü."""
         if spent[0] >= self.max_cost:
             raise BudgetExceeded
+        await self._exec("update tasks set updated_at=now() where id=%s", task["id"])  # canlılık sinyali
         run = (await self._exec(
             "insert into agent_runs(organization_id, agent_id, task_id, status, model)"
             " values (%s,%s,%s,'running',%s) returning id",

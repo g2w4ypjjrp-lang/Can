@@ -140,7 +140,7 @@ Sıra kararı: dış platform bağlantıları (YouTube, Etsy, Printify OAuth ve 
 | P4 Etsy | OAuth, Printify, araştırma, tasarım, SEO, listeleme, siparişler, finans, yayın onayı | ⏳ |
 | **P5 Kalite Kontrol** | QC ajanları, telif riski, finansal doğrulama, test otomasyonu | ✅ QC döngüsü (kalırsa 1 düzeltme), telif riskinde insan incelemesi, CI |
 | **P6 Otomasyon** | Zamanlanmış görevler, günlük/haftalık/aylık raporlar, bildirimler | ✅ Cron kuralları (10 şablon, varsayılan kapalı), Celery beat, onay süre aşımı, bildirimler |
-| P7 Production | Performans, güvenlik testi, yedekleme, izleme, dağıtım, dokümantasyon | ⏳ |
+| **P7 Production** | Performans, güvenlik testi, yedekleme, izleme, dağıtım, dokümantasyon | ✅ Production ayar denetimi, takılı görev temizleyici, beat servisi, Caddy (HTTPS), yedek betiği, [DEPLOYMENT.md](DEPLOYMENT.md). Gerçek sunucuda denenmedi |
 
 ### Kalite kontrol akışı (P5)
 QC ajanları yapılandırılmış karar döndürür: `verdict` (pass/fail), `issues`, `needs_human_review`.

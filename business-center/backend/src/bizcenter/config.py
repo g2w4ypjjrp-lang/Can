@@ -28,6 +28,28 @@ class Settings(BaseSettings):
     redis_url: str = ""                  # boşsa görevler API süreci içinde çalışır (geliştirme)
 
 
+    task_timeout_minutes: int = 30           # bu süreden uzun "çalışıyor" kalan görev başarısız sayılır
+
+    def production_problems(self) -> list[str]:
+        """Production'da güvenli olmayan ayarları listeler (boşsa sorun yok)."""
+        if self.environment != "production":
+            return []
+        p: list[str] = []
+        if not self.supabase_url and not self.supabase_jwt_secret:
+            p.append("BC_SUPABASE_URL (veya BC_SUPABASE_JWT_SECRET) gerekli")
+        if self.supabase_url and not self.supabase_url.startswith("https://"):
+            p.append("BC_SUPABASE_URL https:// ile başlamalı")
+        if self.supabase_jwt_secret and len(self.supabase_jwt_secret) < 32:
+            p.append("BC_SUPABASE_JWT_SECRET en az 32 karakter olmalı")
+        if any(o == "*" or "localhost" in o or o.startswith("http://") for o in self.cors_origins):
+            p.append("BC_CORS_ORIGINS yalnızca https:// alan adlarını içermeli")
+        if not self.redis_url:
+            p.append("BC_REDIS_URL gerekli (görevler çalışan süreçlerde yürütülür)")
+        if self.inline_scheduler:
+            p.append("BC_INLINE_SCHEDULER production'da kapalı olmalı (Celery beat kullanılır)")
+        return p
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()  # type: ignore[call-arg]

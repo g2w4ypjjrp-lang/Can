@@ -32,6 +32,16 @@ services:
     restart: unless-stopped
     depends_on: [redis]
 
+  # Zamanlayıcı: her dakika otomasyonları, onay süre aşımını ve takılı görevleri işler. Yalnızca 1 kopya çalışmalı.
+  beat:
+    build: ./backend
+    env_file: .env
+    environment:
+      BC_REDIS_URL: redis://redis:6379/0
+    command: ["celery", "-A", "bizcenter.worker", "beat", "-l", "info", "-s", "/tmp/celerybeat-schedule"]
+    restart: unless-stopped
+    depends_on: [redis]
+
   redis:
     image: redis:7.4-alpine
     command: ["redis-server", "--appendonly", "yes"]
