@@ -43,7 +43,7 @@ def create_app(settings: Settings | None = None, db: Database | None = None,
         CeleryDispatcher() if settings.redis_url else InlineDispatcher(make_orchestrator(settings, database)))
     app.add_middleware(RateLimitMiddleware, per_minute=settings.rate_limit_per_minute)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
-                       allow_methods=["GET", "POST", "PATCH", "DELETE"],
+                       allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
                        allow_headers=["authorization", "content-type", "x-request-id"])
     app.add_middleware(RequestContextMiddleware)
     for r in (health.router, organizations.router, dashboard.router, approvals.router, tasks.router,

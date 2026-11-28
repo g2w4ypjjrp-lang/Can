@@ -1,3 +1,4 @@
+import { StarterPack } from "@/components/StarterPack";
 import { api } from "@/lib/api";
 import { appContext } from "@/lib/context";
 
@@ -9,13 +10,23 @@ const TONE: Record<string, string> = { executive: "bg-brand", youtube: "bg-yt", 
 
 export default async function Employees() {
   const { token, org } = await appContext();
-  const agents = await api<Agent[]>(`/api/organizations/${org.id}/agents`, token);
+  const [agents, starter, status, prof] = await Promise.all([
+    api<Agent[]>(`/api/organizations/${org.id}/agents`, token),
+    api<Record<string, string>>(`/api/agents/starter-tasks`, token),
+    api<{ llm_configured: boolean; max_task_cost_usd: number; max_parallel_tasks: number }>(`/api/system/status`, token),
+    api<{ profile: Record<string, string> | null }>(`/api/organizations/${org.id}/profile`, token),
+  ]);
+  const profileReady = !!(prof.profile?.youtube_niche || prof.profile?.etsy_niche);
   return (
     <div className="space-y-8">
       <header>
         <h1 className="text-2xl font-semibold">AI Employees</h1>
-        <p className="text-sm text-muted">{agents.length} ajan. Ajanların çalıştırılması Phase 2 (AI Core) ile etkinleşecek.</p>
+        <p className="text-sm text-muted">{agents.length} uzman ajan. Her biri kendi alanında çalışma yöntemi, çıktı şablonu ve kontrol listesiyle çalışır.</p>
       </header>
+      {org.role !== "viewer" && (
+        <StarterPack orgId={org.id} agents={agents} tasks={starter} maxCost={status.max_task_cost_usd}
+          maxParallel={status.max_parallel_tasks} ready={{ llm: status.llm_configured, profile: profileReady }} />
+      )}
       {ORDER.map((dep) => {
         const list = agents.filter((a) => a.department === dep);
         if (!list.length) return null;

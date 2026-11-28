@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field, field_validator
 
@@ -212,3 +212,114 @@ async def save_report(org_id: UUID, start: date, end: date, user: CurrentUser = 
                     (org_id, scope, start, end, cur, Jsonb(figures), miss, not miss))
                 saved += 1
     return {"saved": saved}
+
+
+# ---- işletme profili ----------------------------------------------------------------
+
+class BusinessProfile(BaseModel):
+    brand_name: str = Field(default="", max_length=120)
+    language: str = Field(default="Türkçe", max_length=60)
+    youtube_channel_url: str = Field(default="", max_length=300)
+    youtube_niche: str = Field(default="", max_length=500)
+    youtube_audience: str = Field(default="", max_length=500)
+    etsy_shop_name: str = Field(default="", max_length=120)
+    etsy_shop_url: str = Field(default="", max_length=300)
+    etsy_niche: str = Field(default="", max_length=500)
+    etsy_products: str = Field(default="", max_length=500)
+    price_range: str = Field(default="", max_length=120)
+    currency: str = Field(default="USD", max_length=3)
+    target_markets: str = Field(default="", max_length=300)
+    goals: str = Field(default="", max_length=1000)
+    tone: str = Field(default="", max_length=300)
+    avoid: str = Field(default="", max_length=1000)
+
+    @field_validator("youtube_channel_url", "etsy_shop_url")
+    @classmethod
+    def _url(cls, v: str) -> str:
+        v = v.strip()
+        if v and not v.startswith("https://"):
+            raise ValueError("Adres https:// ile başlamalı")
+        return v
+
+
+@router.get("/organizations/{org_id}/profile")
+async def get_profile(org_id: UUID, user: CurrentUser = Depends(current_user),
+                      db: Database = Depends(get_db)) -> dict[str, Any]:
+    async with db.user_tx(user) as conn:
+        row = await (await conn.execute(
+            "select value, updated_at from system_settings where organization_id=%s and key='business_profile'",
+            (org_id,))).fetchone()
+    return {"profile": row["value"] if row else None, "updated_at": row["updated_at"] if row else None}
+
+
+@router.put("/organizations/{org_id}/profile")
+async def put_profile(org_id: UUID, body: BusinessProfile, user: CurrentUser = Depends(current_user),
+                      db: Database = Depends(get_db)) -> dict[str, Any]:
+    async with db.user_tx(user) as conn:
+        await _require_admin(conn, org_id)
+        await conn.execute(
+            "insert into system_settings(organization_id, key, value, updated_by) values (%s,'business_profile',%s,%s)"
+            " on conflict (organization_id, key) do update set value=excluded.value, updated_by=excluded.updated_by,"
+            " updated_at=now()", (org_id, Jsonb(body.model_dump()), user.id))
+        await conn.execute("select app.log_action(%s, 'settings.business_profile', 'system_settings', %s, '{}')",
+                           (org_id, "business_profile"))
+    return {"profile": body.model_dump()}
+
+
+# ---- ilk görev paketi (ajanları teker teker çalıştırır) -------------------------------
+
+class StarterIn(BaseModel):
+    agent_codes: list[str] = Field(min_length=1, max_length=25)
+
+
+@router.get("/agents/starter-tasks")
+async def starter_tasks() -> dict[str, str]:
+    from ..agents.registry import STARTER_TASKS
+    return STARTER_TASKS
+
+
+@router.post("/organizations/{org_id}/starter-tasks", status_code=201)
+async def launch_starter(org_id: UUID, body: StarterIn, request: Request,
+                         user: CurrentUser = Depends(current_user), db: Database = Depends(get_db)) -> dict[str, Any]:
+    """Seçilen ajanlara ilk görevlerini verir. Görevler 'ertelenmiş' sıraya girer; zamanlayıcı onları
+    eşzamanlı görev sınırına uyarak teker teker başlatır."""
+    from ..agents.registry import STARTER_TASKS
+    settings = request.app.state.settings
+    if not settings.anthropic_api_key:
+        raise HTTPException(409, "Anthropic API anahtarı yapılandırılmadan görev paketi başlatılamaz")
+    codes = list(dict.fromkeys(body.agent_codes))
+    unknown = [c for c in codes if c not in STARTER_TASKS]
+    if unknown:
+        raise HTTPException(422, f"Bilinmeyen ajan: {', '.join(unknown)}")
+    async with db.user_tx(user) as conn:
+        await _require_admin(conn, org_id)
+        prof = await (await conn.execute(
+            "select value from system_settings where organization_id=%s and key='business_profile'", (org_id,))).fetchone()
+        if not prof or not (prof["value"].get("youtube_niche") or prof["value"].get("etsy_niche")):
+            raise HTTPException(409, "Önce Settings > İşletme Profili'nde en az YouTube veya Etsy nişini doldurun")
+        agents = {r["code"]: r["id"] for r in await (await conn.execute(
+            "select code, id from agents where organization_id=%s and enabled and code = any(%s)",
+            (org_id, codes))).fetchall()}
+        created = []
+        for c in codes:
+            if c not in agents:
+                continue
+            cmd = STARTER_TASKS[c]
+            row = await (await conn.execute(
+                "insert into tasks(organization_id, title, command, created_by, assigned_agent_id, result)"
+                " values (%s,%s,%s,%s,%s,%s) returning id",
+                (org_id, f"[İlk görev] {cmd}"[:120], cmd, user.id, agents[c],
+                 Jsonb({"direct_agent": c, "deferred": True})))).fetchone()
+            created.append(row["id"] if row else None)
+        await conn.execute("select app.log_action(%s, 'tasks.starter_pack', 'organization', %s, %s)",
+                           (org_id, str(org_id), Jsonb({"count": len(created)})))
+    return {"queued": len(created), "max_cost_usd_per_task": settings.max_task_cost_usd,
+            "max_parallel": settings.max_active_tasks_per_org}
+
+
+@router.get("/system/status")
+async def system_status(request: Request, user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
+    """Arayüzün neyin hazır olduğunu dürüstçe göstermesi için (gizli bilgi döndürmez)."""
+    s = request.app.state.settings
+    return {"llm_configured": bool(s.anthropic_api_key), "model": s.llm_model,
+            "max_task_cost_usd": s.max_task_cost_usd, "max_parallel_tasks": s.max_active_tasks_per_org}

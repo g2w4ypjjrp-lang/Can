@@ -83,6 +83,21 @@ async def tick(db: Database, dispatcher: Dispatcher, max_active: int, now: datet
                 started.append((await c3.fetchone() or {})["id"])
             await conn.execute("update automation_rules set last_run_at=%s, next_run_at=%s where id=%s",
                                (now, nxt, rule["id"]))
+        # Ertelenmiş görevler (ilk görev paketi): organizasyon başına boş kapasite kadar başlatılır.
+        cur = await conn.execute(
+            """with cap as (
+                 select organization_id, count(*) filter (where status in ('running','waiting_qc','waiting_approval')
+                        or (status = 'queued' and coalesce((result->>'deferred')::boolean, false) = false)) as busy
+                   from tasks where parent_task_id is null group by organization_id),
+               ranked as (
+                 select t.id, t.organization_id,
+                        row_number() over (partition by t.organization_id order by t.created_at) as rn
+                   from tasks t where t.status = 'queued' and (t.result->>'deferred')::boolean)
+               select r.id from ranked r join cap c using (organization_id)
+                where r.rn <= greatest(%s - c.busy, 0)""", (max_active,))
+        for row in await cur.fetchall():
+            await conn.execute("update tasks set result = result - 'deferred' where id = %s", (row["id"],))
+            started.append(row["id"])
         await conn.commit()
     for task_id in started:
         dispatcher.enqueue(task_id)

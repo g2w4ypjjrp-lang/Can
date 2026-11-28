@@ -200,3 +200,11 @@ async def test_rate_limit(dsn):
             transport=ASGITransport(app=app), base_url="http://t") as c:
         codes = [(await c.get("/api/me")).status_code for _ in range(5)]
     assert codes[:3] == [401, 401, 401] and codes[3:] == [429, 429]
+
+
+async def test_cors_preflight_allows_all_used_methods(client):
+    for method in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+        r = await client.options("/api/me", headers={"origin": "http://localhost:3000",
+                                                     "access-control-request-method": method,
+                                                     "access-control-request-headers": "authorization,content-type"})
+        assert r.status_code == 200, method

@@ -64,6 +64,26 @@ class BudgetExceeded(Exception):
     pass
 
 
+PROFILE_FIELDS = {
+    "brand_name": "Marka", "language": "İçerik dili", "youtube_channel_url": "YouTube kanalı",
+    "youtube_niche": "YouTube nişi", "youtube_audience": "YouTube hedef kitlesi",
+    "etsy_shop_name": "Etsy mağazası", "etsy_shop_url": "Etsy mağaza adresi", "etsy_niche": "Etsy nişi",
+    "etsy_products": "Ürün tipleri", "price_range": "Fiyat aralığı", "currency": "Para birimi",
+    "target_markets": "Hedef pazarlar", "goals": "Hedefler", "tone": "Marka dili / ton", "avoid": "Kaçınılacaklar",
+}
+
+
+def profile_block(profile: dict[str, Any] | None) -> str:
+    """İşletme profilini sistem talimatına eklenecek blok olarak verir (yoksa ajan bunu bilir)."""
+    if not profile:
+        return ("\n\n<business_profile>Henüz doldurulmadı. Genel varsayımlar yap ve bunu belirt; "
+                "kullanıcıya profili doldurmasını öner.</business_profile>")
+    lines = [f"{label}: {str(profile[k]).strip()[:500]}" for k, label in PROFILE_FIELDS.items()
+             if str(profile.get(k) or "").strip()]
+    body = "\n".join(lines).replace("</business_profile>", "")
+    return f"\n\n<business_profile>\n{body}\n</business_profile>"
+
+
 def _untrusted(label: str, text: str) -> str:
     safe = text.replace("</untrusted_data>", "</untrusted_data_>")
     return f'<untrusted_data source="{label}">\n{safe}\n</untrusted_data>'
@@ -120,6 +140,9 @@ class Orchestrator:
             log.info("task %s not queued; skipping", task_id)
             return
         task = rows[0]
+        prof = await self._exec("select value from system_settings where organization_id=%s and key='business_profile'",
+                                task["organization_id"])
+        task["profile"] = profile_block(prof[0]["value"] if prof else None)
         spent = [Decimal(0)]
         try:
             agents = {a["code"]: a for a in await self._exec(
@@ -143,7 +166,7 @@ class Orchestrator:
             roster_txt = "\n".join(f"- {c}: {a['description']}" for c, a in roster.items())
             plan_res = await self._call(
                 task, ceo, spent, effort="high", schema=PLAN_SCHEMA,
-                system=f"{COMMON}\n\nRolün: {CEO_ROLE.format(max_steps=MAX_STEPS)}\n\nAjanlar:\n{roster_txt}",
+                system=f"{COMMON}\n\nRolün: {CEO_ROLE.format(max_steps=MAX_STEPS)}\n\nAjanlar:\n{roster_txt}{task['profile']}",
                 user=_untrusted("user_command", task["command"]))
             plan = plan_res.data or {}
             await self._run_steps(task, plan, roster, ceo, spent, report=True)
@@ -215,7 +238,7 @@ class Orchestrator:
             final_text = (await self._call(
             task, ceo, spent, effort="medium", system=f"{COMMON}\n\nRolün: CEO Agent. Ekibin çıktılarını "
             "kullanıcıya tek, kısa ve uygulanabilir bir rapor olarak birleştir: Özet, Bulgular, "
-            "Onaya sunulacak öneriler, Eksik veriler ve sonraki adımlar.",
+            "Onaya sunulacak öneriler, Eksik veriler ve sonraki adımlar." + task["profile"],
             user=_untrusted("user_command", task["command"]) + "\n\n" + "\n\n".join(
                 _untrusted(name, out) for name, out in outputs))).text
         await self._exec(
@@ -233,7 +256,7 @@ class Orchestrator:
                        outputs: list[tuple[str, str]], spent: list[Decimal]) -> LLMResult:
         context = "\n\n".join(_untrusted(f"step_{n}:{name}", out) for n, (name, out) in enumerate(outputs, 1))
         return await self._call(
-            task, agent, spent, system=spec.system, web_search=spec.web_search, effort="medium",
+            task, agent, spent, system=spec.system + task["profile"], web_search=spec.web_search, effort="medium",
             user=f"{_untrusted('user_command', task['command'])}\n\n"
                  f"Önceki adımların çıktıları:\n{context or '(yok)'}\n\nSenin görevin: {instruction}")
 
@@ -241,7 +264,7 @@ class Orchestrator:
                   outputs: list[tuple[str, str]], spent: list[Decimal]) -> dict[str, Any]:
         context = "\n\n".join(_untrusted(f"step_{n}:{name}", out) for n, (name, out) in enumerate(outputs, 1))
         res = await self._call(
-            task, agent, spent, system=spec.system + "\nSonucu şemaya göre ver: verdict (pass/fail), issues "
+            task, agent, spent, system=spec.system + task["profile"] + "\nSonucu şemaya göre ver: verdict (pass/fail), issues "
             "(somut sorunlar), needs_human_review (telif/marka/hukuki/finansal risk varsa true), report.",
             effort="medium", schema=QC_SCHEMA,
             user=f"{_untrusted('user_command', task['command'])}\n\nDenetlenecek çıktılar:\n{context or '(yok)'}"

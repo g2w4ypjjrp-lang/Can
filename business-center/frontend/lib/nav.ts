@@ -18,5 +18,5 @@ export const NAV: NavItem[] = [
   { slug: "integrations", label: "API Integrations", phase: 3, ready: false },
   { slug: "notifications", label: "Notifications", phase: 6, ready: true },
   { slug: "logs", label: "System Logs", phase: 2, ready: true },
-  { slug: "settings", label: "Settings", phase: 1, ready: false },
+  { slug: "settings", label: "Settings", phase: 1, ready: true },
 ];
