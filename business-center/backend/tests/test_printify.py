@@ -56,7 +56,8 @@ async def test_printify_connect_sync_disconnect(dsn, admin):
         assert r.status_code == 200 and r.json()["shop"]["title"] == "Can Posters"
         assert TOKEN not in json.dumps(r.json())
 
-        stored = admin.execute("select access_token_enc from oauth_tokens").fetchall()
+        stored = admin.execute("""select t.access_token_enc from oauth_tokens t join integrations i on i.id=t.integration_id
+                                where i.organization_id=%s""", (org,)).fetchall()
         assert len(stored) == 1 and TOKEN.encode() not in bytes(stored[0]["access_token_enc"])
         assert TokenCipher(KEY).decrypt(stored[0]["access_token_enc"]) == TOKEN
 
@@ -78,7 +79,8 @@ async def test_printify_connect_sync_disconnect(dsn, admin):
         assert (await c.post(url, headers=auth(viewer), json={"token": TOKEN})).status_code == 403
 
         assert (await c.delete(url, headers=auth(uid))).status_code == 204
-        assert admin.execute("select count(*) n from oauth_tokens").fetchone()["n"] == 0
+        assert admin.execute("select count(*) n from oauth_tokens t join integrations i on i.id=t.integration_id"
+                             " where i.organization_id=%s", (org,)).fetchone()["n"] == 0
         assert (await c.post(url + "/sync", headers=auth(uid))).status_code == 409
 
 

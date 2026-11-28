@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     redis_url: str = ""                  # boşsa görevler API süreci içinde çalışır (geliştirme)
 
 
+    etsy_keystring: str = ""                  # Etsy uygulama anahtarı (keystring)
+    etsy_shared_secret: str = ""              # Etsy bunu x-api-key'de istiyorsa "keystring:secret" olarak gönderilir
+    etsy_redirect_uri: str = ""               # ör. https://panel.ornek.com/integrations/etsy/callback
+
+    @property
+    def etsy_api_key(self) -> str:
+        return f"{self.etsy_keystring}:{self.etsy_shared_secret}" if self.etsy_shared_secret else self.etsy_keystring
+
     token_encryption_key: str = ""           # Fernet anahtarı; üretmek: python -m bizcenter.integrations.keygen
     task_timeout_minutes: int = 30           # bu süreden uzun "çalışıyor" kalan görev başarısız sayılır
 

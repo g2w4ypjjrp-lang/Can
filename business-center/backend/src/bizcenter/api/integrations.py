@@ -158,3 +158,194 @@ async def printify_products(org_id: UUID, user: CurrentUser = Depends(current_us
         return await (await conn.execute(
             "select printify_product_id, title, blueprint_id, print_provider_id, variants, synced_at"
             " from printify_products where organization_id=%s order by title limit 500", (org_id,))).fetchall()
+
+
+# ---- Etsy (OAuth 2.0 + PKCE) ---------------------------------------------------------
+
+import hashlib  # noqa: E402
+import secrets  # noqa: E402
+import time  # noqa: E402
+from datetime import UTC, datetime, timedelta  # noqa: E402
+
+from ..integrations.etsy import EtsyClient, EtsyError, authorize_url, money, pkce_pair  # noqa: E402
+
+
+def _etsy_settings(request: Request) -> Any:
+    s = request.app.state.settings
+    if not s.etsy_keystring or not s.etsy_redirect_uri:
+        raise HTTPException(503, "Sunucuda BC_ETSY_KEYSTRING ve BC_ETSY_REDIRECT_URI tanımlı değil")
+    return s
+
+
+@router.post("/organizations/{org_id}/integrations/etsy/start")
+async def etsy_start(org_id: UUID, request: Request, user: CurrentUser = Depends(current_user),
+                     db: Database = Depends(get_db)) -> dict[str, str]:
+    s, cipher = _etsy_settings(request), _cipher(request)
+    verifier, challenge = pkce_pair()
+    state = secrets.token_urlsafe(32)
+    async with db.user_tx(user) as conn:
+        await _admin(conn, org_id)
+        await conn.execute(
+            "insert into system_settings(organization_id, key, value, updated_by) values (%s,'oauth_pending_etsy',%s,%s)"
+            " on conflict (organization_id, key) do update set value=excluded.value, updated_by=excluded.updated_by,"
+            " updated_at=now()",
+            (org_id, Jsonb({"state_hash": hashlib.sha256(state.encode()).hexdigest(), "user": user.id,
+                            "verifier": cipher.encrypt(verifier).decode(), "exp": int(time.time()) + 600}), user.id))
+    return {"url": authorize_url(s.etsy_keystring, s.etsy_redirect_uri, state, challenge)}
+
+
+class EtsyCallback(BaseModel):
+    code: str = Field(min_length=1, max_length=2000)
+    state: str = Field(min_length=10, max_length=200)
+
+
+@router.post("/organizations/{org_id}/integrations/etsy/callback")
+async def etsy_callback(org_id: UUID, body: EtsyCallback, request: Request, user: CurrentUser = Depends(current_user),
+                        db: Database = Depends(get_db)) -> dict[str, Any]:
+    s, cipher = _etsy_settings(request), _cipher(request)
+    async with db.user_tx(user) as conn:
+        await _admin(conn, org_id)
+        row = await (await conn.execute(
+            "delete from system_settings where organization_id=%s and key='oauth_pending_etsy' returning value",
+            (org_id,))).fetchone()
+    p = row["value"] if row else None
+    if (not p or p.get("user") != user.id or p.get("exp", 0) < time.time()
+            or not secrets.compare_digest(p.get("state_hash", ""), hashlib.sha256(body.state.encode()).hexdigest())):
+        raise HTTPException(400, "Geçersiz veya süresi dolmuş Etsy bağlantı isteği; yeniden deneyin")
+    verifier = cipher.decrypt(p["verifier"].encode())
+    try:
+        async with EtsyClient(s.etsy_api_key, transport=_transport(request)) as ec:
+            tok = await ec.exchange(s.etsy_keystring, s.etsy_redirect_uri, body.code, verifier)
+        async with EtsyClient(s.etsy_api_key, tok["access_token"], _transport(request)) as ec:
+            me = await ec.me()
+            if not me.get("shop_id"):
+                raise HTTPException(400, "Bu Etsy hesabında mağaza yok")
+            shop = await ec.shop(int(me["shop_id"]))
+    except EtsyError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    async with db.user_tx(user) as conn:
+        integ = await (await conn.execute(
+            """insert into integrations(organization_id, provider, status, external_account_id, display_name, scopes, last_error)
+               values (%s,'etsy','connected',%s,%s,%s,null)
+               on conflict (organization_id, provider) do update set status='connected',
+                 external_account_id=excluded.external_account_id, display_name=excluded.display_name,
+                 scopes=excluded.scopes, last_error=null returning id""",
+            (org_id, str(me["shop_id"]), shop.get("shop_name", ""), ["shops_r", "listings_r", "transactions_r"]))).fetchone()
+        await conn.execute(
+            """insert into etsy_shops(organization_id, integration_id, etsy_shop_id, name, currency) values (%s,%s,%s,%s,%s)
+               on conflict (organization_id, etsy_shop_id) do update set name=excluded.name, currency=excluded.currency,
+                 integration_id=excluded.integration_id""",
+            (org_id, integ["id"], int(me["shop_id"]), shop.get("shop_name", ""), shop.get("currency_code")))
+        await conn.execute("select app.log_action(%s, 'integration.etsy_connected', 'integration', %s, %s)",
+                           (org_id, str(integ["id"]), Jsonb({"shop": shop.get("shop_name")})))
+    await _store_tokens(db, cipher, integ["id"], tok)
+    return {"status": "connected", "shop": {"id": me["shop_id"], "name": shop.get("shop_name")}}
+
+
+async def _store_tokens(db: Database, cipher: TokenCipher, integ_id: Any, tok: dict[str, Any]) -> None:
+    exp = datetime.now(UTC) + timedelta(seconds=int(tok.get("expires_in", 3600)) - 60)
+    async with db.pool.connection() as conn:
+        await conn.execute(
+            """insert into oauth_tokens(integration_id, access_token_enc, refresh_token_enc, expires_at) values (%s,%s,%s,%s)
+               on conflict (integration_id) do update set access_token_enc=excluded.access_token_enc,
+                 refresh_token_enc=coalesce(excluded.refresh_token_enc, oauth_tokens.refresh_token_enc),
+                 expires_at=excluded.expires_at, updated_at=now()""",
+            (integ_id, cipher.encrypt(tok["access_token"]),
+             cipher.encrypt(tok["refresh_token"]) if tok.get("refresh_token") else None, exp))
+        await conn.commit()
+
+
+async def _etsy_access(db: Database, request: Request, org_id: UUID) -> tuple[str, int, Any]:
+    s, cipher = _etsy_settings(request), _cipher(request)
+    async with db.pool.connection() as conn:
+        row = await (await conn.execute(
+            """select i.id, i.external_account_id, t.access_token_enc, t.refresh_token_enc, t.expires_at
+               from integrations i join oauth_tokens t on t.integration_id=i.id
+               where i.organization_id=%s and i.provider='etsy' and i.status in ('connected','error')""", (org_id,))).fetchone()
+    if not row:
+        raise HTTPException(409, "Etsy bağlı değil")
+    token = cipher.decrypt(row["access_token_enc"])
+    if row["expires_at"] and row["expires_at"] <= datetime.now(UTC):
+        if not row["refresh_token_enc"]:
+            raise HTTPException(409, "Etsy oturumu sona erdi; yeniden bağlanın")
+        try:
+            async with EtsyClient(s.etsy_api_key, transport=_transport(request)) as ec:
+                tok = await ec.refresh(s.etsy_keystring, cipher.decrypt(row["refresh_token_enc"]))
+        except EtsyError as exc:
+            raise HTTPException(409, f"Etsy oturumu yenilenemedi: {exc}") from exc
+        await _store_tokens(db, cipher, row["id"], tok)
+        token = tok["access_token"]
+    return token, int(row["external_account_id"]), row["id"]
+
+
+@router.post("/organizations/{org_id}/integrations/etsy/sync")
+async def etsy_sync(org_id: UUID, request: Request, user: CurrentUser = Depends(current_user),
+                    db: Database = Depends(get_db)) -> dict[str, int]:
+    async with db.user_tx(user) as conn:
+        await _admin(conn, org_id)
+    s = _etsy_settings(request)
+    token, shop_id, integ_id = await _etsy_access(db, request, org_id)
+    since = int(time.time()) - 90 * 86400
+    try:
+        async with EtsyClient(s.etsy_api_key, token, _transport(request)) as ec:
+            listings = await ec.listings(shop_id)
+            receipts = await ec.receipts(shop_id, since)
+    except EtsyError as exc:
+        async with db.pool.connection() as conn:
+            await conn.execute("update integrations set status='error', last_error=%s where id=%s", (str(exc), integ_id))
+            await conn.commit()
+        raise HTTPException(502, str(exc)) from exc
+
+    async with db.user_tx(user) as conn:
+        shop = await (await conn.execute("select id from etsy_shops where organization_id=%s and etsy_shop_id=%s",
+                                         (org_id, shop_id))).fetchone()
+        for li in listings:
+            price, cur = money(li.get("price"))
+            await conn.execute(
+                """insert into etsy_listings(organization_id, shop_id, etsy_listing_id, title, description, tags,
+                       price_amount, currency, quantity, state, synced_at) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now())
+                   on conflict (shop_id, etsy_listing_id) do update set title=excluded.title, description=excluded.description,
+                     tags=excluded.tags, price_amount=excluded.price_amount, currency=excluded.currency,
+                     quantity=excluded.quantity, state=excluded.state, synced_at=now()""",
+                (org_id, shop["id"], li["listing_id"], str(li.get("title", ""))[:140], str(li.get("description", ""))[:20000],
+                 [str(t)[:20] for t in li.get("tags", [])][:13], price, cur, li.get("quantity"),
+                 li.get("state") if li.get("state") in ("active", "inactive", "sold_out", "expired", "draft") else "active"))
+        revenue = 0
+        for r in receipts:
+            total, cur = money(r.get("grandtotal"))
+            created = datetime.fromtimestamp(int(r.get("created_timestamp") or r.get("create_timestamp")), UTC)
+            status = str(r.get("status") or ("paid" if r.get("is_paid") else "open"))
+            await conn.execute(
+                """insert into etsy_orders(organization_id, shop_id, etsy_receipt_id, status, grandtotal_amount, currency,
+                       ordered_at, shipped_at, synced_at) values (%s,%s,%s,%s,%s,%s,%s,%s,now())
+                   on conflict (shop_id, etsy_receipt_id) do update set status=excluded.status,
+                     grandtotal_amount=excluded.grandtotal_amount, shipped_at=excluded.shipped_at, synced_at=now()""",
+                (org_id, shop["id"], r["receipt_id"], status, total, cur, created,
+                 datetime.now(UTC) if r.get("is_shipped") else None))
+            if r.get("is_paid") and total is not None and cur:
+                await conn.execute(
+                    """insert into revenue_records(organization_id, department, category, amount, currency, occurred_on,
+                           source, source_ref) values (%s,'etsy','sales',%s,%s,%s,'etsy_api',%s)
+                       on conflict (organization_id, source, source_ref) do update set amount=excluded.amount""",
+                    (org_id, total, cur, created.date(), str(r["receipt_id"])))
+                revenue += 1
+        await conn.execute("update integrations set last_synced_at=now(), status='connected', last_error=null"
+                           " where organization_id=%s and provider='etsy'", (org_id,))
+    return {"listings": len(listings), "orders": len(receipts), "revenue_records": revenue}
+
+
+@router.delete("/organizations/{org_id}/integrations/etsy", status_code=204)
+async def etsy_disconnect(org_id: UUID, user: CurrentUser = Depends(current_user), db: Database = Depends(get_db)) -> None:
+    async with db.user_tx(user) as conn:
+        await _admin(conn, org_id)
+        row = await (await conn.execute(
+            "update integrations set status='disconnected' where organization_id=%s and provider='etsy' returning id",
+            (org_id,))).fetchone()
+        if row:
+            await conn.execute("select app.log_action(%s, 'integration.etsy_disconnected', 'integration', %s, '{}')",
+                               (org_id, str(row["id"])))
+    if row:
+        async with db.pool.connection() as conn:
+            await conn.execute("delete from oauth_tokens where integration_id=%s", (row["id"],))
+            await conn.commit()
