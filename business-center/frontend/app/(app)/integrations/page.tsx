@@ -1,4 +1,4 @@
-import { EtsyCard } from "@/components/EtsyCard";
+import { OAuthCard } from "@/components/OAuthCard";
 import { PrintifyCard } from "@/components/PrintifyCard";
 import { api } from "@/lib/api";
 import { appContext } from "@/lib/context";
@@ -37,10 +37,10 @@ export default async function Integrations() {
           <PrintifyCard orgId={org.id} state={s.printify} canEdit={canEdit} />
         </Card>
         <Card title="Etsy" tone="#ea580c" status={s.etsy.status}>
-          <EtsyCard orgId={org.id} state={s.etsy} canEdit={canEdit} />
+          <OAuthCard provider="etsy" orgId={org.id} state={s.etsy} canEdit={canEdit} />
         </Card>
         <Card title="YouTube" tone="#e11d48" status={s.youtube.status}>
-          <p className="text-sm text-muted">OAuth bağlantısı geliştiriliyor. Gerekecek: Google Cloud projesinde YouTube Data + Analytics API'leri ve OAuth istemcisi.</p>
+          <OAuthCard provider="youtube" orgId={org.id} state={s.youtube} canEdit={canEdit} />
         </Card>
       </div>
     </div>

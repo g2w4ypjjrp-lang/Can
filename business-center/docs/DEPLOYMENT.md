@@ -66,4 +66,10 @@ Yeni migration varsa önce yedek alın, sonra SQL Editor'da çalıştırın.
 
 ## Bilinen sınırlar
 * Hız sınırı süreç içidir; birden fazla backend kopyasında Redis tabanlı sınıra geçilmeli.
-* YouTube, Etsy ve Printify bağlantıları henüz yok (son aşama).
+* Bağlantılar yalnızca okuma yapar. Video yayınlama, listeleme oluşturma ve fiyat değişikliği gibi yazma işlemleri henüz yok.
+
+## 8. Platform bağlantıları
+* **Printify:** Printify > My Profile > Connections > Personal access tokens. İzinler: shops.read, products.read, orders.read, catalog.read. Paneldeki API Integrations sayfasına yapıştırın.
+* **Etsy:** developers.etsy.com > Create a New App. Callback URL: `https://panel.ornek.com/integrations/etsy/callback`. Keystring'i `BC_ETSY_KEYSTRING` olarak girin. Etsy uygulamayı onaylayana kadar bağlantı çalışmaz.
+* **YouTube:** Google Cloud Console'da proje açın; YouTube Data API v3 ve YouTube Analytics API'yi etkinleştirin. OAuth izin ekranını yapılandırın (test kullanıcısı olarak kendi hesabınızı ekleyin). Web uygulaması OAuth istemcisi oluşturup yönlendirme adresini `https://panel.ornek.com/integrations/youtube/callback` yapın.
+* Tüm tokenlar `BC_TOKEN_ENCRYPTION_KEY` ile şifrelenir. Bu anahtar değişirse platformlara yeniden bağlanmak gerekir.

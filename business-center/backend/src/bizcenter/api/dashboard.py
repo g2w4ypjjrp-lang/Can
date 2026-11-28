@@ -56,7 +56,7 @@ async def dashboard(org_id: UUID, user: CurrentUser = Depends(current_user),
         yt = integ.get("youtube") == "connected"
         etsy = integ.get("etsy") == "connected"
 
-        ch = await _one(conn, """select sum(view_count) as views, sum(subscriber_count) as subs,
+        ch = await _one(conn, """select sum(view_count)::bigint as views, sum(subscriber_count)::bigint as subs,
                                         max(stats_fetched_at) as as_of
                                    from youtube_channels where organization_id = %s
                                     and stats_fetched_at is not null""", org_id)

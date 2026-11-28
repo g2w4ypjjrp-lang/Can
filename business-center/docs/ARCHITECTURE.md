@@ -135,8 +135,10 @@ Sıra kararı: dış platform bağlantıları (YouTube, Etsy, Printify OAuth ve 
 |---|---|---|
 | **P1 Foundation** | Klasör yapısı, şema + RLS, backend, frontend, auth, dashboard, onay çekirdeği, Docker, CI | ✅ Kod + testler hazır. Supabase projesi bağlanmadı, Docker yerelde çalıştırılamadı |
 | **P2 AI Core** | CEO, registry, Claude API, görev kuyruğu (Celery/Redis), ajan logları, CEO Komut Merkezi | ✅ Kod + testler (sahte model ile) hazır; gerçek Claude çağrısı API anahtarı bekliyor |
+| **P3 YouTube (bağlantı)** | Google OAuth + PKCE, kanal, son videolar, 90 günlük analitik, tahmini gelir → finans | ✅ Sahte API ile test edildi; gerçek hesapla denenmedi |
 | P3 YouTube | OAuth, kanal senkronu, trend, senaryo, üretim iş akışı, thumbnail, SEO, yayın onayı, analytics | ⏳ |
 | **Finans motoru** | Kâr-zarar, manuel kayıt, doğrulanmış rapor | ✅ (P4'ün entegrasyondan bağımsız kısmı) |
+| **P4 Etsy + Printify (bağlantı)** | Etsy OAuth + PKCE, listeleme ve sipariş senkronu → gelir; Printify token, ürün/maliyet senkronu | ✅ Sahte API ile test edildi; gerçek hesapla denenmedi |
 | P4 Etsy | OAuth, Printify, araştırma, tasarım, SEO, listeleme, siparişler, finans, yayın onayı | ⏳ |
 | **P5 Kalite Kontrol** | QC ajanları, telif riski, finansal doğrulama, test otomasyonu | ✅ QC döngüsü (kalırsa 1 düzeltme), telif riskinde insan incelemesi, CI |
 | **P6 Otomasyon** | Zamanlanmış görevler, günlük/haftalık/aylık raporlar, bildirimler | ✅ Cron kuralları (10 şablon, varsayılan kapalı), Celery beat, onay süre aşımı, bildirimler |

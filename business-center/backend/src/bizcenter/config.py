@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     def etsy_api_key(self) -> str:
         return f"{self.etsy_keystring}:{self.etsy_shared_secret}" if self.etsy_shared_secret else self.etsy_keystring
 
+    google_client_id: str = ""                # Google Cloud > OAuth istemcisi (Web uygulaması)
+    google_client_secret: str = ""
+    youtube_redirect_uri: str = ""            # ör. https://panel.ornek.com/integrations/youtube/callback
+
     token_encryption_key: str = ""           # Fernet anahtarı; üretmek: python -m bizcenter.integrations.keygen
     task_timeout_minutes: int = 30           # bu süreden uzun "çalışıyor" kalan görev başarısız sayılır
 

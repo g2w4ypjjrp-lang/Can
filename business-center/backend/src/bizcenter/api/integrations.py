@@ -349,3 +349,190 @@ async def etsy_disconnect(org_id: UUID, user: CurrentUser = Depends(current_user
         async with db.pool.connection() as conn:
             await conn.execute("delete from oauth_tokens where integration_id=%s", (row["id"],))
             await conn.commit()
+
+
+# ---- YouTube (Google OAuth 2.0 + PKCE) -----------------------------------------------
+
+from ..integrations import youtube as yt  # noqa: E402
+
+
+def _yt_settings(request: Request) -> Any:
+    s = request.app.state.settings
+    if not (s.google_client_id and s.google_client_secret and s.youtube_redirect_uri):
+        raise HTTPException(503, "Sunucuda BC_GOOGLE_CLIENT_ID, BC_GOOGLE_CLIENT_SECRET ve BC_YOUTUBE_REDIRECT_URI tanımlı değil")
+    return s
+
+
+@router.post("/organizations/{org_id}/integrations/youtube/start")
+async def youtube_start(org_id: UUID, request: Request, user: CurrentUser = Depends(current_user),
+                        db: Database = Depends(get_db)) -> dict[str, str]:
+    s, cipher = _yt_settings(request), _cipher(request)
+    verifier, challenge = pkce_pair()
+    state = secrets.token_urlsafe(32)
+    async with db.user_tx(user) as conn:
+        await _admin(conn, org_id)
+        await conn.execute(
+            "insert into system_settings(organization_id, key, value, updated_by) values (%s,'oauth_pending_youtube',%s,%s)"
+            " on conflict (organization_id, key) do update set value=excluded.value, updated_by=excluded.updated_by,"
+            " updated_at=now()",
+            (org_id, Jsonb({"state_hash": hashlib.sha256(state.encode()).hexdigest(), "user": user.id,
+                            "verifier": cipher.encrypt(verifier).decode(), "exp": int(time.time()) + 600}), user.id))
+    return {"url": yt.authorize_url(s.google_client_id, s.youtube_redirect_uri, state, challenge)}
+
+
+@router.post("/organizations/{org_id}/integrations/youtube/callback")
+async def youtube_callback(org_id: UUID, body: EtsyCallback, request: Request, user: CurrentUser = Depends(current_user),
+                           db: Database = Depends(get_db)) -> dict[str, Any]:
+    s, cipher = _yt_settings(request), _cipher(request)
+    async with db.user_tx(user) as conn:
+        await _admin(conn, org_id)
+        row = await (await conn.execute(
+            "delete from system_settings where organization_id=%s and key='oauth_pending_youtube' returning value",
+            (org_id,))).fetchone()
+    p = row["value"] if row else None
+    if (not p or p.get("user") != user.id or p.get("exp", 0) < time.time()
+            or not secrets.compare_digest(p.get("state_hash", ""), hashlib.sha256(body.state.encode()).hexdigest())):
+        raise HTTPException(400, "Geçersiz veya süresi dolmuş YouTube bağlantı isteği; yeniden deneyin")
+    try:
+        async with yt.YouTubeClient(transport=_transport(request)) as c:
+            tok = await c.exchange(s.google_client_id, s.google_client_secret, s.youtube_redirect_uri, body.code,
+                                   cipher.decrypt(p["verifier"].encode()))
+        async with yt.YouTubeClient(tok["access_token"], _transport(request)) as c:
+            ch = await c.my_channel()
+    except yt.YouTubeError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not ch:
+        raise HTTPException(400, "Bu Google hesabında YouTube kanalı yok")
+    granted = str(tok.get("scope", "")).split()
+    async with db.user_tx(user) as conn:
+        integ = await (await conn.execute(
+            """insert into integrations(organization_id, provider, status, external_account_id, display_name, scopes, last_error)
+               values (%s,'youtube','connected',%s,%s,%s,null)
+               on conflict (organization_id, provider) do update set status='connected',
+                 external_account_id=excluded.external_account_id, display_name=excluded.display_name,
+                 scopes=excluded.scopes, last_error=null returning id""",
+            (org_id, ch["id"], ch["snippet"]["title"], granted))).fetchone()
+        await _upsert_channel(conn, org_id, integ["id"], ch)
+        await conn.execute("select app.log_action(%s, 'integration.youtube_connected', 'integration', %s, %s)",
+                           (org_id, str(integ["id"]), Jsonb({"channel": ch["snippet"]["title"]})))
+    await _store_tokens(db, cipher, integ["id"], tok)
+    return {"status": "connected", "channel": {"id": ch["id"], "title": ch["snippet"]["title"]}}
+
+
+async def _upsert_channel(conn: Any, org_id: UUID, integ_id: Any, ch: dict[str, Any]) -> Any:
+    st = ch.get("statistics", {})
+    row = await (await conn.execute(
+        """insert into youtube_channels(organization_id, integration_id, youtube_channel_id, title, subscriber_count,
+               view_count, video_count, stats_fetched_at) values (%s,%s,%s,%s,%s,%s,%s,now())
+           on conflict (organization_id, youtube_channel_id) do update set title=excluded.title,
+             integration_id=excluded.integration_id,
+             subscriber_count=excluded.subscriber_count, view_count=excluded.view_count, video_count=excluded.video_count,
+             stats_fetched_at=now() returning id""",
+        (org_id, integ_id, ch["id"], ch["snippet"]["title"],
+         None if st.get("hiddenSubscriberCount") else int(st.get("subscriberCount", 0)),
+         int(st.get("viewCount", 0)), int(st.get("videoCount", 0))))).fetchone()
+    return row["id"]
+
+
+async def _youtube_access(db: Database, request: Request, org_id: UUID) -> tuple[str, Any]:
+    s, cipher = _yt_settings(request), _cipher(request)
+    async with db.pool.connection() as conn:
+        row = await (await conn.execute(
+            """select i.id, t.access_token_enc, t.refresh_token_enc, t.expires_at from integrations i
+               join oauth_tokens t on t.integration_id=i.id
+               where i.organization_id=%s and i.provider='youtube' and i.status in ('connected','error')""",
+            (org_id,))).fetchone()
+    if not row:
+        raise HTTPException(409, "YouTube bağlı değil")
+    token = cipher.decrypt(row["access_token_enc"])
+    if row["expires_at"] and row["expires_at"] <= datetime.now(UTC):
+        if not row["refresh_token_enc"]:
+            raise HTTPException(409, "YouTube oturumu sona erdi; yeniden bağlanın")
+        try:
+            async with yt.YouTubeClient(transport=_transport(request)) as c:
+                tok = await c.refresh(s.google_client_id, s.google_client_secret, cipher.decrypt(row["refresh_token_enc"]))
+        except yt.YouTubeError as exc:
+            raise HTTPException(409, f"YouTube oturumu yenilenemedi: {exc}") from exc
+        await _store_tokens(db, cipher, row["id"], tok)
+        token = tok["access_token"]
+    return token, row["id"]
+
+
+@router.post("/organizations/{org_id}/integrations/youtube/sync")
+async def youtube_sync(org_id: UUID, request: Request, user: CurrentUser = Depends(current_user),
+                       db: Database = Depends(get_db)) -> dict[str, Any]:
+    async with db.user_tx(user) as conn:
+        await _admin(conn, org_id)
+    token, integ_id = await _youtube_access(db, request, org_id)
+    end = datetime.now(UTC).date() - timedelta(days=1)
+    start = end - timedelta(days=89)
+    revenue_note = None
+    try:
+        async with yt.YouTubeClient(token, _transport(request)) as c:
+            ch = await c.my_channel()
+            if not ch:
+                raise HTTPException(409, "Kanal bulunamadı")
+            videos = await c.recent_videos(ch["contentDetails"]["relatedPlaylists"]["uploads"])
+            try:
+                report = await c.daily_report(start.isoformat(), end.isoformat(), with_revenue=True)
+            except yt.YouTubeError as exc:
+                if exc.status != 403:
+                    raise
+                report = await c.daily_report(start.isoformat(), end.isoformat(), with_revenue=False)
+                revenue_note = "Gelir verisi alınamadı (kanal para kazanmıyor veya gelir izni verilmedi)"
+    except yt.YouTubeError as exc:
+        async with db.pool.connection() as conn:
+            await conn.execute("update integrations set status='error', last_error=%s where id=%s", (str(exc), integ_id))
+            await conn.commit()
+        raise HTTPException(502, str(exc)) from exc
+
+    cols = [h["name"] for h in report.get("columnHeaders", [])]
+    async with db.user_tx(user) as conn:
+        channel_id = await _upsert_channel(conn, org_id, integ_id, ch)
+        for v in videos:
+            sn = v.get("snippet", {})
+            await conn.execute(
+                """insert into youtube_videos(organization_id, channel_id, youtube_video_id, title, description, tags,
+                       privacy_status, lifecycle, published_at) values (%s,%s,%s,%s,%s,%s,%s,'published',%s)
+                   on conflict (channel_id, youtube_video_id) do update set title=excluded.title,
+                     description=excluded.description, tags=excluded.tags, privacy_status=excluded.privacy_status""",
+                (org_id, channel_id, v["id"], str(sn.get("title", ""))[:300], str(sn.get("description", ""))[:5000],
+                 sn.get("tags", [])[:50], v.get("status", {}).get("privacyStatus"), sn.get("publishedAt")))
+        for r in report.get("rows", []):
+            d = dict(zip(cols, r, strict=False))
+            rev = d.get("estimatedRevenue")
+            await conn.execute(
+                """insert into youtube_analytics(organization_id, channel_id, day, views, watch_time_minutes,
+                       subscribers_gained, subscribers_lost, estimated_revenue, currency)
+                   values (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   on conflict (channel_id, coalesce(video_id, '00000000-0000-0000-0000-000000000000'::uuid), day)
+                   do update set views=excluded.views, watch_time_minutes=excluded.watch_time_minutes,
+                     subscribers_gained=excluded.subscribers_gained, subscribers_lost=excluded.subscribers_lost,
+                     estimated_revenue=excluded.estimated_revenue, currency=excluded.currency, fetched_at=now()""",
+                (org_id, channel_id, d["day"], d.get("views"), d.get("estimatedMinutesWatched"), d.get("subscribersGained"),
+                 d.get("subscribersLost"), rev, "USD" if rev is not None else None))
+            if rev:
+                await conn.execute(
+                    """insert into revenue_records(organization_id, department, category, amount, currency, occurred_on,
+                           source, source_ref) values (%s,'youtube','ad_revenue',%s,'USD',%s,'youtube_api',%s)
+                       on conflict (organization_id, source, source_ref) do update set amount=excluded.amount""",
+                    (org_id, rev, d["day"], f"{ch['id']}:{d['day']}"))
+        await conn.execute("update integrations set last_synced_at=now(), status='connected', last_error=%s"
+                           " where organization_id=%s and provider='youtube'", (revenue_note, org_id))
+    return {"videos": len(videos), "days": len(report.get("rows", [])), "note": revenue_note}
+
+
+@router.delete("/organizations/{org_id}/integrations/youtube", status_code=204)
+async def youtube_disconnect(org_id: UUID, user: CurrentUser = Depends(current_user), db: Database = Depends(get_db)) -> None:
+    async with db.user_tx(user) as conn:
+        await _admin(conn, org_id)
+        row = await (await conn.execute(
+            "update integrations set status='disconnected' where organization_id=%s and provider='youtube' returning id",
+            (org_id,))).fetchone()
+        if row:
+            await conn.execute("select app.log_action(%s, 'integration.youtube_disconnected', 'integration', %s, '{}')",
+                               (org_id, str(row["id"])))
+    if row:
+        async with db.pool.connection() as conn:
+            await conn.execute("delete from oauth_tokens where integration_id=%s", (row["id"],))
+            await conn.commit()
