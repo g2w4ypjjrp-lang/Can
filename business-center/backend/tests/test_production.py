@@ -14,11 +14,12 @@ def test_production_settings_are_enforced():
     bad = Settings(database_url="x", environment="production", supabase_jwt_secret="kısa",
                    cors_origins=["http://localhost:3000"], inline_scheduler=True)
     problems = bad.production_problems()
-    assert len(problems) == 4
+    assert len(problems) == 5
     with pytest.raises(RuntimeError, match="Güvensiz production"):
         create_app(bad)
     good = Settings(database_url="x", environment="production", supabase_url="https://p.supabase.co",
-                    cors_origins=["https://panel.example.com"], redis_url="redis://r:6379/0")
+                    cors_origins=["https://panel.example.com"], redis_url="redis://r:6379/0",
+                    token_encryption_key="k")
     assert good.production_problems() == []
     assert Settings(database_url="x", supabase_jwt_secret=SECRET).production_problems() == []
 

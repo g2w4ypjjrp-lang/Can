@@ -15,7 +15,7 @@ export const NAV: NavItem[] = [
   { slug: "analytics", label: "Analytics", phase: 3, ready: false },
   { slug: "calendar", label: "Content Calendar", phase: 3, ready: false },
   { slug: "automation", label: "Automation", phase: 6, ready: true },
-  { slug: "integrations", label: "API Integrations", phase: 3, ready: false },
+  { slug: "integrations", label: "API Integrations", phase: 3, ready: true },
   { slug: "notifications", label: "Notifications", phase: 6, ready: true },
   { slug: "logs", label: "System Logs", phase: 2, ready: true },
   { slug: "settings", label: "Settings", phase: 1, ready: true },

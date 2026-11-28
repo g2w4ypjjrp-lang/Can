@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     redis_url: str = ""                  # boşsa görevler API süreci içinde çalışır (geliştirme)
 
 
+    token_encryption_key: str = ""           # Fernet anahtarı; üretmek: python -m bizcenter.integrations.keygen
     task_timeout_minutes: int = 30           # bu süreden uzun "çalışıyor" kalan görev başarısız sayılır
 
     def production_problems(self) -> list[str]:
@@ -45,6 +46,8 @@ class Settings(BaseSettings):
             p.append("BC_CORS_ORIGINS yalnızca https:// alan adlarını içermeli")
         if not self.redis_url:
             p.append("BC_REDIS_URL gerekli (görevler çalışan süreçlerde yürütülür)")
+        if not self.token_encryption_key:
+            p.append("BC_TOKEN_ENCRYPTION_KEY gerekli (entegrasyon tokenları şifrelenir)")
         if self.inline_scheduler:
             p.append("BC_INLINE_SCHEDULER production'da kapalı olmalı (Celery beat kullanılır)")
         return p

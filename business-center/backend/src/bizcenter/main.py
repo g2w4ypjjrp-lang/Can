@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import approvals, dashboard, health, operations, organizations, tasks
+from .api import approvals, dashboard, health, integrations, operations, organizations, tasks
 from .auth import TokenVerifier
 from .config import Settings, get_settings
 from .db import Database
@@ -50,7 +50,7 @@ def create_app(settings: Settings | None = None, db: Database | None = None,
                        allow_headers=["authorization", "content-type", "x-request-id"])
     app.add_middleware(RequestContextMiddleware)
     for r in (health.router, organizations.router, dashboard.router, approvals.router, tasks.router,
-              operations.router):
+              operations.router, integrations.router):
         app.include_router(r)
     return app
 
