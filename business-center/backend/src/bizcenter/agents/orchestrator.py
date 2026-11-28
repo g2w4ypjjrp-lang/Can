@@ -16,6 +16,7 @@ from psycopg.types.json import Jsonb
 from ..db import Database
 from .llm import LLM, LLMError, LLMResult
 from .registry import COMMON, SPECS
+from .structured import INSTRUCTIONS, SCHEMAS, domain_context, persist
 
 log = logging.getLogger("bizcenter.orchestrator")
 
@@ -256,10 +257,24 @@ class Orchestrator:
     async def _produce(self, task: dict[str, Any], agent: dict[str, Any], spec: Any, instruction: str,
                        outputs: list[tuple[str, str]], spent: list[Decimal]) -> LLMResult:
         context = "\n\n".join(_untrusted(f"step_{n}:{name}", out) for n, (name, out) in enumerate(outputs, 1))
-        return await self._call(
-            task, agent, spent, system=spec.system + task["profile"], web_search=spec.web_search, effort="medium",
+        kind = spec.structured
+        records = await domain_context(self.db, task["organization_id"], kind)
+        res = await self._call(
+            task, agent, spent, system=spec.system + task["profile"] + (f"\n\n{INSTRUCTIONS[kind]}" if kind else ""),
+            web_search=spec.web_search, effort="medium", schema=SCHEMAS.get(kind) if kind else None,
             user=f"{_untrusted('user_command', task['command'])}\n\n"
-                 f"Önceki adımların çıktıları:\n{context or '(yok)'}\n\nSenin görevin: {instruction}")
+                 f"Önceki adımların çıktıları:\n{context or '(yok)'}{records}\n\nSenin görevin: {instruction}")
+        if kind and isinstance(res.data, dict):
+            stats = await persist(self.db, task, agent, kind, res.data)
+            note = []
+            if stats["saved"]:
+                note.append(f"{stats['saved']} fikir kaydedildi")
+            if stats["proposed"]:
+                note.append(f"{stats['proposed']} değişiklik önerisi Approval Center'a gönderildi")
+            if stats["rejected"]:
+                note.append(f"{stats['rejected']} öneri kurallara uymadığı için reddedildi")
+            res.text = str(res.data.get("report", "")) + (f"\n\n**Sistem notu:** {'; '.join(note)}." if note else "")
+        return res
 
     async def _qc(self, task: dict[str, Any], agent: dict[str, Any], spec: Any, instruction: str,
                   outputs: list[tuple[str, str]], spent: list[Decimal]) -> dict[str, Any]:

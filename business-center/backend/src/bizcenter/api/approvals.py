@@ -2,7 +2,6 @@ from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
 from ..auth import CurrentUser, current_user
@@ -14,7 +13,8 @@ router = APIRouter(prefix="/api", tags=["approvals"])
 
 _COLS = """id, platform, action, reason, expected_outcome, risk_level, cost_amount, cost_currency,
            before_state, after_state, status, decided_by, decided_at, decision_note,
-           expires_at, created_at"""
+           expires_at, created_at, task_id,
+           (select name from agents g where g.id = requested_by_agent_id) as requested_by_agent"""
 
 
 class Proposal(BaseModel):
@@ -30,42 +30,17 @@ class Proposal(BaseModel):
 async def propose(org_id: UUID, body: Proposal, user: CurrentUser = Depends(current_user),
                   db: Database = Depends(get_db)) -> dict[str, Any]:
     """Kritik bir değişikliği onaya sunar. Mevcut durum (öncesi) veritabanından okunur, istemciden alınmaz."""
-    from ..executor import ACTIONS, payload_hash, validate_payload
-    if body.action not in ACTIONS:
-        raise HTTPException(422, "Desteklenmeyen işlem")
-    is_etsy = body.action.startswith("etsy")
-    payload = {("listing_id" if is_etsy else "video_id"): int(body.target_id) if is_etsy and body.target_id.isdigit()
-               else body.target_id, "changes": body.changes}
-    try:
-        validate_payload(body.action, payload)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
+    from ..executor import ProposalError, create_proposal
     async with db.user_tx(user) as conn:
         ok = await (await conn.execute("select app.has_role(%s, array['owner','admin']) as ok", (org_id,))).fetchone()
         if not ok or not ok["ok"]:
             raise HTTPException(403, "Yönetici yetkisi gerekli")
-        if is_etsy:
-            cur = await (await conn.execute("select title, description, tags from etsy_listings where organization_id=%s"
-                                            " and etsy_listing_id=%s", (org_id, payload["listing_id"]))).fetchone()
-        else:
-            cur = await (await conn.execute("select title, description, tags from youtube_videos where organization_id=%s"
-                                            " and youtube_video_id=%s", (org_id, payload["video_id"]))).fetchone()
-        if cur is None:
-            raise HTTPException(404, "Hedef bulunamadı (önce senkronlayın)")
-        before = {k: cur[k] for k in body.changes}
-    # approvals tablosu istemci rolüne kapalıdır; kayıt servis bağlantısıyla, kullanıcı adına açılır.
-    async with db.pool.connection() as conn:
-        row = await (await conn.execute(
-            """insert into approvals(organization_id, platform, action, reason, expected_outcome, risk_level,
-                   before_state, after_state, payload, payload_hash, expires_at)
-               values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now() + make_interval(hours => %s)) returning id""",
-            (org_id, ACTIONS[body.action]["platform"], body.action, body.reason, body.expected_outcome,
-             ACTIONS[body.action]["risk"], Jsonb(before), Jsonb(body.changes), Jsonb(payload),
-             payload_hash(body.action, payload), body.expires_hours))).fetchone()
-        await conn.execute("insert into audit_logs(organization_id, actor_user_id, action, target_type, target_id)"
-                           " values (%s,%s,'approval.proposed','approval',%s)", (org_id, user.id, str(row["id"])))
-        await conn.commit()
-    return {"id": row["id"], "status": "pending"}
+    try:
+        aid = await create_proposal(db, org_id, body.action, body.target_id, body.changes, body.reason,
+                                    body.expected_outcome, body.expires_hours, user_id=user.id)
+    except ProposalError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
+    return {"id": aid, "status": "pending"}
 
 
 class Decision(BaseModel):

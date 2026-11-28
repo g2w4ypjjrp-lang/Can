@@ -141,3 +141,42 @@ class Executor:
         await self._q("insert into notifications(organization_id, user_id, kind, title, body, link) values (%s,%s,%s,%s,%s,'/approvals')",
                       a["organization_id"], a["decided_by"], f"approval_{status}",
                       ("İşlem uygulandı: " if status == "executed" else "İşlem başarısız: ") + a["action"], note)
+
+
+class ProposalError(Exception):
+    def __init__(self, msg: str, status: int = 422) -> None:
+        super().__init__(msg)
+        self.status = status
+
+
+async def create_proposal(db: Database, org: Any, action: str, target_id: str, changes: dict[str, Any], reason: str,
+                          expected: str, expires_hours: int = 48, user_id: str | None = None,
+                          agent_id: Any = None, task_id: Any = None) -> Any:
+    """Onay önerisi oluşturur (API ve ajanlar ortak kullanır). 'Öncesi' durumu veritabanından okunur."""
+    if action not in ACTIONS:
+        raise ProposalError("Desteklenmeyen işlem")
+    is_etsy = action.startswith("etsy")
+    tid: Any = int(target_id) if is_etsy and str(target_id).isdigit() else str(target_id)
+    payload = {("listing_id" if is_etsy else "video_id"): tid, "changes": changes}
+    try:
+        validate_payload(action, payload)
+    except ValueError as exc:
+        raise ProposalError(str(exc)) from exc
+    table, col = ("etsy_listings", "etsy_listing_id") if is_etsy else ("youtube_videos", "youtube_video_id")
+    async with db.pool.connection() as conn:
+        cur = await (await conn.execute(
+            f"select title, description, tags from {table} where organization_id=%s and {col}=%s",  # noqa: S608 (sabit tablo)
+            (org, tid))).fetchone()
+        if cur is None:
+            raise ProposalError("Hedef bulunamadı (önce senkronlayın)", 404)
+        row = await (await conn.execute(
+            """insert into approvals(organization_id, task_id, requested_by_agent_id, platform, action, reason, expected_outcome,
+                   risk_level, before_state, after_state, payload, payload_hash, expires_at)
+               values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now() + make_interval(hours => %s)) returning id""",
+            (org, task_id, agent_id, ACTIONS[action]["platform"], action, reason[:2000], expected[:2000], ACTIONS[action]["risk"],
+             Jsonb({k: cur[k] for k in changes}), Jsonb(changes), Jsonb(payload), payload_hash(action, payload),
+             expires_hours))).fetchone()
+        await conn.execute("insert into audit_logs(organization_id, actor_user_id, actor_agent_id, action, target_type, target_id)"
+                           " values (%s,%s,%s,'approval.proposed','approval',%s)", (org, user_id, agent_id, str(row["id"])))
+        await conn.commit()
+    return row["id"]

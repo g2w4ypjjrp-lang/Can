@@ -16,8 +16,9 @@ from bizcenter.main import create_app
 class FakeLLM:
     """Gerçek Claude çağrısı yapmaz; istekleri kaydeder ve sıradaki cevabı verir."""
 
-    def __init__(self, plan=None, fail_on_call=None, cost="0.010000", on_call=None, qc=None):
+    def __init__(self, plan=None, fail_on_call=None, cost="0.010000", on_call=None, qc=None, structured=None):
         self.calls = []
+        self.structured = structured or {}   # yapılandırılmış ajan çıktısına eklenecek alanlar
         self.qc = list(qc or [])  # sırayla dönecek QC kararları
         self.plan = plan or {"summary": "Ürün araştır, kontrol et",
                              "steps": [{"agent_code": "etsy_product_research", "instruction": "20 ürün bul"},
@@ -38,6 +39,11 @@ class FakeLLM:
             v = self.qc.pop(0) if self.qc else {"verdict": "pass", "issues": [], "needs_human_review": False}
             v = {"report": f"qc {n}", **v}
             return LLMResult(text=json.dumps(v), data=v, model="claude-opus-5-5", cost_usd=self.cost)
+        if kw.get("schema") and "report" in kw["schema"]["properties"]:
+            props = kw["schema"]["properties"]
+            v = {"report": f"çıktı {n}", **{k: [] for k in props if k != "report"}, **{k: x for k, x in self.structured.items() if k in props}}
+            return LLMResult(text=json.dumps(v), data=v, model="claude-opus-5-5", input_tokens=200, output_tokens=300,
+                             cost_usd=self.cost, sources=[{"url": "https://e.x", "title": "t"}])
         if kw.get("schema"):
             return LLMResult(text=json.dumps(self.plan), data=self.plan, model="claude-opus-5-5",
                              input_tokens=100, output_tokens=50, cost_usd=self.cost)
@@ -279,6 +285,6 @@ async def test_direct_agent_assignment_skips_ceo(env, admin):
         await disp.drain()
         t = (await c.get(f"/api/tasks/{r.json()['id']}", headers=auth(uid))).json()
     assert t["status"] == "completed"
-    assert len(llm.calls) == 1 and "schema" not in llm.calls[0]  # CEO planı yok
+    assert len(llm.calls) == 1 and "steps" not in (llm.calls[0].get("schema") or {}).get("properties", {})  # CEO planı yok
     assert [s["agent_code"] for s in t["steps"]] == ["yt_seo"]
     assert t["result"]["report"] == "çıktı 1" and t["current_agent"] == "YouTube SEO Agent"

@@ -29,6 +29,7 @@ class AgentSpec:
     output: list[str]
     checklist: list[str] = field(default_factory=list)
     web_search: bool = False
+    structured: str | None = None   # product_ideas | video_ideas | etsy_proposals | yt_proposals
 
     @property
     def system(self) -> str:
@@ -53,7 +54,7 @@ _SPECS = [
         ["Tablo: Fikir | Neden şimdi | Kanıt (link) | Rekabet | Puan", "En iyi 3 fikir için başlık + kanca önerisi",
          "Kaçınılması gereken doymuş konular"],
         ["Her fikrin en az bir kaynağı var mı?", "Puanların gerekçesi yazılı mı?", "Fikirler profildeki nişe uygun mu?"],
-        web_search=True),
+        web_search=True, structured="video_ideas"),
     AgentSpec(
         "yt_channel_strategist", "Channel Strategist Agent",
         ["Kanal konumlandırma, içerik sütunları (pillars) ve seri formatları",
@@ -107,7 +108,7 @@ _SPECS = [
         ["Anahtar kelime tablosu: Kelime | Niyet | Öncelik", "5 başlık", "Açıklama (kopyalanabilir)",
          "Etiketler ve 3 hashtag", "SEO kontrol listesi"],
         ["Başlıklar 60 karakter içinde mi?", "Anahtar kelime doldurma (stuffing) var mı?"],
-        web_search=True),
+        web_search=True, structured="yt_proposals"),
     AgentSpec(
         "yt_analytics", "YouTube Analytics Agent",
         ["Gösterim → CTR → izlenme süresi → abone hunisi analizi",
@@ -129,7 +130,7 @@ _SPECS = [
         ["Tablo: Ürün fikri | Ürün tipi | Hedef alıcı | Kanıt | Tahmini fiyat | Puan",
          "İlk test edilecek 5 ürün", "Sezonluk takvim fırsatları"],
         ["Marka/telif riski taşıyan fikir var mı?", "Her fikrin kanıtı var mı?"],
-        web_search=True),
+        web_search=True, structured="product_ideas"),
     AgentSpec(
         "etsy_competitor_analysis", "Competitor Analysis Agent",
         ["Rakip mağaza analizi: ürün yelpazesi, fiyat, yorum, görsel kalite, marka hikâyesi",
@@ -162,7 +163,7 @@ _SPECS = [
          "SEO puanı (0-100) ve gerekçesi"],
         ["Başlık ≤ 140 karakter mi?", "Etiket sayısı tam 13 ve her biri ≤ 20 karakter mi?",
          "Marka adı içeren etiket var mı?"],
-        web_search=True),
+        web_search=True, structured="etsy_proposals"),
     AgentSpec(
         "etsy_listing_manager", "Listing Manager Agent",
         ["Listeleme yönetimi: fotoğraf sırası, varyasyonlar, stok, işlem süresi, kargo profili",

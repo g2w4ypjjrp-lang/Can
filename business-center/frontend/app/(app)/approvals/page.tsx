@@ -4,7 +4,7 @@ import { appContext } from "@/lib/context";
 
 type Approval = { id: string; platform: string; action: string; reason: string; expected_outcome: string;
   risk_level: string; cost_amount: string | null; cost_currency: string | null; before_state: unknown;
-  after_state: unknown; status: string; decision_note: string | null; expires_at: string; created_at: string };
+  after_state: unknown; status: string; requested_by_agent: string | null; task_id: string | null; decision_note: string | null; expires_at: string; created_at: string };
 
 const STATUS_TR: Record<string, string> = { pending: "Bekliyor", approved: "Onaylandı", rejected: "Reddedildi",
   expired: "Süresi doldu", executed: "Uygulandı", failed: "Başarısız" };
@@ -32,6 +32,8 @@ export default async function Approvals() {
               <span className="rounded bg-canvas px-2 py-0.5">Risk: {RISK[a.risk_level]}</span>
               <span className="rounded bg-canvas px-2 py-0.5">Durum: {STATUS_TR[a.status] ?? a.status}</span>
               <span className="text-muted">Son: {new Date(a.expires_at).toLocaleString("tr-TR")}</span>
+              {a.requested_by_agent && <span className="rounded bg-indigo-50 px-2 py-0.5 text-indigo-800">Öneren: {a.requested_by_agent}</span>}
+              {a.task_id && <a href={`/tasks/${a.task_id}`} className="text-brand underline">Görev</a>}
             </div>
             <h2 className="mt-2 font-semibold">{ACTION_TR[a.action] ?? a.action}</h2>
             <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
