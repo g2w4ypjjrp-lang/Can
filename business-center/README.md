@@ -34,6 +34,15 @@ Mimari ve yol haritası: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 * Notifications: görev bitti/başarısız, atlanan otomasyon
 * Financial Reports: YouTube, Etsy ve birleşik kâr-zarar, manuel kayıt, eksik veri uyarıları, doğrulanmış rapor
 
+## İş ekranları
+* YouTube Management: kanal özeti, son videolar, hızlı görevler (video fikri, performans analizi)
+* Etsy Management: listelemeler (13 etiket kontrolü), siparişler, hızlı görevler (SEO denetimi, satış analizi)
+* Product Research: ürün, rakip ve trend araştırma raporları
+* Video Production: fikirden yayına üretim hattı
+* Analytics: 7/30/90 günlük grafikler ve tablo görünümü (izlenme, izlenme süresi, abone, Etsy siparişleri)
+* Content Calendar: yayınlar, görevler ve planlı otomasyonlar
+Bağlantı yoksa bu ekranlar örnek veri göstermez; "bağlı değil" der.
+
 ## Kurulum
 
 ### 1. Supabase

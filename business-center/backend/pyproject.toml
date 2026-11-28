@@ -40,7 +40,7 @@ pythonpath = ["tests"]
 addopts = "-ra --strict-markers"
 
 [tool.ruff]
-line-length = 130
+line-length = 140
 target-version = "py312"
 
 [tool.ruff.lint]
